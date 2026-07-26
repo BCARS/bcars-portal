@@ -32,12 +32,32 @@ Optional developer tools:
 
 ```sh
 cp .env.sample .env         # then edit; do NOT commit .env
+make install-hooks          # ONE-TIME: installs pre-push guard against direct pushes to main
 make build                  # builds cmd/portal and cmd/portalctl
 make test                   # runs unit tests
 make lint                   # gofmt + go vet + staticcheck + golangci-lint + secrets check
-./bin/portal --help
+./bin/portal --version
 ./bin/portalctl --help
 ```
+
+## Development workflow
+
+`main` is protected by a local pre-push hook (installed by `make
+install-hooks`). All work goes through a pull request:
+
+```sh
+git switch -c ws2/short-topic-name
+# ... edits ...
+make build && go test -race ./... && ./scripts/check-no-secrets.sh
+git push -u origin HEAD
+gh pr create --fill
+gh run watch                 # wait for CI green
+gh pr merge --squash --delete-branch
+git switch main && git pull --ff-only
+```
+
+Emergency bypass (initial repo push, hotfix): `PORTAL_ALLOW_PUSH_MAIN=1 git
+push`. Every use of the bypass should be justifiable in the commit message.
 
 ## Running the server
 
