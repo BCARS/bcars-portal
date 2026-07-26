@@ -17,3 +17,4 @@ Rationale for a decision belongs here; day-to-day design detail belongs in
 | 0006 | Accepted | Preference history pattern for sharing preferences |
 | 0007 | Accepted | Coverage/payment split (Phase 2 shape) |
 | 0008 | Accepted | Import staging model |
+| 0009 | Accepted | Version stamping via ldflags + runtime/debug |
