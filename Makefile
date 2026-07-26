@@ -2,8 +2,12 @@
 # Every target should be safe to run on a clean checkout with only Go installed.
 
 GO           ?= go
-BIN_DIR      ?= bin
+BIN_DIR      ?= $(CURDIR)/bin
 PKGS         := ./...
+GOBIN				?= $(BIN_DIR)
+
+# Ensure the toolchain matches go.mod so fmt/lint use the correct Go version.
+export GOTOOLCHAIN := go1.26.0
 
 # Version stamp. Overridable: `make build VERSION=v1.2.3`.
 # Defaults to the nearest git tag (e.g. "v1.2.3"); when the repo has no tag
@@ -12,9 +16,9 @@ PKGS         := ./...
 VERSION      ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
 VERSION_PKG  := github.com/bcars/bcars-portal/internal/version
 LDFLAGS      := -s -w -X $(VERSION_PKG).version=$(VERSION)
-GOLANGCI     := $(shell go env GOPATH)/bin/golangci-lint
-STATICCHECK  := $(shell go env GOPATH)/bin/staticcheck
-SQLC         := $(shell go env GOPATH)/bin/sqlc
+GOLANGCI     := $(BIN_DIR)/golangci-lint
+STATICCHECK  := $(BIN_DIR)/staticcheck
+SQLC         := $(BIN_DIR)/sqlc
 
 .PHONY: all build test lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks
 
@@ -37,14 +41,14 @@ vet:
 staticcheck:
 	@if [ ! -x "$(STATICCHECK)" ]; then \
 		echo "installing staticcheck"; \
-		$(GO) install honnef.co/go/tools/cmd/staticcheck@latest; \
+		GOBIN=$(GOBIN) $(GO) install honnef.co/go/tools/cmd/staticcheck@latest; \
 	fi
 	$(STATICCHECK) $(PKGS)
 
 golangci:
 	@if [ ! -x "$(GOLANGCI)" ]; then \
 		echo "installing golangci-lint"; \
-		$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		GOBIN=$(GOBIN) $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
 	fi
 	$(GOLANGCI) run
 
@@ -56,7 +60,7 @@ lint: fmt vet staticcheck golangci check-secrets
 sqlc:
 	@if [ ! -x "$(SQLC)" ]; then \
 		echo "installing sqlc"; \
-		$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@latest; \
+		$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1; \
 	fi
 	$(SQLC) generate
 
@@ -79,9 +83,9 @@ run: build
 	./$(BIN_DIR)/portal
 
 tools:
-	$(GO) install honnef.co/go/tools/cmd/staticcheck@latest
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	GOBIN=$(GOBIN) $(GO) install honnef.co/go/tools/cmd/staticcheck@latest
+	GOBIN=$(GOBIN) $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	GOBIN=$(GOBIN) $(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
 clean:
 	rm -rf $(BIN_DIR) dist coverage.out coverage.html
