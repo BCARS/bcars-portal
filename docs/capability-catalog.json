@@ -1,0 +1,219 @@
+[
+  {
+    "code": "session.self.read",
+    "description": "Read own session and effective capabilities.",
+    "category": "system",
+    "ai_tool_eligibility": "read-only",
+    "operation_ids": [
+      "capabilities-list",
+      "roles-list",
+      "session-signout",
+      "session-current"
+    ]
+  },
+  {
+    "code": "role.grant",
+    "description": "Grant or revoke roles and direct capabilities.",
+    "category": "system",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "role-grant-revoke",
+      "role-grant-create",
+      "users-list"
+    ]
+  },
+  {
+    "code": "user.invite",
+    "description": "Invite a new officer or user.",
+    "category": "system",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "integration.config.write",
+    "description": "Manage non-secret integration settings.",
+    "category": "system",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "system.admin",
+    "description": "Bootstrap and low-level administrative operations.",
+    "category": "system",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "member.read",
+    "description": "Read canonical member data (server-filtered by role).",
+    "category": "membership",
+    "ai_tool_eligibility": "read-only",
+    "operation_ids": [
+      "notes-list",
+      "member-get",
+      "contact-methods-list",
+      "members-list",
+      "member-timeline",
+      "contact-method-visibility-get",
+      "member-acs-ares-get"
+    ]
+  },
+  {
+    "code": "member.export",
+    "description": "Export member data to CSV or JSON.",
+    "category": "membership",
+    "ai_tool_eligibility": "curated",
+    "operation_ids": [
+      "export-members"
+    ]
+  },
+  {
+    "code": "member.create",
+    "description": "Create a person and pending membership.",
+    "category": "membership",
+    "ai_tool_eligibility": "curated",
+    "operation_ids": [
+      "member-create",
+      "membership-apply"
+    ]
+  },
+  {
+    "code": "member.update",
+    "description": "Update person fields.",
+    "category": "membership",
+    "ai_tool_eligibility": "curated",
+    "operation_ids": [
+      "member-update"
+    ]
+  },
+  {
+    "code": "member.deactivate",
+    "description": "Deactivate or reactivate a member.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "member-reactivate",
+      "member-deactivate"
+    ]
+  },
+  {
+    "code": "contact_method.write",
+    "description": "Add, edit, make-primary, or archive contact methods.",
+    "category": "membership",
+    "ai_tool_eligibility": "curated",
+    "operation_ids": [
+      "contact-method-update",
+      "contact-method-archive",
+      "contact-method-make-primary",
+      "contact-method-create"
+    ]
+  },
+  {
+    "code": "sharing_pref.write.officer",
+    "description": "Change directory visibility or ACS-ARES sharing prefs on behalf of a member.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "member-acs-ares-post",
+      "contact-method-visibility-post"
+    ]
+  },
+  {
+    "code": "membership.approve",
+    "description": "Approve or reject membership applications and set the base type.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "membership-approve",
+      "membership-reject"
+    ]
+  },
+  {
+    "code": "membership.lifecycle",
+    "description": "Change membership lifecycle to inactive, resigned, or deceased.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "membership-lifecycle"
+    ]
+  },
+  {
+    "code": "fcc.verify",
+    "description": "Record or revoke an FCC license verification.",
+    "category": "membership",
+    "ai_tool_eligibility": "curated",
+    "operation_ids": [
+      "fcc-verification-revoke",
+      "fcc-verification-create"
+    ]
+  },
+  {
+    "code": "honorary.grant",
+    "description": "Create, edit, expire, or revoke honorary grants.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "honorary-grant-create",
+      "honorary-grant-expire",
+      "honorary-grant-update",
+      "honorary-grant-revoke"
+    ]
+  },
+  {
+    "code": "notes.write.officer",
+    "description": "Write officer-visibility notes.",
+    "category": "membership",
+    "ai_tool_eligibility": "curated",
+    "operation_ids": [
+      "note-create",
+      "note-update"
+    ]
+  },
+  {
+    "code": "import.upload",
+    "description": "Upload and stage an import file for review.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "imports-list",
+      "import-get",
+      "import-row-decision",
+      "import-discard",
+      "import-rows-list",
+      "import-preview",
+      "import-upload"
+    ]
+  },
+  {
+    "code": "import.commit",
+    "description": "Commit a reconciled import run to canonical data.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": [
+      "import-commit"
+    ]
+  },
+  {
+    "code": "notes.write.treasurer",
+    "description": "Write treasurer-visibility notes.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "notes.read.treasurer",
+    "description": "Read treasurer-visibility notes.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "audit.read",
+    "description": "Search and read audit events.",
+    "category": "audit",
+    "ai_tool_eligibility": "read-only",
+    "operation_ids": [
+      "audit-events-list"
+    ]
+  }
+]
