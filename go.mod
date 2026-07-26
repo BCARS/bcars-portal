@@ -6,6 +6,7 @@ require (
 	github.com/danielgtaylor/huma/v2 v2.39.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/crypto v0.54.0
 	modernc.org/sqlite v1.54.0
 )
 
