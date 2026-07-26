@@ -4,6 +4,14 @@
 GO           ?= go
 BIN_DIR      ?= bin
 PKGS         := ./...
+
+# Version stamp. Overridable: `make build VERSION=v1.2.3`.
+# Defaults to the nearest git tag (e.g. "v1.2.3"); when the repo has no tag
+# yet we fall back to "dev". Revision SHA and dirty state come from
+# runtime/debug at run time, so we intentionally do NOT include them here.
+VERSION      ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
+VERSION_PKG  := github.com/bcars/bcars-portal/internal/version
+LDFLAGS      := -s -w -X $(VERSION_PKG).version=$(VERSION)
 GOLANGCI     := $(shell go env GOPATH)/bin/golangci-lint
 STATICCHECK  := $(shell go env GOPATH)/bin/staticcheck
 SQLC         := $(shell go env GOPATH)/bin/sqlc
@@ -14,8 +22,8 @@ all: build
 
 build:
 	mkdir -p $(BIN_DIR)
-	$(GO) build -trimpath -o $(BIN_DIR)/portal ./cmd/portal
-	$(GO) build -trimpath -o $(BIN_DIR)/portalctl ./cmd/portalctl
+	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/portal ./cmd/portal
+	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/portalctl ./cmd/portalctl
 
 test:
 	$(GO) test -race -count=1 $(PKGS)

@@ -8,9 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-)
 
-var version = "dev"
+	"github.com/bcars/bcars-portal/internal/version"
+)
 
 func main() {
 	if len(os.Args) < 2 {
@@ -20,8 +20,10 @@ func main() {
 	switch os.Args[1] {
 	case "-h", "--help", "help":
 		usage(os.Stdout)
-	case "--version", "version":
-		fmt.Println(version)
+	case "--version":
+		fmt.Println(version.Get().Short())
+	case "version":
+		fmt.Print(version.Get().Long())
 	case "bootstrap-admin":
 		fmt.Fprintln(os.Stderr, "portalctl bootstrap-admin: not yet implemented (WS4.7).")
 		os.Exit(0)
@@ -45,6 +47,7 @@ Commands:
   bootstrap-admin --email <addr>   Create the first administrator (WS4.7).
   backup --to <dir>                Encrypted database backup (WS8.2).
   restore --from <path> --into <dir>   Restore an encrypted backup (WS8.2).
-  version                          Print version.
+  version                          Print detailed build info.
+  --version                        Print short version identifier.
   help                             Show this help.`)
 }

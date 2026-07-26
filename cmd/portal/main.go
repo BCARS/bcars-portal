@@ -9,10 +9,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-)
 
-// version is overridden at link time via -ldflags "-X main.version=...".
-var version = "dev"
+	"github.com/bcars/bcars-portal/internal/version"
+)
 
 func main() {
 	fs := flag.NewFlagSet("portal", flag.ContinueOnError)
@@ -30,6 +29,7 @@ Flags:
 	}
 
 	showVersion := fs.Bool("version", false, "print version and exit")
+	showVersionLong := fs.Bool("version-long", false, "print detailed build info and exit")
 	migrate := fs.Bool("migrate", false, "apply pending migrations at startup (WS3.1+)")
 	_ = migrate
 
@@ -39,12 +39,17 @@ Flags:
 		}
 		os.Exit(2)
 	}
+	if *showVersionLong {
+		fmt.Print(version.Get().Long())
+		return
+	}
 	if *showVersion {
-		fmt.Println(version)
+		fmt.Println(version.Get().Short())
 		return
 	}
 
 	fmt.Fprintln(os.Stderr, "portal: HTTP server not yet implemented (Phase 1 WS2+).")
+	fmt.Fprintln(os.Stderr, "Version:", version.Get().Short())
 	fmt.Fprintln(os.Stderr, "Run 'portal --help' for available flags.")
 	os.Exit(0)
 }
