@@ -1,0 +1,34 @@
+# Build output
+/bin/
+/dist/
+*.test
+*.out
+
+# Local environment (sample is committed)
+.env
+.env.*
+!.env.sample
+
+# SQLite database and WAL/SHM sidecars
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Real BCARS data. Never commit any of these.
+/data/
+/backups/
+/uploads/
+/extracted/
+/transcripts/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Coverage
+coverage.out
+coverage.html

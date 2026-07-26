@@ -1,0 +1,1774 @@
+{
+  "table": {
+    "id": 999001,
+    "object": "databasetable",
+    "created": "2026-01-01T00:00:00Z",
+    "updated": "2026-01-01T00:00:00Z",
+    "group_id": 999000,
+    "user_id": 1,
+    "name": "Synthetic BCARS Contact Database",
+    "short_desc": "Synthetic test fixture",
+    "desc": "<div>Synthetic; contains no real member data.</div>",
+    "desc_type": "html",
+    "edit_table": "database_access_restricted",
+    "edit_rows": "database_access_restricted",
+    "add_rows": "database_access_restricted",
+    "view_table": "database_access_restricted",
+    "num_rows": 21,
+    "max_row_id": 900020,
+    "num_columns": 13,
+    "max_col_id": 14,
+    "display_template": "",
+    "columns": [
+      {
+        "id": 1,
+        "name": "Contact Name",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 11,
+        "name": "Call Sign",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 3,
+        "name": "Current Until",
+        "type": "date_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 14,
+        "name": "Note",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 2,
+        "name": "Membership Type",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 13,
+        "name": "Class",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 7,
+        "name": "Phone",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 4,
+        "name": "Email",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 5,
+        "name": "Street Address",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 6,
+        "name": "City",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 9,
+        "name": "Postal Code",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 8,
+        "name": "State/Province",
+        "type": "text_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      },
+      {
+        "id": 12,
+        "name": "Volunteer Examiner",
+        "type": "checkbox_column",
+        "required": false,
+        "color": "color_none",
+        "width": 0,
+        "default_hidden": false,
+        "description": ""
+      }
+    ]
+  },
+  "rows": [
+    {
+      "id": 900000,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 1,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest1 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F01X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full1@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "101 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900001,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 2,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest2 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F02X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1002"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full2@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "102 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900002,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 3,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest3 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F03X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1003"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full3@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "103 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900003,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 4,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest4 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F04X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1004"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full4@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "104 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": true
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900004,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 5,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest5 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F05X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1005"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full5@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "105 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900005,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 6,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest6 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F06X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1006"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full6@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "106 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900006,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 7,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest7 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F07X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1007"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full7@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "107 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900007,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 8,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Fulltest8 Member"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9F08X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-010-1008"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "full8@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "108 Fake St"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": true
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900008,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 9,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Assoctest1 Person"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Associate"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-020-2001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "assoc1@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "201 Fake Ave"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900009,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 10,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Assoctest2 Person"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Associate"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-020-2002"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "assoc2@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "202 Fake Ave"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900010,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 11,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Assoctest3 Person"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Associate"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-020-2003"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "assoc3@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "203 Fake Ave"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900011,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 12,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Assoctest4 Person"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Associate"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-020-2004"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "assoc4@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "204 Fake Ave"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900001,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 13,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Lifetimetest One"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9L01X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2055"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": "Passed initial exam via BCARS session (synthetic)"
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Honorary"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "Technician"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-030-0001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "life1@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "301 Fake Ln"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900002,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 14,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Lifetimetest Two"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9L02X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2055"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": "Longtime service; synthetic lifetime honorary"
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Honorary"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-030-0002"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "life2@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "302 Fake Ln"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900014,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 15,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Suspicious Date"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9S01X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2055"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-040-0001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "sus1@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "401 Fake Rd"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900015,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 16,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Unknowndate Sample"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9U01X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "01/01/0001"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "Technician"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-050-0001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "unk1@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "501 Fake Way"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900016,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 17,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Ambigone Shared"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9A01X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-060-0001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "shared@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "601 Shared Ct"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900017,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 18,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Ambigtwo Shared"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9A02X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-060-0002"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "shared@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "602 Shared Ct"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900018,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 19,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Honorary Unspecified"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": "Dues waived; base type unspecified in export"
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Honorary"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-070-0001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "honnun@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "701 Fake Blvd"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900019,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 20,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Badphone Sample"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9B01X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "Full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "Technician"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "call me maybe"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "bad1@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "801 Fake Cir"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    },
+    {
+      "id": 900020,
+      "object": "databaserow",
+      "created": "2026-01-01T00:00:00Z",
+      "updated": "2026-01-01T00:00:00Z",
+      "group_id": 999000,
+      "table_id": 999001,
+      "row_num": 21,
+      "vals": [
+        {
+          "col_id": 1,
+          "col_type": "text_column",
+          "text": "Lowercase Full"
+        },
+        {
+          "col_id": 11,
+          "col_type": "text_column",
+          "text": "KA9C01X"
+        },
+        {
+          "col_id": 3,
+          "col_type": "date_column",
+          "text": "12/31/2026"
+        },
+        {
+          "col_id": 14,
+          "col_type": "text_column",
+          "text": ""
+        },
+        {
+          "col_id": 2,
+          "col_type": "text_column",
+          "text": "full"
+        },
+        {
+          "col_id": 13,
+          "col_type": "text_column",
+          "text": "General"
+        },
+        {
+          "col_id": 7,
+          "col_type": "text_column",
+          "text": "555-090-0001"
+        },
+        {
+          "col_id": 4,
+          "col_type": "text_column",
+          "text": "case1@example.invalid"
+        },
+        {
+          "col_id": 5,
+          "col_type": "text_column",
+          "text": "901 Fake Pl"
+        },
+        {
+          "col_id": 6,
+          "col_type": "text_column",
+          "text": "Butler"
+        },
+        {
+          "col_id": 9,
+          "col_type": "text_column",
+          "text": "16001"
+        },
+        {
+          "col_id": 8,
+          "col_type": "text_column",
+          "text": "PA"
+        },
+        {
+          "col_id": 12,
+          "col_type": "checkbox_column",
+          "checked": false
+        }
+      ],
+      "num_vals": 13
+    }
+  ]
+}

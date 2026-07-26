@@ -1,0 +1,22 @@
+Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner
+Fulltest1 Member,KA9F01X,12/31/2026,,Full,General,555-010-1001,full1@example.invalid,101 Fake St,Butler,16001,PA,false
+Fulltest2 Member,KA9F02X,12/31/2026,,Full,General,555-010-1002,full2@example.invalid,102 Fake St,Butler,16001,PA,false
+Fulltest3 Member,KA9F03X,12/31/2026,,Full,General,555-010-1003,full3@example.invalid,103 Fake St,Butler,16001,PA,false
+Fulltest4 Member,KA9F04X,12/31/2026,,Full,General,555-010-1004,full4@example.invalid,104 Fake St,Butler,16001,PA,true
+Fulltest5 Member,KA9F05X,12/31/2026,,Full,General,555-010-1005,full5@example.invalid,105 Fake St,Butler,16001,PA,false
+Fulltest6 Member,KA9F06X,12/31/2026,,Full,General,555-010-1006,full6@example.invalid,106 Fake St,Butler,16001,PA,false
+Fulltest7 Member,KA9F07X,12/31/2026,,Full,General,555-010-1007,full7@example.invalid,107 Fake St,Butler,16001,PA,false
+Fulltest8 Member,KA9F08X,12/31/2026,,Full,General,555-010-1008,full8@example.invalid,108 Fake St,Butler,16001,PA,true
+Assoctest1 Person,,12/31/2026,,Associate,,555-020-2001,assoc1@example.invalid,201 Fake Ave,Butler,16001,PA,false
+Assoctest2 Person,,12/31/2026,,Associate,,555-020-2002,assoc2@example.invalid,202 Fake Ave,Butler,16001,PA,false
+Assoctest3 Person,,12/31/2026,,Associate,,555-020-2003,assoc3@example.invalid,203 Fake Ave,Butler,16001,PA,false
+Assoctest4 Person,,12/31/2026,,Associate,,555-020-2004,assoc4@example.invalid,204 Fake Ave,Butler,16001,PA,false
+Lifetimetest One,KA9L01X,12/31/2055,Passed initial exam via BCARS session (synthetic),Honorary,Technician,555-030-0001,life1@example.invalid,301 Fake Ln,Butler,16001,PA,false
+Lifetimetest Two,KA9L02X,12/31/2055,Longtime service; synthetic lifetime honorary,Honorary,General,555-030-0002,life2@example.invalid,302 Fake Ln,Butler,16001,PA,false
+Suspicious Date,KA9S01X,12/31/2055,,Full,General,555-040-0001,sus1@example.invalid,401 Fake Rd,Butler,16001,PA,false
+Unknowndate Sample,KA9U01X,01/01/0001,,Full,Technician,555-050-0001,unk1@example.invalid,501 Fake Way,Butler,16001,PA,false
+Ambigone Shared,KA9A01X,12/31/2026,,Full,General,555-060-0001,shared@example.invalid,601 Shared Ct,Butler,16001,PA,false
+Ambigtwo Shared,KA9A02X,12/31/2026,,Full,General,555-060-0002,shared@example.invalid,602 Shared Ct,Butler,16001,PA,false
+Honorary Unspecified,,12/31/2026,Dues waived; base type unspecified in export,Honorary,,555-070-0001,honnun@example.invalid,701 Fake Blvd,Butler,16001,PA,false
+Badphone Sample,KA9B01X,12/31/2026,,Full,Technician,call me maybe,bad1@example.invalid,801 Fake Cir,Butler,16001,PA,false
+Lowercase Full,KA9C01X,12/31/2026,,full,General,555-090-0001,case1@example.invalid,901 Fake Pl,Butler,16001,PA,false
