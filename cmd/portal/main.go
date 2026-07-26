@@ -1,15 +1,25 @@
 // Package main is the BCARS portal HTTP server entry point.
-//
-// Phase 1 status: only --help and --version work. Later workstreams wire in
-// the HTTP router (WS2), migrations (WS3.1), authentication (WS4), and so on.
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/bcars/bcars-portal/internal/domain/authz"
+	"github.com/bcars/bcars-portal/internal/httpapi"
+	"github.com/bcars/bcars-portal/internal/obs"
 	"github.com/bcars/bcars-portal/internal/version"
 )
 
@@ -17,8 +27,6 @@ func main() {
 	fs := flag.NewFlagSet("portal", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), `bcars-portal — BCARS members portal server.
-
-Phase 1 is under construction. See docs/phase-1-plan.md.
 
 Usage:
   portal [flags]
@@ -30,7 +38,12 @@ Flags:
 
 	showVersion := fs.Bool("version", false, "print version and exit")
 	showVersionLong := fs.Bool("version-long", false, "print detailed build info and exit")
+	addr := fs.String("addr", ":8080", "listen address")
+	logLevel := fs.String("log-level", "info", "log level (debug|info|warn|error)")
 	migrate := fs.Bool("migrate", false, "apply pending migrations at startup (WS3.1+)")
+	dumpOpenAPI := fs.String("dump-openapi", "", "write OpenAPI JSON to `path` and exit (used by make openapi)")
+	dumpCatalog := fs.String("dump-catalog", "", "write capability catalog JSON to `path` and exit (used by make openapi)")
+
 	_ = migrate
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -48,8 +61,110 @@ Flags:
 		return
 	}
 
-	fmt.Fprintln(os.Stderr, "portal: HTTP server not yet implemented (Phase 1 WS2+).")
-	fmt.Fprintln(os.Stderr, "Version:", version.Get().Short())
-	fmt.Fprintln(os.Stderr, "Run 'portal --help' for available flags.")
-	os.Exit(0)
+	logger := obs.NewLogger(os.Stderr, *logLevel)
+
+	// Build the router and register all operations.
+	handler, api := httpapi.NewRouter(httpapi.Config{
+		Logger:  logger,
+		Version: version.Get().Short(),
+	})
+	httpapi.RegisterAll(api)
+
+	// Startup check: every operation must have metadata.
+	if err := httpapi.VerifyAll(api); err != nil {
+		logger.Error("startup check failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	// Generate artifacts and exit (used by make openapi).
+	if *dumpOpenAPI != "" || *dumpCatalog != "" {
+		if err := dumpArtifacts(api, *dumpOpenAPI, *dumpCatalog); err != nil {
+			logger.Error("dump failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Start server.
+	srv := &http.Server{
+		Addr:         *addr,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BaseContext:  func(_ net.Listener) context.Context { return context.Background() },
+	}
+
+	logger.Info("starting portal",
+		slog.String("addr", *addr),
+		slog.String("version", version.Get().Short()),
+	)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server error", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	}()
+
+	// Graceful shutdown on SIGINT / SIGTERM.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("shutting down")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("shutdown error", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	logger.Info("stopped")
+}
+
+// dumpArtifacts writes OpenAPI JSON and/or capability catalog JSON for CI diffing.
+func dumpArtifacts(api huma.API, openapiPath, catalogPath string) error {
+	if openapiPath != "" {
+		b, err := json.MarshalIndent(api.OpenAPI(), "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal openapi: %w", err)
+		}
+		if err := os.WriteFile(openapiPath, b, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", openapiPath, err)
+		}
+	}
+	if catalogPath != "" {
+		type entry struct {
+			Code              string `json:"code"`
+			Description       string `json:"description"`
+			Category          string `json:"category"`
+			AIToolEligibility string `json:"ai_tool_eligibility"`
+			// OperationIDs that require this capability.
+			OperationIDs []string `json:"operation_ids"`
+		}
+		// Build a map from capability code to operation IDs.
+		opIDsByCode := map[string][]string{}
+		for opID, meta := range httpapi.AllMeta() {
+			code := meta.RequiredCapability
+			opIDsByCode[code] = append(opIDsByCode[code], opID)
+		}
+		var entries []entry
+		for _, cap := range authz.All {
+			entries = append(entries, entry{
+				Code:              cap.Code,
+				Description:       cap.Description,
+				Category:          cap.Category,
+				AIToolEligibility: cap.AIToolEligibility,
+				OperationIDs:      opIDsByCode[cap.Code],
+			})
+		}
+		b, err := json.MarshalIndent(entries, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal catalog: %w", err)
+		}
+		if err := os.WriteFile(catalogPath, b, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", catalogPath, err)
+		}
+	}
+	return nil
 }
