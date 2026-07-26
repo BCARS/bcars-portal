@@ -33,23 +33,23 @@ type VisibilityEvent struct {
 }
 
 type VisibilityHistory struct {
-	Current string          `json:"current" enum:"hidden,full_members,officers_only"`
+	Current string            `json:"current" enum:"hidden,full_members,officers_only"`
 	History []VisibilityEvent `json:"history"`
 }
 
 type ACSARESEvent struct {
-	ID          int64  `json:"id"`
-	PersonID    int64  `json:"person_id"`
-	Participates bool  `json:"participates"`
-	Source      string `json:"source" enum:"import_default,officer_ui,member_request"`
-	EffectiveAt string `json:"effective_at" format:"date-time"`
-	ActorUserID int64  `json:"actor_user_id,omitempty"`
-	Reason      string `json:"reason,omitempty"`
+	ID           int64  `json:"id"`
+	PersonID     int64  `json:"person_id"`
+	Participates bool   `json:"participates"`
+	Source       string `json:"source" enum:"import_default,officer_ui,member_request"`
+	EffectiveAt  string `json:"effective_at" format:"date-time"`
+	ActorUserID  int64  `json:"actor_user_id,omitempty"`
+	Reason       string `json:"reason,omitempty"`
 }
 
 type ACSARESHistory struct {
-	Current  bool           `json:"current"`
-	History  []ACSARESEvent `json:"history"`
+	Current bool           `json:"current"`
+	History []ACSARESEvent `json:"history"`
 }
 
 // --- Contact method inputs / outputs ---
@@ -62,9 +62,9 @@ type ContactMethodsListOutput struct {
 }
 
 type CreateContactMethodBody struct {
-	Kind    string `json:"kind" enum:"email,phone,postal"`
-	Label   string `json:"label,omitempty"`
-	Value   string `json:"value_raw" minLength:"1"`
+	Kind  string `json:"kind" enum:"email,phone,postal"`
+	Label string `json:"label,omitempty"`
+	Value string `json:"value_raw" minLength:"1"`
 }
 type CreateContactMethodInput struct {
 	MemberID int64 `path:"id"`
@@ -158,11 +158,11 @@ func RegisterContactMethods(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "contact-method-create",
-		Method:      http.MethodPost,
-		Path:        "/members/{id}/contact-methods",
-		Summary:     "Add a contact method to a member",
-		Tags:        []string{"contact-methods"},
+		OperationID:   "contact-method-create",
+		Method:        http.MethodPost,
+		Path:          "/members/{id}/contact-methods",
+		Summary:       "Add a contact method to a member",
+		Tags:          []string{"contact-methods"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "contact_method.write",
@@ -189,11 +189,11 @@ func RegisterContactMethods(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "contact-method-archive",
-		Method:      http.MethodPost,
-		Path:        "/contact-methods/{id}/archive",
-		Summary:     "Archive a contact method",
-		Tags:        []string{"contact-methods"},
+		OperationID:   "contact-method-archive",
+		Method:        http.MethodPost,
+		Path:          "/contact-methods/{id}/archive",
+		Summary:       "Archive a contact method",
+		Tags:          []string{"contact-methods"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "contact_method.write",
@@ -205,11 +205,11 @@ func RegisterContactMethods(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "contact-method-make-primary",
-		Method:      http.MethodPost,
-		Path:        "/contact-methods/{id}/make-primary",
-		Summary:     "Make a contact method the primary for its kind",
-		Tags:        []string{"contact-methods"},
+		OperationID:   "contact-method-make-primary",
+		Method:        http.MethodPost,
+		Path:          "/contact-methods/{id}/make-primary",
+		Summary:       "Make a contact method the primary for its kind",
+		Tags:          []string{"contact-methods"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "contact_method.write",
@@ -235,11 +235,11 @@ func RegisterContactMethods(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "contact-method-visibility-post",
-		Method:      http.MethodPost,
-		Path:        "/contact-methods/{id}/visibility",
-		Summary:     "Record a new visibility preference event",
-		Tags:        []string{"sharing"},
+		OperationID:   "contact-method-visibility-post",
+		Method:        http.MethodPost,
+		Path:          "/contact-methods/{id}/visibility",
+		Summary:       "Record a new visibility preference event",
+		Tags:          []string{"sharing"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "sharing_pref.write.officer",
@@ -265,11 +265,11 @@ func RegisterContactMethods(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "member-acs-ares-post",
-		Method:      http.MethodPost,
-		Path:        "/members/{id}/acs-ares-sharing",
-		Summary:     "Record a new ACS/ARES sharing preference event",
-		Tags:        []string{"sharing"},
+		OperationID:   "member-acs-ares-post",
+		Method:        http.MethodPost,
+		Path:          "/members/{id}/acs-ares-sharing",
+		Summary:       "Record a new ACS/ARES sharing preference event",
+		Tags:          []string{"sharing"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "sharing_pref.write.officer",

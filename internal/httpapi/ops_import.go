@@ -22,16 +22,16 @@ type ImportRun struct {
 }
 
 type StagedImportRow struct {
-	ID              int64  `json:"id"`
-	ImportID        int64  `json:"import_id"`
-	ExternalID      string `json:"external_id,omitempty"`
-	DisplayName     string `json:"display_name,omitempty"`
-	Email           string `json:"email,omitempty"`
-	CallSign        string `json:"call_sign,omitempty"`
-	MatchMethod     string `json:"match_method,omitempty" enum:"external_id,call_sign,email,manual,none"`
-	MatchedPersonID int64  `json:"matched_person_id,omitempty"`
-	RequiresManual  bool   `json:"requires_manual"`
-	ProposedAction  string `json:"proposed_action,omitempty" enum:"create,update,skip,conflict"`
+	ID               int64    `json:"id"`
+	ImportID         int64    `json:"import_id"`
+	ExternalID       string   `json:"external_id,omitempty"`
+	DisplayName      string   `json:"display_name,omitempty"`
+	Email            string   `json:"email,omitempty"`
+	CallSign         string   `json:"call_sign,omitempty"`
+	MatchMethod      string   `json:"match_method,omitempty" enum:"external_id,call_sign,email,manual,none"`
+	MatchedPersonID  int64    `json:"matched_person_id,omitempty"`
+	RequiresManual   bool     `json:"requires_manual"`
+	ProposedAction   string   `json:"proposed_action,omitempty" enum:"create,update,skip,conflict"`
 	ValidationErrors []string `json:"validation_errors,omitempty"`
 }
 
@@ -41,11 +41,11 @@ type ReconciliationDecision struct {
 }
 
 type ImportPreviewSummary struct {
-	Creates  int `json:"creates"`
-	Updates  int `json:"updates"`
-	Skips    int `json:"skips"`
+	Creates   int `json:"creates"`
+	Updates   int `json:"updates"`
+	Skips     int `json:"skips"`
 	Conflicts int `json:"conflicts"`
-	Manuals  int `json:"requires_manual"`
+	Manuals   int `json:"requires_manual"`
 }
 
 // --- Import inputs / outputs ---
@@ -97,8 +97,8 @@ type ImportPreviewOutput struct {
 }
 
 type ImportCommitInput struct {
-	ID              int64  `path:"id"`
-	IdempotencyKey  string `header:"Idempotency-Key" required:"true" doc:"Client-generated UUID for safe retry."`
+	ID             int64  `path:"id"`
+	IdempotencyKey string `header:"Idempotency-Key" required:"true" doc:"Client-generated UUID for safe retry."`
 }
 type ImportCommitOutput struct {
 	Body ImportPreviewSummary
@@ -112,11 +112,11 @@ type ImportDiscardOutput struct{}
 // RegisterImports registers all import workflow endpoints.
 func RegisterImports(api huma.API) {
 	Register(api, huma.Operation{
-		OperationID: "import-upload",
-		Method:      http.MethodPost,
-		Path:        "/imports",
-		Summary:     "Upload a Groups.io export file for staging",
-		Tags:        []string{"imports"},
+		OperationID:   "import-upload",
+		Method:        http.MethodPost,
+		Path:          "/imports",
+		Summary:       "Upload a Groups.io export file for staging",
+		Tags:          []string{"imports"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
@@ -214,11 +214,11 @@ func RegisterImports(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "import-discard",
-		Method:      http.MethodPost,
-		Path:        "/imports/{id}/discard",
-		Summary:     "Discard a staged import run",
-		Tags:        []string{"imports"},
+		OperationID:   "import-discard",
+		Method:        http.MethodPost,
+		Path:          "/imports/{id}/discard",
+		Summary:       "Discard a staged import run",
+		Tags:          []string{"imports"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "import.upload",

@@ -70,11 +70,11 @@ func RegisterNotes(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "note-create",
-		Method:      http.MethodPost,
-		Path:        "/notes",
-		Summary:     "Create a note (officer or treasurer category)",
-		Tags:        []string{"notes"},
+		OperationID:   "note-create",
+		Method:        http.MethodPost,
+		Path:          "/notes",
+		Summary:       "Create a note (officer or treasurer category)",
+		Tags:          []string{"notes"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "notes.write.officer",

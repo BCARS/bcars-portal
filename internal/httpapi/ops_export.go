@@ -10,9 +10,9 @@ import (
 // --- Export types ---
 
 type ExportMembersBody struct {
-	Format   string   `json:"format" enum:"csv,json" default:"csv"`
-	Fields   []string `json:"fields,omitempty"  doc:"Subset of fields to include; omit for caller's default view."`
-	Filter   struct {
+	Format string   `json:"format" enum:"csv,json" default:"csv"`
+	Fields []string `json:"fields,omitempty"  doc:"Subset of fields to include; omit for caller's default view."`
+	Filter struct {
 		Lifecycle []string `json:"lifecycle,omitempty"`
 		BaseType  []string `json:"base_type,omitempty"`
 	} `json:"filter,omitempty"`

@@ -102,7 +102,7 @@ type MemberReactivateInput struct {
 type MemberReactivateOutput struct{}
 
 type MemberTimelineInput struct {
-	ID     int64 `path:"id"`
+	ID int64 `path:"id"`
 	PageQuery
 }
 type MemberTimelineOutput struct {
@@ -126,11 +126,11 @@ func RegisterMembers(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "member-create",
-		Method:      http.MethodPost,
-		Path:        "/members",
-		Summary:     "Create a person and pending membership",
-		Tags:        []string{"members"},
+		OperationID:   "member-create",
+		Method:        http.MethodPost,
+		Path:          "/members",
+		Summary:       "Create a person and pending membership",
+		Tags:          []string{"members"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "member.create",
@@ -171,11 +171,11 @@ func RegisterMembers(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "member-deactivate",
-		Method:      http.MethodPost,
-		Path:        "/members/{id}/deactivate",
-		Summary:     "Deactivate a member",
-		Tags:        []string{"members"},
+		OperationID:   "member-deactivate",
+		Method:        http.MethodPost,
+		Path:          "/members/{id}/deactivate",
+		Summary:       "Deactivate a member",
+		Tags:          []string{"members"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "member.deactivate",
@@ -187,11 +187,11 @@ func RegisterMembers(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "member-reactivate",
-		Method:      http.MethodPost,
-		Path:        "/members/{id}/reactivate",
-		Summary:     "Reactivate a member",
-		Tags:        []string{"members"},
+		OperationID:   "member-reactivate",
+		Method:        http.MethodPost,
+		Path:          "/members/{id}/reactivate",
+		Summary:       "Reactivate a member",
+		Tags:          []string{"members"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "member.deactivate",

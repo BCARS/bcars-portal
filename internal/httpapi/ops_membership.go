@@ -10,16 +10,16 @@ import (
 // --- Membership types ---
 
 type Membership struct {
-	ID                    int64  `json:"id"`
-	PersonID              int64  `json:"person_id"`
-	BaseType              string `json:"base_type" enum:"full,associate"`
-	Lifecycle             string `json:"lifecycle" enum:"pending,approved,rejected,inactive,resigned,deceased"`
-	JoinedOn              string `json:"joined_on,omitempty" format:"date"`
-	EndedOn               string `json:"ended_on,omitempty" format:"date"`
-	LegacyCurrentUntil    string `json:"legacy_current_until,omitempty" format:"date"`
-	Version               int64  `json:"version"`
-	CreatedAt             string `json:"created_at" format:"date-time"`
-	UpdatedAt             string `json:"updated_at" format:"date-time"`
+	ID                 int64  `json:"id"`
+	PersonID           int64  `json:"person_id"`
+	BaseType           string `json:"base_type" enum:"full,associate"`
+	Lifecycle          string `json:"lifecycle" enum:"pending,approved,rejected,inactive,resigned,deceased"`
+	JoinedOn           string `json:"joined_on,omitempty" format:"date"`
+	EndedOn            string `json:"ended_on,omitempty" format:"date"`
+	LegacyCurrentUntil string `json:"legacy_current_until,omitempty" format:"date"`
+	Version            int64  `json:"version"`
+	CreatedAt          string `json:"created_at" format:"date-time"`
+	UpdatedAt          string `json:"updated_at" format:"date-time"`
 }
 
 type FCCVerification struct {
@@ -169,11 +169,11 @@ type RevokeHonoraryOutput struct{}
 // RegisterMemberships registers all membership lifecycle, FCC, and honorary grant endpoints.
 func RegisterMemberships(api huma.API) {
 	Register(api, huma.Operation{
-		OperationID: "membership-apply",
-		Method:      http.MethodPost,
-		Path:        "/members/{id}/memberships/apply",
-		Summary:     "Create a pending membership application for a member",
-		Tags:        []string{"memberships"},
+		OperationID:   "membership-apply",
+		Method:        http.MethodPost,
+		Path:          "/members/{id}/memberships/apply",
+		Summary:       "Create a pending membership application for a member",
+		Tags:          []string{"memberships"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "member.create",
@@ -230,11 +230,11 @@ func RegisterMemberships(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "fcc-verification-create",
-		Method:      http.MethodPost,
-		Path:        "/memberships/{id}/fcc-verifications",
-		Summary:     "Record an FCC license verification for a membership",
-		Tags:        []string{"fcc"},
+		OperationID:   "fcc-verification-create",
+		Method:        http.MethodPost,
+		Path:          "/memberships/{id}/fcc-verifications",
+		Summary:       "Record an FCC license verification for a membership",
+		Tags:          []string{"fcc"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "fcc.verify",
@@ -246,11 +246,11 @@ func RegisterMemberships(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "fcc-verification-revoke",
-		Method:      http.MethodPost,
-		Path:        "/fcc-verifications/{id}/revoke",
-		Summary:     "Revoke an FCC verification",
-		Tags:        []string{"fcc"},
+		OperationID:   "fcc-verification-revoke",
+		Method:        http.MethodPost,
+		Path:          "/fcc-verifications/{id}/revoke",
+		Summary:       "Revoke an FCC verification",
+		Tags:          []string{"fcc"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "fcc.verify",
@@ -262,11 +262,11 @@ func RegisterMemberships(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "honorary-grant-create",
-		Method:      http.MethodPost,
-		Path:        "/memberships/{id}/honorary-grants",
-		Summary:     "Create an honorary grant for a membership",
-		Tags:        []string{"honorary"},
+		OperationID:   "honorary-grant-create",
+		Method:        http.MethodPost,
+		Path:          "/memberships/{id}/honorary-grants",
+		Summary:       "Create an honorary grant for a membership",
+		Tags:          []string{"honorary"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "honorary.grant",
@@ -293,11 +293,11 @@ func RegisterMemberships(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "honorary-grant-expire",
-		Method:      http.MethodPost,
-		Path:        "/honorary-grants/{id}/expire",
-		Summary:     "Mark an honorary grant as expired",
-		Tags:        []string{"honorary"},
+		OperationID:   "honorary-grant-expire",
+		Method:        http.MethodPost,
+		Path:          "/honorary-grants/{id}/expire",
+		Summary:       "Mark an honorary grant as expired",
+		Tags:          []string{"honorary"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "honorary.grant",
@@ -309,11 +309,11 @@ func RegisterMemberships(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "honorary-grant-revoke",
-		Method:      http.MethodPost,
-		Path:        "/honorary-grants/{id}/revoke",
-		Summary:     "Revoke an honorary grant",
-		Tags:        []string{"honorary"},
+		OperationID:   "honorary-grant-revoke",
+		Method:        http.MethodPost,
+		Path:          "/honorary-grants/{id}/revoke",
+		Summary:       "Revoke an honorary grant",
+		Tags:          []string{"honorary"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "honorary.grant",

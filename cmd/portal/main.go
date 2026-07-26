@@ -36,13 +36,13 @@ Flags:
 		fs.PrintDefaults()
 	}
 
-	showVersion     := fs.Bool("version",      false, "print version and exit")
+	showVersion := fs.Bool("version", false, "print version and exit")
 	showVersionLong := fs.Bool("version-long", false, "print detailed build info and exit")
-	addr            := fs.String("addr",        ":8080", "listen address")
-	logLevel        := fs.String("log-level",  "info",  "log level (debug|info|warn|error)")
-	migrate         := fs.Bool("migrate",       false, "apply pending migrations at startup (WS3.1+)")
-	dumpOpenAPI     := fs.String("dump-openapi", "", "write OpenAPI JSON to `path` and exit (used by make openapi)")
-	dumpCatalog     := fs.String("dump-catalog", "", "write capability catalog JSON to `path` and exit (used by make openapi)")
+	addr := fs.String("addr", ":8080", "listen address")
+	logLevel := fs.String("log-level", "info", "log level (debug|info|warn|error)")
+	migrate := fs.Bool("migrate", false, "apply pending migrations at startup (WS3.1+)")
+	dumpOpenAPI := fs.String("dump-openapi", "", "write OpenAPI JSON to `path` and exit (used by make openapi)")
+	dumpCatalog := fs.String("dump-catalog", "", "write capability catalog JSON to `path` and exit (used by make openapi)")
 
 	_ = migrate
 

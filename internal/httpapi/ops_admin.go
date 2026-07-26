@@ -23,12 +23,12 @@ type Role struct {
 }
 
 type User struct {
-	ID          int64  `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
+	ID          int64    `json:"id"`
+	Email       string   `json:"email"`
+	DisplayName string   `json:"display_name"`
 	Roles       []string `json:"roles" doc:"Role names currently granted."`
-	IsActive    bool   `json:"is_active"`
-	CreatedAt   string `json:"created_at" format:"date-time"`
+	IsActive    bool     `json:"is_active"`
+	CreatedAt   string   `json:"created_at" format:"date-time"`
 }
 
 type RoleGrant struct {
@@ -123,11 +123,11 @@ func RegisterAdmin(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "role-grant-create",
-		Method:      http.MethodPost,
-		Path:        "/users/{id}/role-grants",
-		Summary:     "Grant a role to a user",
-		Tags:        []string{"admin"},
+		OperationID:   "role-grant-create",
+		Method:        http.MethodPost,
+		Path:          "/users/{id}/role-grants",
+		Summary:       "Grant a role to a user",
+		Tags:          []string{"admin"},
 		DefaultStatus: http.StatusCreated,
 	}, OperationMeta{
 		RequiredCapability: "role.grant",
@@ -139,11 +139,11 @@ func RegisterAdmin(api huma.API) {
 	})
 
 	Register(api, huma.Operation{
-		OperationID: "role-grant-revoke",
-		Method:      http.MethodPost,
-		Path:        "/role-grants/{id}/revoke",
-		Summary:     "Revoke a role grant",
-		Tags:        []string{"admin"},
+		OperationID:   "role-grant-revoke",
+		Method:        http.MethodPost,
+		Path:          "/role-grants/{id}/revoke",
+		Summary:       "Revoke a role grant",
+		Tags:          []string{"admin"},
 		DefaultStatus: http.StatusNoContent,
 	}, OperationMeta{
 		RequiredCapability: "role.grant",
