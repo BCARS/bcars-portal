@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# pre-push hook — refuse direct pushes to protected branches.
+#
+# GitHub's server-side branch protection requires a paid plan on private
+# repos, so this hook is our local substitute. Install with:
+#     make install-hooks
+#
+# Bypass (rarely — for the first push, tag pushes, or emergency fixes):
+#     PORTAL_ALLOW_PUSH_MAIN=1 git push
+#
+# Standard flow: work on a branch, `git push -u origin <branch>`, open a PR
+# with `gh pr create`, merge with `gh pr merge --squash --delete-branch`.
+
+set -euo pipefail
+
+protected_branches=("main")
+
+if [ "${PORTAL_ALLOW_PUSH_MAIN:-0}" = "1" ]; then
+  exit 0
+fi
+
+# stdin lines: <local-ref> <local-sha> <remote-ref> <remote-sha>
+while read -r local_ref _local_sha remote_ref _remote_sha; do
+  # Ignore tag pushes and deletions.
+  case "$remote_ref" in
+    refs/tags/*|"")
+      continue
+      ;;
+  esac
+  for br in "${protected_branches[@]}"; do
+    if [ "$remote_ref" = "refs/heads/$br" ]; then
+      echo "pre-push: refusing direct push to '$br'." >&2
+      echo "  local ref: $local_ref" >&2
+      echo "  Push to a branch and open a PR:" >&2
+      echo "    git switch -c my-topic" >&2
+      echo "    git push -u origin HEAD" >&2
+      echo "    gh pr create --fill" >&2
+      echo "    gh pr merge --squash --delete-branch" >&2
+      echo "  Emergency bypass: PORTAL_ALLOW_PUSH_MAIN=1 git push" >&2
+      exit 1
+    fi
+  done
+done
+
+exit 0
