@@ -16,7 +16,7 @@ GOLANGCI     := $(shell go env GOPATH)/bin/golangci-lint
 STATICCHECK  := $(shell go env GOPATH)/bin/staticcheck
 SQLC         := $(shell go env GOPATH)/bin/sqlc
 
-.PHONY: all build test lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets
+.PHONY: all build test lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks
 
 all: build
 
@@ -84,3 +84,8 @@ tools:
 
 clean:
 	rm -rf $(BIN_DIR) dist coverage.out coverage.html
+
+install-hooks:
+	@if [ ! -d .git ]; then echo "not a git repo"; exit 1; fi
+	install -m 0755 hooks/pre-push .git/hooks/pre-push
+	@echo "installed .git/hooks/pre-push"
