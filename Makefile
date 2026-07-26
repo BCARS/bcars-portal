@@ -60,7 +60,7 @@ lint: fmt vet staticcheck golangci check-secrets
 sqlc:
 	@if [ ! -x "$(SQLC)" ]; then \
 		echo "installing sqlc"; \
-		$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@latest; \
+		$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1; \
 	fi
 	$(SQLC) generate
 
@@ -85,7 +85,7 @@ run: build
 tools:
 	GOBIN=$(GOBIN) $(GO) install honnef.co/go/tools/cmd/staticcheck@latest
 	GOBIN=$(GOBIN) $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	GOBIN=$(GOBIN) $(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	GOBIN=$(GOBIN) $(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
 clean:
 	rm -rf $(BIN_DIR) dist coverage.out coverage.html
