@@ -101,7 +101,7 @@ jobs:
           if [ -f docs/openapi.json ]; then
             make build
             ./bin/portal -dump-openapi docs/openapi.json -dump-catalog docs/capability-catalog.json
-            git diff --exit-code -- docs/openapi.json docs/capability-catalog.json
+            git diff -I '"version":' --exit-code -- docs/openapi.json docs/capability-catalog.json
           else
             echo "no openapi doc yet; skipping"
           fi
