@@ -69,7 +69,7 @@ sqlc-diff: sqlc
 		|| (echo "sqlc drift detected; run 'make sqlc' and commit"; exit 1)
 
 openapi: build
-	./$(BIN_DIR)/portal -dump-openapi docs/openapi.json -dump-catalog docs/capability-catalog.json
+	$(BIN_DIR)/portal -dump-openapi docs/openapi.json -dump-catalog docs/capability-catalog.json
 	@echo "wrote docs/openapi.json and docs/capability-catalog.json"
 
 openapi-diff: openapi

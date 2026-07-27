@@ -5,10 +5,10 @@
     "category": "system",
     "ai_tool_eligibility": "read-only",
     "operation_ids": [
-      "capabilities-list",
       "roles-list",
       "session-signout",
-      "session-current"
+      "session-current",
+      "capabilities-list"
     ]
   },
   {
@@ -17,9 +17,9 @@
     "category": "system",
     "ai_tool_eligibility": "never",
     "operation_ids": [
+      "users-list",
       "role-grant-revoke",
-      "role-grant-create",
-      "users-list"
+      "role-grant-create"
     ]
   },
   {
@@ -49,12 +49,12 @@
     "category": "membership",
     "ai_tool_eligibility": "read-only",
     "operation_ids": [
-      "notes-list",
       "member-get",
-      "contact-methods-list",
-      "members-list",
-      "member-timeline",
       "contact-method-visibility-get",
+      "notes-list",
+      "member-timeline",
+      "members-list",
+      "contact-methods-list",
       "member-acs-ares-get"
     ]
   },
@@ -73,8 +73,8 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "member-create",
-      "membership-apply"
+      "membership-apply",
+      "member-create"
     ]
   },
   {
@@ -104,8 +104,8 @@
     "operation_ids": [
       "contact-method-update",
       "contact-method-archive",
-      "contact-method-make-primary",
-      "contact-method-create"
+      "contact-method-create",
+      "contact-method-make-primary"
     ]
   },
   {
@@ -143,8 +143,8 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "fcc-verification-revoke",
-      "fcc-verification-create"
+      "fcc-verification-create",
+      "fcc-verification-revoke"
     ]
   },
   {
@@ -165,8 +165,8 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "note-create",
-      "note-update"
+      "note-update",
+      "note-create"
     ]
   },
   {
@@ -175,13 +175,13 @@
     "category": "membership",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "imports-list",
-      "import-get",
       "import-row-decision",
       "import-discard",
-      "import-rows-list",
       "import-preview",
-      "import-upload"
+      "import-get",
+      "import-upload",
+      "imports-list",
+      "import-rows-list"
     ]
   },
   {

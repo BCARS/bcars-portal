@@ -111,10 +111,10 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := dashboardData{}
 
-	h.db.QueryRowContext(ctx, `SELECT count(*) FROM persons WHERE deactivated_at IS NULL`).Scan(&data.TotalPersons)
-	h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'approved'`).Scan(&data.ActiveMemberships)
-	h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'pending'`).Scan(&data.PendingApprovals)
-	h.db.QueryRowContext(ctx, `SELECT count(*) FROM import_runs`).Scan(&data.ImportRuns)
+	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM persons WHERE deactivated_at IS NULL`).Scan(&data.TotalPersons)
+	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'approved'`).Scan(&data.ActiveMemberships)
+	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'pending'`).Scan(&data.PendingApprovals)
+	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM import_runs`).Scan(&data.ImportRuns)
 
 	data.RecentAudit, _ = h.queries.ListAuditEvents(ctx, sqlcgen.ListAuditEventsParams{Limit: 10, Offset: 0})
 
@@ -223,7 +223,10 @@ func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := h.principal()
 
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
 	person, err := h.members.CreatePerson(ctx, p, members.CreatePersonParams{
 		DisplayName: r.FormValue("display_name"),
 		SortName:    r.FormValue("sort_name"),
@@ -259,7 +262,10 @@ func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
 	p := h.principal()
 	id := parseID(r, "id")
 
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
 
 	_, err := h.members.UpdatePerson(ctx, p, members.UpdatePersonParams{
@@ -288,7 +294,10 @@ func (h *Handler) memberDeactivate(w http.ResponseWriter, r *http.Request) {
 	p := h.principal()
 	id := parseID(r, "id")
 
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
 
 	if err := h.members.DeactivatePerson(ctx, p, id, version); err != nil {
@@ -305,7 +314,10 @@ func (h *Handler) memberReactivate(w http.ResponseWriter, r *http.Request) {
 	p := h.principal()
 	id := parseID(r, "id")
 
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
 
 	if err := h.members.ReactivatePerson(ctx, p, id, version); err != nil {
@@ -323,7 +335,10 @@ func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
 	id := parseID(r, "id")
 	mid := parseID(r, "mid")
 
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
 	baseType := r.FormValue("base_type")
 
@@ -342,7 +357,10 @@ func (h *Handler) noteCreate(w http.ResponseWriter, r *http.Request) {
 	p := h.principal()
 	id := parseID(r, "id")
 
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
 	_, err := h.members.CreateNote(ctx, p, members.CreateNoteParams{
 		SubjectKind: "person",
 		SubjectID:   id,
@@ -390,7 +408,10 @@ func (h *Handler) contactCreate(w http.ResponseWriter, r *http.Request) {
 	p := h.principal()
 	id := parseID(r, "id")
 
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
 	valueRaw := strings.TrimSpace(r.FormValue("value"))
 	isPrimary := r.FormValue("is_primary") == "1"
 
