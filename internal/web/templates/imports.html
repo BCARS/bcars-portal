@@ -1,0 +1,78 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Import Review - BCARS Portal{{end}}
+
+{{define "content"}}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Import Review</h2>
+</div>
+
+<div class="card">
+    <h3>Upload Import File</h3>
+    <form method="post" action="/admin/imports/upload" enctype="multipart/form-data">
+        <div style="display: flex; gap: 8px; align-items: end;">
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                <label for="file">Groups.io Export (CSV or JSON)</label>
+                <input type="file" id="file" name="file" accept=".csv,.json" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload &amp; Stage</button>
+        </div>
+    </form>
+</div>
+
+{{if .Runs}}
+<div class="card">
+    <h3>Import Runs</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>File</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Uploaded</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Runs}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.SourceFilename}}</td>
+            <td><span class="badge badge-gray">{{.SourceKind}}</span></td>
+            <td>
+                {{if eq .Status "staged"}}<span class="badge badge-yellow">Staged</span>
+                {{else if eq .Status "committed"}}<span class="badge badge-green">Committed</span>
+                {{else if eq .Status "discarded"}}<span class="badge badge-gray">Discarded</span>
+                {{else}}<span class="badge badge-blue">{{.Status}}</span>
+                {{end}}
+            </td>
+            <td>{{.UploadedAt}}</td>
+            <td>
+                {{if eq .Status "staged"}}
+                <div style="display: flex; gap: 4px;">
+                    <a href="/admin/imports/{{.ID}}" class="btn btn-sm btn-secondary">Review</a>
+                    <form method="post" action="/admin/imports/{{.ID}}/commit" style="display: inline;">
+                        <button type="submit" class="btn btn-sm btn-primary"
+                                onclick="return confirm('Commit this import? Auto-resolvable rows will be applied.');">Commit</button>
+                    </form>
+                    <form method="post" action="/admin/imports/{{.ID}}/discard" style="display: inline;">
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('Discard this import? No data will be applied.');">Discard</button>
+                    </form>
+                </div>
+                {{else if eq .Status "committed"}}
+                <a href="/admin/imports/{{.ID}}" class="btn btn-sm btn-secondary">View</a>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<div class="card">
+    <div class="empty-state"><p>No import runs yet.</p></div>
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,63 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Members - BCARS Portal{{end}}
+
+{{define "content"}}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Members</h2>
+    <a href="/admin/members/new" class="btn btn-primary">Create Member</a>
+</div>
+
+<div class="card">
+    <form action="/admin/members" method="get">
+        <div class="search-bar">
+            <input type="text" name="q" value="{{.Query}}" placeholder="Search by name or call sign..." aria-label="Search members"
+                   hx-get="/admin/members" hx-trigger="input changed delay:300ms" hx-target="#members-table" hx-select="#members-table" hx-push-url="true">
+            <button type="submit" class="btn btn-secondary">Search</button>
+        </div>
+    </form>
+
+    <div id="members-table">
+        {{if .Members}}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Call Sign</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Members}}
+                <tr>
+                    <td><a href="/admin/members/{{.ID}}">{{.DisplayName}}</a></td>
+                    <td>{{if .CallSign.Valid}}{{.CallSign.String}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                    <td>{{if .BaseType}}{{.BaseType}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                    <td>
+                        {{if .DeactivatedAt.Valid}}<span class="badge badge-red">Deactivated</span>
+                        {{else if .DeceasedAt.Valid}}<span class="badge badge-gray">Deceased</span>
+                        {{else}}<span class="badge badge-green">Active</span>
+                        {{end}}
+                    </td>
+                    <td><a href="/admin/members/{{.ID}}" class="btn btn-sm btn-secondary">View</a></td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+
+        {{if .HasMore}}
+        <div style="text-align: center; margin-top: 16px;">
+            <a href="/admin/members?q={{.Query}}&offset={{.NextOffset}}" class="btn btn-secondary btn-sm">Load more</a>
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No members found.</p>
+            {{if .Query}}<p>Try adjusting your search terms.</p>{{end}}
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

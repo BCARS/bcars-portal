@@ -76,11 +76,11 @@ openapi-diff: openapi
 	@git diff --exit-code -- docs/openapi.json docs/capability-catalog.json 2>/dev/null \
 		|| (echo "openapi/capability catalog drift; run 'make openapi' and commit"; exit 1)
 
-migrate:
-	@echo "migrations not yet implemented (WS3.1)"
+migrate: build
+	$(BIN_DIR)/portal --migrate-only --db bcars.db
 
 run: build
-	./$(BIN_DIR)/portal
+	$(BIN_DIR)/portal --migrate --db bcars.db
 
 tools:
 	GOBIN=$(GOBIN) $(GO) install honnef.co/go/tools/cmd/staticcheck@latest
