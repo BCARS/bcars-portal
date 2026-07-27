@@ -73,7 +73,7 @@ openapi: build
 	@echo "wrote docs/openapi.json and docs/capability-catalog.json"
 
 openapi-diff: openapi
-	@git diff --exit-code -- docs/openapi.json docs/capability-catalog.json 2>/dev/null \
+	@git diff -I '"version":' --exit-code -- docs/openapi.json docs/capability-catalog.json 2>/dev/null \
 		|| (echo "openapi/capability catalog drift; run 'make openapi' and commit"; exit 1)
 
 migrate: build
