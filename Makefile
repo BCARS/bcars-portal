@@ -60,7 +60,7 @@ lint: fmt vet staticcheck golangci check-secrets
 sqlc:
 	@if [ ! -x "$(SQLC)" ]; then \
 		echo "installing sqlc"; \
-		$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1; \
+		GOBIN=$(GOBIN) $(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1; \
 	fi
 	$(SQLC) generate
 
