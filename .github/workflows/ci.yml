@@ -77,14 +77,7 @@ jobs:
           cache: true
 
       - name: sqlc diff
-        run: |
-          if [ -f sqlc.yaml ] && [ -n "$(ls internal/db/queries 2>/dev/null | grep -v '^\.gitkeep$' || true)" ]; then
-            go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
-            sqlc generate
-            git diff --exit-code -- internal/db/sqlc
-          else
-            echo "no sqlc queries yet; skipping"
-          fi
+        run: make sqlc-diff
 
   openapi-diff:
     runs-on: ubuntu-latest
@@ -97,11 +90,4 @@ jobs:
           cache: true
 
       - name: OpenAPI diff
-        run: |
-          if [ -f docs/openapi.json ]; then
-            make build
-            ./bin/portal -dump-openapi docs/openapi.json -dump-catalog docs/capability-catalog.json
-            git diff -I '"version":' --exit-code -- docs/openapi.json docs/capability-catalog.json
-          else
-            echo "no openapi doc yet; skipping"
-          fi
+        run: make openapi-diff
