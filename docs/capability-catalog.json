@@ -5,10 +5,10 @@
     "category": "system",
     "ai_tool_eligibility": "read-only",
     "operation_ids": [
+      "capabilities-list",
       "roles-list",
-      "session-signout",
       "session-current",
-      "capabilities-list"
+      "session-signout"
     ]
   },
   {
@@ -17,9 +17,9 @@
     "category": "system",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "users-list",
+      "role-grant-create",
       "role-grant-revoke",
-      "role-grant-create"
+      "users-list"
     ]
   },
   {
@@ -49,13 +49,13 @@
     "category": "membership",
     "ai_tool_eligibility": "read-only",
     "operation_ids": [
-      "member-get",
       "contact-method-visibility-get",
-      "notes-list",
+      "contact-methods-list",
+      "member-acs-ares-get",
+      "member-get",
       "member-timeline",
       "members-list",
-      "contact-methods-list",
-      "member-acs-ares-get"
+      "notes-list"
     ]
   },
   {
@@ -73,8 +73,8 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "membership-apply",
-      "member-create"
+      "member-create",
+      "membership-apply"
     ]
   },
   {
@@ -92,8 +92,8 @@
     "category": "membership",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "member-reactivate",
-      "member-deactivate"
+      "member-deactivate",
+      "member-reactivate"
     ]
   },
   {
@@ -102,10 +102,10 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "contact-method-update",
       "contact-method-archive",
       "contact-method-create",
-      "contact-method-make-primary"
+      "contact-method-make-primary",
+      "contact-method-update"
     ]
   },
   {
@@ -114,8 +114,8 @@
     "category": "membership",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "member-acs-ares-post",
-      "contact-method-visibility-post"
+      "contact-method-visibility-post",
+      "member-acs-ares-post"
     ]
   },
   {
@@ -155,8 +155,8 @@
     "operation_ids": [
       "honorary-grant-create",
       "honorary-grant-expire",
-      "honorary-grant-update",
-      "honorary-grant-revoke"
+      "honorary-grant-revoke",
+      "honorary-grant-update"
     ]
   },
   {
@@ -165,8 +165,8 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "note-update",
-      "note-create"
+      "note-create",
+      "note-update"
     ]
   },
   {
@@ -175,13 +175,13 @@
     "category": "membership",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "import-row-decision",
       "import-discard",
-      "import-preview",
       "import-get",
+      "import-preview",
+      "import-row-decision",
+      "import-rows-list",
       "import-upload",
-      "imports-list",
-      "import-rows-list"
+      "imports-list"
     ]
   },
   {

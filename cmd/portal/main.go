@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 	"time"
 
@@ -65,10 +66,12 @@ Flags:
 	logger := obs.NewLogger(os.Stderr, *logLevel)
 
 	// Generate artifacts and exit (used by make openapi). No DB needed.
+	// Use the base version without git SHA so the output is deterministic
+	// across commits and openapi-diff stays clean.
 	if *dumpOpenAPI != "" || *dumpCatalog != "" {
 		_, api := httpapi.NewRouter(httpapi.Config{
 			Logger:  logger,
-			Version: version.Get().Short(),
+			Version: version.Get().Version,
 		})
 		httpapi.RegisterAll(api)
 		if err := httpapi.VerifyAll(api); err != nil {
@@ -179,6 +182,9 @@ func dumpArtifacts(api huma.API, openapiPath, catalogPath string) error {
 		for opID, meta := range httpapi.AllMeta() {
 			code := meta.RequiredCapability
 			opIDsByCode[code] = append(opIDsByCode[code], opID)
+		}
+		for k := range opIDsByCode {
+			sort.Strings(opIDsByCode[k])
 		}
 		var entries []entry
 		for _, cap := range authz.All {
