@@ -1,0 +1,140 @@
+{{template "layout.html" .}}
+
+{{define "title"}}{{.Person.DisplayName}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="breadcrumb">
+    <a href="/admin/members">Members</a> <span>&rsaquo;</span> {{.Person.DisplayName}}
+</div>
+
+{{if .Flash}}
+<div class="alert alert-success">{{.Flash}}</div>
+{{end}}
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+    <div>
+        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">{{.Person.DisplayName}}</h2>
+        <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
+            {{if .Person.CallSign.Valid}}{{.Person.CallSign.String}}{{end}}
+            {{if .Person.DeactivatedAt.Valid}}<span class="badge badge-red">Deactivated</span>{{end}}
+            {{if .Person.DeceasedAt.Valid}}<span class="badge badge-gray">Deceased</span>{{end}}
+        </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        <a href="/admin/members/{{.Person.ID}}/edit" class="btn btn-secondary btn-sm">Edit</a>
+        {{if .Person.DeactivatedAt.Valid}}
+        <form method="post" action="/admin/members/{{.Person.ID}}/reactivate">
+            <input type="hidden" name="version" value="{{.Person.Version}}">
+            <button type="submit" class="btn btn-sm btn-secondary">Reactivate</button>
+        </form>
+        {{else}}
+        <form method="post" action="/admin/members/{{.Person.ID}}/deactivate"
+              onsubmit="return confirm('Are you sure you want to deactivate this member?');">
+            <input type="hidden" name="version" value="{{.Person.Version}}">
+            <button type="submit" class="btn btn-sm btn-danger">Deactivate</button>
+        </form>
+        {{end}}
+    </div>
+</div>
+
+<div class="detail-grid">
+    <div class="card">
+        <h3>Person Details</h3>
+        <div class="detail-row"><div class="detail-label">Display Name</div><div class="detail-value">{{.Person.DisplayName}}</div></div>
+        <div class="detail-row"><div class="detail-label">Sort Name</div><div class="detail-value">{{.Person.SortName}}</div></div>
+        <div class="detail-row"><div class="detail-label">Call Sign</div><div class="detail-value">{{if .Person.CallSign.Valid}}{{.Person.CallSign.String}}{{else}}<span style="color:#94a3b8;">Not set</span>{{end}}</div></div>
+        <div class="detail-row"><div class="detail-label">Created</div><div class="detail-value">{{.Person.CreatedAt}}</div></div>
+        <div class="detail-row"><div class="detail-label">Updated</div><div class="detail-value">{{.Person.UpdatedAt}}</div></div>
+    </div>
+
+    <div class="card">
+        <h3>Contact Methods</h3>
+        {{if .ContactMethods}}
+        {{range .ContactMethods}}
+        <div class="detail-row">
+            <div class="detail-label">
+                {{.Kind}}
+                {{if eq .IsPrimary 1}}<span class="badge badge-blue">Primary</span>{{end}}
+            </div>
+            <div class="detail-value">{{.ValueRaw}}</div>
+        </div>
+        {{end}}
+        {{else}}
+        <p style="color: #94a3b8; font-size: 0.875rem;">No contact methods.</p>
+        {{end}}
+        <div style="margin-top: 12px;">
+            <a href="/admin/members/{{.Person.ID}}/contacts/new" class="btn btn-sm btn-secondary">Add Contact</a>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 16px;">
+    <h3>Memberships</h3>
+    {{if .Memberships}}
+    <table>
+        <thead><tr><th>Type</th><th>Status</th><th>Joined</th><th>Ended</th><th></th></tr></thead>
+        <tbody>
+        {{range .Memberships}}
+        <tr>
+            <td>{{.BaseType}}</td>
+            <td>
+                {{if eq .Lifecycle "approved"}}<span class="badge badge-green">Approved</span>
+                {{else if eq .Lifecycle "pending"}}<span class="badge badge-yellow">Pending</span>
+                {{else if eq .Lifecycle "rejected"}}<span class="badge badge-red">Rejected</span>
+                {{else}}<span class="badge badge-gray">{{.Lifecycle}}</span>
+                {{end}}
+            </td>
+            <td>{{if .JoinedOn.Valid}}{{.JoinedOn.String}}{{else}}-{{end}}</td>
+            <td>{{if .EndedOn.Valid}}{{.EndedOn.String}}{{else}}-{{end}}</td>
+            <td>
+                {{if eq .Lifecycle "pending"}}
+                <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/approve" style="display:inline;">
+                    <input type="hidden" name="version" value="{{.Version}}">
+                    <input type="hidden" name="base_type" value="{{.BaseType}}">
+                    <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                </form>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p style="color: #94a3b8; font-size: 0.875rem;">No memberships.</p>
+    {{end}}
+</div>
+
+<div class="card" style="margin-top: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>Notes</h3>
+    </div>
+    {{if .Notes}}
+    {{range .Notes}}
+    <div style="border-bottom: 1px solid #f1f5f9; padding: 12px 0;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">
+            <span><span class="badge badge-gray">{{.Category}}</span> <span class="badge badge-gray">{{.Visibility}}</span></span>
+            <span>{{.CreatedAt}}</span>
+        </div>
+        <div style="font-size: 0.875rem; white-space: pre-wrap;">{{.Body}}</div>
+    </div>
+    {{end}}
+    {{else}}
+    <p style="color: #94a3b8; font-size: 0.875rem;">No notes.</p>
+    {{end}}
+
+    <form method="post" action="/admin/members/{{.Person.ID}}/notes" style="margin-top: 16px;">
+        <div class="form-group">
+            <label for="note-body">Add Note</label>
+            <textarea id="note-body" name="body" rows="3" placeholder="Write a note..." required></textarea>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <select name="category" class="form-group" style="width: auto; padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+                <option value="general">General</option>
+                <option value="approval">Approval</option>
+                <option value="honorary">Honorary</option>
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary">Save Note</button>
+        </div>
+    </form>
+</div>
+{{end}}

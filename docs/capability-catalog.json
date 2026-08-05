@@ -7,8 +7,8 @@
     "operation_ids": [
       "capabilities-list",
       "roles-list",
-      "session-signout",
-      "session-current"
+      "session-current",
+      "session-signout"
     ]
   },
   {
@@ -17,8 +17,8 @@
     "category": "system",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "role-grant-revoke",
       "role-grant-create",
+      "role-grant-revoke",
       "users-list"
     ]
   },
@@ -49,13 +49,13 @@
     "category": "membership",
     "ai_tool_eligibility": "read-only",
     "operation_ids": [
-      "notes-list",
-      "member-get",
-      "contact-methods-list",
-      "members-list",
-      "member-timeline",
       "contact-method-visibility-get",
-      "member-acs-ares-get"
+      "contact-methods-list",
+      "member-acs-ares-get",
+      "member-get",
+      "member-timeline",
+      "members-list",
+      "notes-list"
     ]
   },
   {
@@ -92,8 +92,8 @@
     "category": "membership",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "member-reactivate",
-      "member-deactivate"
+      "member-deactivate",
+      "member-reactivate"
     ]
   },
   {
@@ -102,10 +102,10 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "contact-method-update",
       "contact-method-archive",
+      "contact-method-create",
       "contact-method-make-primary",
-      "contact-method-create"
+      "contact-method-update"
     ]
   },
   {
@@ -114,8 +114,8 @@
     "category": "membership",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "member-acs-ares-post",
-      "contact-method-visibility-post"
+      "contact-method-visibility-post",
+      "member-acs-ares-post"
     ]
   },
   {
@@ -143,8 +143,8 @@
     "category": "membership",
     "ai_tool_eligibility": "curated",
     "operation_ids": [
-      "fcc-verification-revoke",
-      "fcc-verification-create"
+      "fcc-verification-create",
+      "fcc-verification-revoke"
     ]
   },
   {
@@ -155,8 +155,8 @@
     "operation_ids": [
       "honorary-grant-create",
       "honorary-grant-expire",
-      "honorary-grant-update",
-      "honorary-grant-revoke"
+      "honorary-grant-revoke",
+      "honorary-grant-update"
     ]
   },
   {
@@ -175,13 +175,13 @@
     "category": "membership",
     "ai_tool_eligibility": "never",
     "operation_ids": [
-      "imports-list",
-      "import-get",
-      "import-row-decision",
       "import-discard",
-      "import-rows-list",
+      "import-get",
       "import-preview",
-      "import-upload"
+      "import-row-decision",
+      "import-rows-list",
+      "import-upload",
+      "imports-list"
     ]
   },
   {

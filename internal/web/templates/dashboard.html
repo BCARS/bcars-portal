@@ -1,0 +1,56 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Dashboard - BCARS Portal{{end}}
+
+{{define "content"}}
+<h2 style="margin: 0 0 24px; font-size: 1.25rem; font-weight: 600;">Dashboard</h2>
+
+<div class="stats">
+    <div class="stat-card">
+        <div class="label">Total Members</div>
+        <div class="value">{{.TotalPersons}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Active Memberships</div>
+        <div class="value">{{.ActiveMemberships}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Pending Approval</div>
+        <div class="value">{{.PendingApprovals}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Import Runs</div>
+        <div class="value">{{.ImportRuns}}</div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div class="card">
+        <h2>Quick Actions</h2>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <a href="/admin/members" class="btn btn-primary" style="text-align: center;">Search Members</a>
+            <a href="/admin/members/new" class="btn btn-secondary" style="text-align: center;">Create Member</a>
+            <a href="/admin/imports" class="btn btn-secondary" style="text-align: center;">Import Review</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Recent Activity</h2>
+        {{if .RecentAudit}}
+        <table>
+            <thead><tr><th>Action</th><th>When</th></tr></thead>
+            <tbody>
+            {{range .RecentAudit}}
+            <tr>
+                <td>{{.Action}}</td>
+                <td>{{.OccurredAt}}</td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state"><p>No recent activity.</p></div>
+        {{end}}
+    </div>
+</div>
+{{end}}

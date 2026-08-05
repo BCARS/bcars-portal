@@ -1,0 +1,114 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Import #{{.Run.ID}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="breadcrumb">
+    <a href="/admin/imports">Imports</a> <span>&rsaquo;</span> Run #{{.Run.ID}}
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+    <div>
+        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Import Run #{{.Run.ID}}</h2>
+        <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
+            {{.Run.SourceFilename}} ({{.Run.SourceKind}})
+            {{if eq .Run.Status "staged"}}<span class="badge badge-yellow">Staged</span>
+            {{else if eq .Run.Status "committed"}}<span class="badge badge-green">Committed</span>
+            {{else if eq .Run.Status "discarded"}}<span class="badge badge-gray">Discarded</span>
+            {{end}}
+        </div>
+    </div>
+    {{if eq .Run.Status "staged"}}
+    <div style="display: flex; gap: 8px;">
+        <form method="post" action="/admin/imports/{{.Run.ID}}/commit">
+            <button type="submit" class="btn btn-primary"
+                    onclick="return confirm('Commit this import?');">Commit Import</button>
+        </form>
+        <form method="post" action="/admin/imports/{{.Run.ID}}/discard">
+            <button type="submit" class="btn btn-danger"
+                    onclick="return confirm('Discard this import?');">Discard</button>
+        </form>
+    </div>
+    {{end}}
+</div>
+
+<div class="stats">
+    <div class="stat-card">
+        <div class="label">Total Rows</div>
+        <div class="value">{{.TotalRows}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Auto-Resolvable</div>
+        <div class="value">{{.AutoRows}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Manual Review</div>
+        <div class="value">{{.ManualRows}}</div>
+    </div>
+</div>
+
+{{if .ManualItems}}
+<div class="card">
+    <h3>Rows Requiring Manual Review</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Row</th>
+                <th>Name</th>
+                <th>Action</th>
+                <th>Reason</th>
+                <th>Match</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .ManualItems}}
+        <tr>
+            <td>{{.SourceRowIndex}}</td>
+            <td>{{.DisplayName}}</td>
+            <td><span class="badge badge-yellow">{{.ProposedAction}}</span></td>
+            <td>{{.ManualReason}}</td>
+            <td>{{if .MatchMethod}}{{.MatchMethod}}{{else}}-{{end}}</td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+<div class="card">
+    <h3>All Staged Rows</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Row</th>
+                <th>Name</th>
+                <th>Call Sign</th>
+                <th>Action</th>
+                <th>Match</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .AllItems}}
+        <tr>
+            <td>{{.SourceRowIndex}}</td>
+            <td>{{.DisplayName}}</td>
+            <td>{{.CallSign}}</td>
+            <td>
+                {{if eq .ProposedAction "create"}}<span class="badge badge-green">Create</span>
+                {{else if eq .ProposedAction "update"}}<span class="badge badge-blue">Update</span>
+                {{else}}<span class="badge badge-yellow">{{.ProposedAction}}</span>
+                {{end}}
+            </td>
+            <td>{{if .MatchMethod}}{{.MatchMethod}}{{else}}-{{end}}</td>
+            <td>
+                {{if .RequiresManual}}<span class="badge badge-yellow">Manual</span>
+                {{else}}<span class="badge badge-green">Auto</span>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

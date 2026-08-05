@@ -60,7 +60,7 @@ lint: fmt vet staticcheck golangci check-secrets
 sqlc:
 	@if [ ! -x "$(SQLC)" ]; then \
 		echo "installing sqlc"; \
-		$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1; \
+		GOBIN=$(GOBIN) $(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1; \
 	fi
 	$(SQLC) generate
 
@@ -69,18 +69,18 @@ sqlc-diff: sqlc
 		|| (echo "sqlc drift detected; run 'make sqlc' and commit"; exit 1)
 
 openapi: build
-	./$(BIN_DIR)/portal -dump-openapi docs/openapi.json -dump-catalog docs/capability-catalog.json
+	$(BIN_DIR)/portal -dump-openapi docs/openapi.json -dump-catalog docs/capability-catalog.json
 	@echo "wrote docs/openapi.json and docs/capability-catalog.json"
 
 openapi-diff: openapi
-	@git diff --exit-code -- docs/openapi.json docs/capability-catalog.json 2>/dev/null \
+	@git diff -I '"version":' --exit-code -- docs/openapi.json docs/capability-catalog.json 2>/dev/null \
 		|| (echo "openapi/capability catalog drift; run 'make openapi' and commit"; exit 1)
 
-migrate:
-	@echo "migrations not yet implemented (WS3.1)"
+migrate: build
+	$(BIN_DIR)/portal --migrate-only --db bcars.db
 
 run: build
-	./$(BIN_DIR)/portal
+	$(BIN_DIR)/portal --migrate --db bcars.db
 
 tools:
 	GOBIN=$(GOBIN) $(GO) install honnef.co/go/tools/cmd/staticcheck@latest

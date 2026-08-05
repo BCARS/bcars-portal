@@ -1,0 +1,56 @@
+{{template "layout.html" .}}
+
+{{define "title"}}{{if .IsEdit}}Edit {{.Person.DisplayName}}{{else}}Create Member{{end}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="breadcrumb">
+    <a href="/admin/members">Members</a>
+    {{if .IsEdit}}<span>&rsaquo;</span> <a href="/admin/members/{{.Person.ID}}">{{.Person.DisplayName}}</a>{{end}}
+    <span>&rsaquo;</span> {{if .IsEdit}}Edit{{else}}Create{{end}}
+</div>
+
+<div class="card" style="max-width: 600px;">
+    <h2>{{if .IsEdit}}Edit Member{{else}}Create Member{{end}}</h2>
+
+    {{if .Error}}
+    <div class="alert alert-error">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="{{if .IsEdit}}/admin/members/{{.Person.ID}}/edit{{else}}/admin/members/new{{end}}">
+        {{if .IsEdit}}<input type="hidden" name="version" value="{{.Person.Version}}">{{end}}
+
+        <div class="form-group">
+            <label for="display_name">Display Name</label>
+            <input type="text" id="display_name" name="display_name" required
+                   value="{{if .IsEdit}}{{.Person.DisplayName}}{{end}}" placeholder="e.g. Alice Member">
+        </div>
+
+        <div class="form-group">
+            <label for="sort_name">Sort Name</label>
+            <input type="text" id="sort_name" name="sort_name" required
+                   value="{{if .IsEdit}}{{.Person.SortName}}{{end}}" placeholder="e.g. Member, Alice">
+        </div>
+
+        <div class="form-group">
+            <label for="call_sign">Call Sign</label>
+            <input type="text" id="call_sign" name="call_sign"
+                   value="{{if .IsEdit}}{{if .Person.CallSign.Valid}}{{.Person.CallSign.String}}{{end}}{{end}}" placeholder="e.g. KA1ABC">
+        </div>
+
+        {{if not .IsEdit}}
+        <div class="form-group">
+            <label for="base_type">Membership Type</label>
+            <select id="base_type" name="base_type" required>
+                <option value="full">Full</option>
+                <option value="associate">Associate</option>
+            </select>
+        </div>
+        {{end}}
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <a href="{{if .IsEdit}}/admin/members/{{.Person.ID}}{{else}}/admin/members{{end}}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{if .IsEdit}}Save Changes{{else}}Create Member{{end}}</button>
+        </div>
+    </form>
+</div>
+{{end}}

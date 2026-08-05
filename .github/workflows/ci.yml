@@ -5,28 +5,21 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  GOTOOLCHAIN: auto
+  GO_VERSION: '1.26.x'
+
 jobs:
-  build:
+  # Fast checks that don't need build output — run in parallel.
+  lint:
     runs-on: ubuntu-latest
-    env:
-      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version: ${{ env.GO_VERSION }}
           check-latest: true
-          # cache: true re-enabled once WS3 introduces go.sum.
-
-      - name: Show Go version
-        run: go version
-
-      - name: Build
-        run: make build
-
-      - name: Test (race)
-        run: go test -race -count=1 ./...
+          cache: true
 
       - name: gofmt
         run: |
@@ -40,37 +33,61 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
-
       - name: staticcheck
-        run: staticcheck ./...
-
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
 
       - name: golangci-lint
-        run: golangci-lint run
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run
 
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
       - name: Secrets / PII check
         run: ./scripts/check-no-secrets.sh
 
-      # sqlc-diff and openapi-diff become meaningful in WS2/WS3. Until then
-      # they no-op because the target files do not exist yet.
-      - name: sqlc diff (no-op until WS3)
-        run: |
-          if [ -f sqlc.yaml ] && [ -n "$(ls internal/db/queries 2>/dev/null | grep -v '^\.gitkeep$' || true)" ]; then
-            go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-            sqlc generate
-            git diff --exit-code -- internal/db/sqlc
-          else
-            echo "no sqlc queries yet; skipping"
-          fi
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
 
-      - name: OpenAPI diff (no-op until WS2.4)
-        run: |
-          if [ -f docs/openapi.json ]; then
-            echo "TODO: regenerate and diff docs/openapi.json"
-          else
-            echo "no openapi doc yet; skipping"
-          fi
+      - name: Build
+        run: make build
+
+      - name: Test (race)
+        run: go test -race -count=1 ./...
+
+  sqlc-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+
+      - name: sqlc diff
+        run: make sqlc-diff
+
+  openapi-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+
+      - name: OpenAPI diff
+        run: make openapi-diff

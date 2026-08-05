@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/httpapi"
 	"github.com/bcars/bcars-portal/internal/obs"
@@ -40,11 +42,11 @@ Flags:
 	showVersionLong := fs.Bool("version-long", false, "print detailed build info and exit")
 	addr := fs.String("addr", ":8080", "listen address")
 	logLevel := fs.String("log-level", "info", "log level (debug|info|warn|error)")
-	migrate := fs.Bool("migrate", false, "apply pending migrations at startup (WS3.1+)")
+	dbPath := fs.String("db", "bcars.db", "path to SQLite database file")
+	migrate := fs.Bool("migrate", false, "apply pending migrations at startup")
+	migrateOnly := fs.Bool("migrate-only", false, "apply migrations and exit")
 	dumpOpenAPI := fs.String("dump-openapi", "", "write OpenAPI JSON to `path` and exit (used by make openapi)")
 	dumpCatalog := fs.String("dump-catalog", "", "write capability catalog JSON to `path` and exit (used by make openapi)")
-
-	_ = migrate
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -63,10 +65,52 @@ Flags:
 
 	logger := obs.NewLogger(os.Stderr, *logLevel)
 
+	// Generate artifacts and exit (used by make openapi). No DB needed.
+	// Use the base version without git SHA so the output is deterministic
+	// across commits and openapi-diff stays clean.
+	if *dumpOpenAPI != "" || *dumpCatalog != "" {
+		_, api := httpapi.NewRouter(httpapi.Config{
+			Logger:  logger,
+			Version: version.Get().Version,
+		})
+		httpapi.RegisterAll(api)
+		if err := httpapi.VerifyAll(api); err != nil {
+			logger.Error("startup check failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		if err := dumpArtifacts(api, *dumpOpenAPI, *dumpCatalog); err != nil {
+			logger.Error("dump failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Open the database.
+	database, err := db.Open(*dbPath)
+	if err != nil {
+		logger.Error("failed to open database", slog.String("path", *dbPath), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	// Run migrations if requested.
+	if *migrate || *migrateOnly {
+		logger.Info("running migrations", slog.String("path", *dbPath))
+		if err := db.Migrate(database); err != nil {
+			logger.Error("migration failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		logger.Info("migrations complete")
+		if *migrateOnly {
+			return
+		}
+	}
+
 	// Build the router and register all operations.
 	handler, api := httpapi.NewRouter(httpapi.Config{
 		Logger:  logger,
 		Version: version.Get().Short(),
+		DB:      database,
 	})
 	httpapi.RegisterAll(api)
 
@@ -74,15 +118,6 @@ Flags:
 	if err := httpapi.VerifyAll(api); err != nil {
 		logger.Error("startup check failed", slog.String("error", err.Error()))
 		os.Exit(1)
-	}
-
-	// Generate artifacts and exit (used by make openapi).
-	if *dumpOpenAPI != "" || *dumpCatalog != "" {
-		if err := dumpArtifacts(api, *dumpOpenAPI, *dumpCatalog); err != nil {
-			logger.Error("dump failed", slog.String("error", err.Error()))
-			os.Exit(1)
-		}
-		return
 	}
 
 	// Start server.
@@ -147,6 +182,9 @@ func dumpArtifacts(api huma.API, openapiPath, catalogPath string) error {
 		for opID, meta := range httpapi.AllMeta() {
 			code := meta.RequiredCapability
 			opIDsByCode[code] = append(opIDsByCode[code], opID)
+		}
+		for k := range opIDsByCode {
+			sort.Strings(opIDsByCode[k])
 		}
 		var entries []entry
 		for _, cap := range authz.All {
