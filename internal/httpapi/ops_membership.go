@@ -175,6 +175,19 @@ type RevokeHonoraryInput struct {
 }
 type RevokeHonoraryOutput struct{}
 
+// honoraryFromDB converts a sqlcgen.HonoraryGrant to the API type.
+func honoraryFromDB(g sqlcgen.HonoraryGrant) HonoraryGrant {
+	return HonoraryGrant{
+		ID:           g.ID,
+		MembershipID: g.MembershipID,
+		IsLifetime:   g.IsLifetime == 1,
+		GrantedAt:    g.ApprovedAt,
+		EndsOn:       g.EndsOn.String,
+		Reason:       g.Reason,
+		RevokedAt:    g.RevokedAt.String,
+	}
+}
+
 // membershipFromDB converts a sqlcgen.Membership to the API type.
 func membershipFromDB(m sqlcgen.Membership) Membership {
 	return Membership{
@@ -360,7 +373,8 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		return &LifecycleMembershipOutput{Body: membershipFromDB(m)}, nil
 	})
 
-	// FCC and honorary endpoints remain stubs (separate beads: cme, 8kf).
+	// --- FCC verification endpoints ---
+
 	Register(api, huma.Operation{
 		OperationID:   "fcc-verification-create",
 		Method:        http.MethodPost,
@@ -374,7 +388,23 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *CreateFCCInput) (*CreateFCCOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		v, err := memberSvc.VerifyFCC(ctx, principal,
+			input.MembershipID, input.Body.CallSign, "", input.Body.VerificationSource)
+		if err != nil {
+			return nil, mapMembershipError(err)
+		}
+		return &CreateFCCOutput{Body: FCCVerification{
+			ID: v.ID, MembershipID: v.MembershipID,
+			CallSign: v.CallSign, VerificationSource: v.VerificationSource,
+			VerifiedAt: v.VerifiedAt, VerifiedByUserID: v.VerifiedBy,
+		}}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -390,8 +420,20 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RevokeFCCInput) (*RevokeFCCOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := memberSvc.RevokeFCCVerification(ctx, principal, input.ID, input.Body.Reason); err != nil {
+			return nil, mapMembershipError(err)
+		}
+		return nil, nil
 	})
+
+	// --- Honorary grant endpoints ---
 
 	Register(api, huma.Operation{
 		OperationID:   "honorary-grant-create",
@@ -406,7 +448,23 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreateHonoraryInput) (*CreateHonoraryOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		g, err := memberSvc.CreateHonoraryGrant(ctx, principal, members.CreateHonoraryGrantParams{
+			MembershipID: input.MembershipID,
+			IsLifetime:   input.Body.IsLifetime,
+			EndsOn:       input.Body.EndsOn,
+			Reason:       input.Body.Reason,
+		})
+		if err != nil {
+			return nil, mapMembershipError(err)
+		}
+		return &CreateHonoraryOutput{Body: honoraryFromDB(g)}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -421,6 +479,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *UpdateHonoraryInput) (*UpdateHonoraryOutput, error) {
+		// Update requires a domain method not yet implemented.
 		return nil, ErrNotImplemented()
 	})
 
@@ -437,6 +496,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ExpireHonoraryInput) (*ExpireHonoraryOutput, error) {
+		// Expire requires a domain method not yet implemented.
 		return nil, ErrNotImplemented()
 	})
 
@@ -453,6 +513,16 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "explicit-confirm",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RevokeHonoraryInput) (*RevokeHonoraryOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := memberSvc.RevokeHonoraryGrant(ctx, principal, input.ID, input.Body.Version, input.Body.Reason); err != nil {
+			return nil, mapMembershipError(err)
+		}
+		return nil, nil
 	})
 }
