@@ -670,19 +670,6 @@
             "readOnly": true,
             "type": "string"
           },
-          "fields": {
-            "description": "Subset of fields to include; omit for caller's default view.",
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "filter": {
-            "$ref": "#/components/schemas/ExportMembersBodyFilterStruct"
-          },
           "format": {
             "default": "csv",
             "enum": [
@@ -695,30 +682,6 @@
         "required": [
           "format"
         ],
-        "type": "object"
-      },
-      "ExportMembersBodyFilterStruct": {
-        "additionalProperties": false,
-        "properties": {
-          "base_type": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "lifecycle": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
         "type": "object"
       },
       "ExportResult": {

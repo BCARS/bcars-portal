@@ -30,7 +30,7 @@ func RegisterAll(api huma.API, deps Deps) {
 	RegisterMemberships(api, deps)
 	RegisterNotes(api)
 	RegisterImports(api, deps)
-	RegisterExports(api)
+	RegisterExports(api, deps)
 	RegisterAudit(api)
 	RegisterAdmin(api, deps)
 }
