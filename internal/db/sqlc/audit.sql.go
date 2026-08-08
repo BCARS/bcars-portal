@@ -107,104 +107,6 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 	return items, nil
 }
 
-const listAuditEventsByAction = `-- name: ListAuditEventsByAction :many
-SELECT id, occurred_at, request_id, actor_user_id, actor_role_codes, "action", resource_kind, resource_id, outcome, reason_code, detail_json, created_at FROM audit_events
-WHERE action = ?
-ORDER BY occurred_at DESC
-LIMIT ? OFFSET ?
-`
-
-type ListAuditEventsByActionParams struct {
-	Action string
-	Limit  int64
-	Offset int64
-}
-
-func (q *Queries) ListAuditEventsByAction(ctx context.Context, arg ListAuditEventsByActionParams) ([]AuditEvent, error) {
-	rows, err := q.db.QueryContext(ctx, listAuditEventsByAction, arg.Action, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AuditEvent{}
-	for rows.Next() {
-		var i AuditEvent
-		if err := rows.Scan(
-			&i.ID,
-			&i.OccurredAt,
-			&i.RequestID,
-			&i.ActorUserID,
-			&i.ActorRoleCodes,
-			&i.Action,
-			&i.ResourceKind,
-			&i.ResourceID,
-			&i.Outcome,
-			&i.ReasonCode,
-			&i.DetailJson,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAuditEventsByActor = `-- name: ListAuditEventsByActor :many
-SELECT id, occurred_at, request_id, actor_user_id, actor_role_codes, "action", resource_kind, resource_id, outcome, reason_code, detail_json, created_at FROM audit_events
-WHERE actor_user_id = ?
-ORDER BY occurred_at DESC
-LIMIT ? OFFSET ?
-`
-
-type ListAuditEventsByActorParams struct {
-	ActorUserID sql.NullInt64
-	Limit       int64
-	Offset      int64
-}
-
-func (q *Queries) ListAuditEventsByActor(ctx context.Context, arg ListAuditEventsByActorParams) ([]AuditEvent, error) {
-	rows, err := q.db.QueryContext(ctx, listAuditEventsByActor, arg.ActorUserID, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AuditEvent{}
-	for rows.Next() {
-		var i AuditEvent
-		if err := rows.Scan(
-			&i.ID,
-			&i.OccurredAt,
-			&i.RequestID,
-			&i.ActorUserID,
-			&i.ActorRoleCodes,
-			&i.Action,
-			&i.ResourceKind,
-			&i.ResourceID,
-			&i.Outcome,
-			&i.ReasonCode,
-			&i.DetailJson,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listAuditEventsByResource = `-- name: ListAuditEventsByResource :many
 SELECT id, occurred_at, request_id, actor_user_id, actor_role_codes, "action", resource_kind, resource_id, outcome, reason_code, detail_json, created_at FROM audit_events
 WHERE resource_kind = ? AND resource_id = ?
@@ -225,6 +127,73 @@ func (q *Queries) ListAuditEventsByResource(ctx context.Context, arg ListAuditEv
 		arg.ResourceID,
 		arg.Limit,
 		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditEvent{}
+	for rows.Next() {
+		var i AuditEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.RequestID,
+			&i.ActorUserID,
+			&i.ActorRoleCodes,
+			&i.Action,
+			&i.ResourceKind,
+			&i.ResourceID,
+			&i.Outcome,
+			&i.ReasonCode,
+			&i.DetailJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAuditEvents = `-- name: SearchAuditEvents :many
+SELECT id, occurred_at, request_id, actor_user_id, actor_role_codes, "action", resource_kind, resource_id, outcome, reason_code, detail_json, created_at FROM audit_events
+WHERE (?1 IS NULL OR instr(action, ?1) = 1)
+  AND (?2 IS NULL OR actor_user_id = ?2)
+  AND (?3 IS NULL OR resource_kind = ?3)
+  AND (?4 IS NULL OR resource_id = ?4)
+ORDER BY occurred_at DESC, id DESC
+LIMIT ?6 OFFSET ?5
+`
+
+type SearchAuditEventsParams struct {
+	ActionPrefix interface{}
+	ActorUserID  interface{}
+	ResourceKind interface{}
+	ResourceID   interface{}
+	Offset       int64
+	Limit        int64
+}
+
+// SearchAuditEvents is the general filtered listing behind GET /audit-events.
+// Every filter is optional (pass NULL to skip it) and all filters compose.
+// action is matched as a prefix (instr(...) = 1 rather than LIKE, so the
+// caller's value needs no wildcard escaping); the rest are exact matches.
+// The tiebreak on id keeps the order total, which offset paging requires.
+func (q *Queries) SearchAuditEvents(ctx context.Context, arg SearchAuditEventsParams) ([]AuditEvent, error) {
+	rows, err := q.db.QueryContext(ctx, searchAuditEvents,
+		arg.ActionPrefix,
+		arg.ActorUserID,
+		arg.ResourceKind,
+		arg.ResourceID,
+		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err

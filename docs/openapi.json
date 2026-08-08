@@ -2179,40 +2179,46 @@
             }
           },
           {
-            "description": "Filter by action prefix (e.g. 'member.').",
+            "description": "Filter by action prefix (e.g. 'member.' matches member.create). Prefix, not equality.",
             "explode": false,
             "in": "query",
             "name": "action",
             "schema": {
-              "description": "Filter by action prefix (e.g. 'member.').",
+              "description": "Filter by action prefix (e.g. 'member.' matches member.create). Prefix, not equality.",
               "type": "string"
             }
           },
           {
-            "description": "Filter by actor.",
+            "description": "Filter by actor user id (exact). Omit or 0 for any actor.",
             "explode": false,
             "in": "query",
             "name": "actor_user_id",
             "schema": {
-              "description": "Filter by actor.",
+              "description": "Filter by actor user id (exact). Omit or 0 for any actor.",
               "format": "int64",
+              "minimum": 0,
               "type": "integer"
             }
           },
           {
+            "description": "Filter by the audited resource kind (exact), e.g. 'member'.",
             "explode": false,
             "in": "query",
             "name": "subject_kind",
             "schema": {
+              "description": "Filter by the audited resource kind (exact), e.g. 'member'.",
               "type": "string"
             }
           },
           {
+            "description": "Filter by the audited resource id (exact). Omit or 0 for any subject.",
             "explode": false,
             "in": "query",
             "name": "subject_id",
             "schema": {
+              "description": "Filter by the audited resource id (exact). Omit or 0 for any subject.",
               "format": "int64",
+              "minimum": 0,
               "type": "integer"
             }
           }
