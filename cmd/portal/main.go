@@ -18,7 +18,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/httpapi"
@@ -37,6 +36,10 @@ Usage:
 Flags:
 `)
 		fs.PrintDefaults()
+		fmt.Fprintf(fs.Output(), `
+Environment:
+  PORTAL_SMTP_PASSWORD  password for -smtp-user (never passed as a flag)
+`)
 	}
 
 	showVersion := fs.Bool("version", false, "print version and exit")
@@ -48,6 +51,16 @@ Flags:
 	migrateOnly := fs.Bool("migrate-only", false, "apply migrations and exit")
 	dumpOpenAPI := fs.String("dump-openapi", "", "write OpenAPI JSON to `path` and exit (used by make openapi)")
 	dumpCatalog := fs.String("dump-catalog", "", "write capability catalog JSON to `path` and exit (used by make openapi)")
+	baseURL := fs.String("base-url", "http://localhost:8080", "public base URL used to build recovery and invitation links")
+	mailTransport := fs.String("mail-transport", "filelog", "outbound mail transport: filelog (writes JSON files, for dev) or smtp")
+	mailDir := fs.String("mail-dir", "mail-outbox", "directory for the filelog mail transport (created if missing)")
+	smtpHost := fs.String("smtp-host", "", "SMTP relay host (required when -mail-transport=smtp)")
+	smtpPort := fs.Int("smtp-port", 587, "SMTP relay port")
+	smtpUser := fs.String("smtp-user", "", "SMTP username; empty means no authentication")
+	smtpFrom := fs.String("smtp-from", "", "From address for outbound mail (required when -mail-transport=smtp)")
+	// The SMTP password is read from the environment so it never appears in
+	// process listings or shell history.
+	smtpPassword := os.Getenv("PORTAL_SMTP_PASSWORD")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -107,31 +120,34 @@ Flags:
 		}
 	}
 
-	// Build auth services.
-	cookieName := "bcars_session"
-	sessionStore := authn.NewSessionStore(database, authn.SessionConfig{
-		CookieName: cookieName,
-		TTL:        24 * time.Hour,
+	// Build the outbound mail transport.
+	mailer, err := newMailSender(mailConfig{
+		Transport:    *mailTransport,
+		FilelogDir:   *mailDir,
+		SMTPHost:     *smtpHost,
+		SMTPPort:     *smtpPort,
+		SMTPUser:     *smtpUser,
+		SMTPFrom:     *smtpFrom,
+		SMTPPassword: smtpPassword,
 	})
-	// TODO: load pepper from environment/config in production.
-	authService := authn.NewAuthService(database, sessionStore, nil)
+	if err != nil {
+		logger.Error("mail configuration invalid", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
-	// Build the router and register all operations.
-	handler, api := httpapi.NewRouter(httpapi.Config{
-		Logger:  logger,
-		Version: version.Get().Short(),
-		DB:      database,
+	// Assemble the production handler (router + capability enforcement +
+	// session-cookie authentication).
+	handler, err := buildHandler(database, assemblyConfig{
+		Logger:       logger,
+		Version:      version.Get().Short(),
+		CookieName:   "bcars_session",
+		SessionTTL:   24 * time.Hour,
+		BaseURL:      *baseURL,
+		EmailLinkTTL: 24 * time.Hour,
+		Mailer:       mailer,
 	})
-	httpapi.RegisterAll(api, httpapi.Deps{
-		DB:           database,
-		AuthService:  authService,
-		SessionStore: sessionStore,
-		CookieName:   cookieName,
-	})
-
-	// Startup check: every operation must have metadata.
-	if err := httpapi.VerifyAll(api); err != nil {
-		logger.Error("startup check failed", slog.String("error", err.Error()))
+	if err != nil {
+		logger.Error("failed to assemble server", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 

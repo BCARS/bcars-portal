@@ -133,6 +133,18 @@ See the backup manifest JSON for schema version, file size, and SHA-256 checksum
 | `--db` | `PORTAL_DB` | `portal.db` | Path to SQLite database |
 | `--addr` | `PORTAL_ADDR` | `:8080` | Listen address |
 | `--log-level` | `PORTAL_LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
+| `--base-url` | — | `http://localhost:8080` | Public base URL used to build recovery/invitation links |
+| `--mail-transport` | — | `filelog` | Outbound mail transport: `filelog` (JSON files, dev) or `smtp` |
+| `--mail-dir` | — | `mail-outbox` | Directory for the `filelog` transport (created if missing) |
+| `--smtp-host` | — | — | SMTP relay host (required for `--mail-transport=smtp`) |
+| `--smtp-port` | — | `587` | SMTP relay port |
+| `--smtp-user` | — | — | SMTP username; empty means no authentication |
+| `--smtp-from` | — | — | From address (required for `--mail-transport=smtp`) |
+| — | `PORTAL_SMTP_PASSWORD` | — | SMTP password; env-only so it never appears in process listings |
+
+Production deployments should set `--base-url` to the externally reachable URL
+and use `--mail-transport=smtp`; the default `filelog` transport writes messages
+to disk instead of delivering them.
 
 ## Health Checks
 
