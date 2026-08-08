@@ -41,7 +41,7 @@
             <td>{{.SourceFilename}}</td>
             <td><span class="badge badge-gray">{{.SourceKind}}</span></td>
             <td>
-                {{if eq .Status "staged"}}<span class="badge badge-yellow">Staged</span>
+                {{if or (eq .Status "validated") (eq .Status "previewed")}}<span class="badge badge-yellow">Pending Review</span>
                 {{else if eq .Status "committed"}}<span class="badge badge-green">Committed</span>
                 {{else if eq .Status "discarded"}}<span class="badge badge-gray">Discarded</span>
                 {{else}}<span class="badge badge-blue">{{.Status}}</span>
@@ -49,7 +49,7 @@
             </td>
             <td>{{.UploadedAt}}</td>
             <td>
-                {{if eq .Status "staged"}}
+                {{if or (eq .Status "validated") (eq .Status "previewed")}}
                 <div style="display: flex; gap: 4px;">
                     <a href="/admin/imports/{{.ID}}" class="btn btn-sm btn-secondary">Review</a>
                     <form method="post" action="/admin/imports/{{.ID}}/commit" style="display: inline;">

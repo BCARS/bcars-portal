@@ -12,13 +12,14 @@
         <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Import Run #{{.Run.ID}}</h2>
         <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
             {{.Run.SourceFilename}} ({{.Run.SourceKind}})
-            {{if eq .Run.Status "staged"}}<span class="badge badge-yellow">Staged</span>
+            {{if or (eq .Run.Status "validated") (eq .Run.Status "previewed")}}<span class="badge badge-yellow">Pending Review</span>
             {{else if eq .Run.Status "committed"}}<span class="badge badge-green">Committed</span>
             {{else if eq .Run.Status "discarded"}}<span class="badge badge-gray">Discarded</span>
+            {{else}}<span class="badge badge-blue">{{.Run.Status}}</span>
             {{end}}
         </div>
     </div>
-    {{if eq .Run.Status "staged"}}
+    {{if or (eq .Run.Status "validated") (eq .Run.Status "previewed")}}
     <div style="display: flex; gap: 8px;">
         <form method="post" action="/admin/imports/{{.Run.ID}}/commit">
             <button type="submit" class="btn btn-primary"
