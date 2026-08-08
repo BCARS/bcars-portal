@@ -162,7 +162,7 @@ func (h *Handler) loginPage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 
@@ -266,7 +266,7 @@ func (h *Handler) memberList(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.log.Error("list persons failed", slog.String("error", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -308,7 +308,7 @@ func (h *Handler) memberDetail(w http.ResponseWriter, r *http.Request) {
 	person, err := h.members.GetPerson(ctx, p, id)
 	if err != nil {
 		h.log.Error("get person failed", slog.Int64("id", id), slog.String("error", err.Error()))
-		http.Error(w, "Member not found", http.StatusNotFound)
+		h.renderError(w, r, http.StatusNotFound, "Member not found.")
 		return
 	}
 
@@ -336,7 +336,7 @@ func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
 	p := h.principal(r)
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 	person, err := h.members.CreatePerson(ctx, p, members.CreatePersonParams{
@@ -362,7 +362,7 @@ func (h *Handler) memberEdit(w http.ResponseWriter, r *http.Request) {
 	person, err := h.members.GetPerson(ctx, p, id)
 	if err != nil {
 		h.log.Error("get person for edit failed", slog.Int64("id", id), slog.String("error", err.Error()))
-		http.Error(w, "Member not found", http.StatusNotFound)
+		h.renderError(w, r, http.StatusNotFound, "Member not found.")
 		return
 	}
 
@@ -375,7 +375,7 @@ func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
@@ -407,14 +407,14 @@ func (h *Handler) memberDeactivate(w http.ResponseWriter, r *http.Request) {
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
 
 	if err := h.members.DeactivatePerson(ctx, p, id, version); err != nil {
 		h.log.Error("deactivate person failed", slog.Int64("id", id), slog.String("error", err.Error()))
-		http.Error(w, friendlyError(err), http.StatusConflict)
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -427,14 +427,14 @@ func (h *Handler) memberReactivate(w http.ResponseWriter, r *http.Request) {
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
 
 	if err := h.members.ReactivatePerson(ctx, p, id, version); err != nil {
 		h.log.Error("reactivate person failed", slog.Int64("id", id), slog.String("error", err.Error()))
-		http.Error(w, friendlyError(err), http.StatusConflict)
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -448,7 +448,7 @@ func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
 	mid := parseID(r, "mid")
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
@@ -457,7 +457,7 @@ func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
 	_, err := h.members.ApproveMembership(ctx, p, mid, version, baseType, "Approved via admin UI")
 	if err != nil {
 		h.log.Error("approve membership failed", slog.Int64("person_id", id), slog.Int64("membership_id", mid), slog.String("error", err.Error()))
-		http.Error(w, friendlyError(err), http.StatusConflict)
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -470,7 +470,7 @@ func (h *Handler) noteCreate(w http.ResponseWriter, r *http.Request) {
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 	_, err := h.members.CreateNote(ctx, p, members.CreateNoteParams{
@@ -482,7 +482,7 @@ func (h *Handler) noteCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.log.Error("create note failed", slog.Int64("person_id", id), slog.String("error", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -505,7 +505,7 @@ func (h *Handler) contactNew(w http.ResponseWriter, r *http.Request) {
 	person, err := h.members.GetPerson(ctx, p, id)
 	if err != nil {
 		h.log.Error("get person for contact form failed", slog.Int64("id", id), slog.String("error", err.Error()))
-		http.Error(w, "Member not found", http.StatusNotFound)
+		h.renderError(w, r, http.StatusNotFound, "Member not found.")
 		return
 	}
 
@@ -521,7 +521,7 @@ func (h *Handler) contactCreate(w http.ResponseWriter, r *http.Request) {
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
 		return
 	}
 	valueRaw := strings.TrimSpace(r.FormValue("value"))
@@ -595,7 +595,7 @@ func (h *Handler) importDetail(w http.ResponseWriter, r *http.Request) {
 
 	run, err := h.queries.GetImportRun(ctx, id)
 	if err != nil {
-		http.Error(w, "Import run not found", http.StatusNotFound)
+		h.renderError(w, r, http.StatusNotFound, "Import run not found.")
 		return
 	}
 
@@ -789,4 +789,62 @@ func friendlyError(err error) string {
 		return "This record was modified by another user. Please reload and try again."
 	}
 	return msg
+}
+
+type errorPageData struct {
+	Code      int
+	Title     string
+	Message   string
+	RequestID string
+}
+
+// renderError renders a user-friendly error page.
+// For HTMX requests, it returns a small HTML fragment instead.
+func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, code int, message string) {
+	title := "Error"
+	switch code {
+	case http.StatusBadRequest:
+		title = "Bad Request"
+	case http.StatusForbidden:
+		title = "Forbidden"
+	case http.StatusNotFound:
+		title = "Not Found"
+	case http.StatusConflict:
+		title = "Conflict"
+	case http.StatusInternalServerError:
+		title = "Server Error"
+		// Don't leak internal details on 500.
+		message = "An unexpected error occurred. Please try again or contact an administrator."
+	}
+
+	// For HTMX requests, return a fragment.
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(code)
+		fmt.Fprintf(w, `<div class="alert alert-error">%s: %s</div>`, title, message)
+		return
+	}
+
+	data := errorPageData{
+		Code:    code,
+		Title:   title,
+		Message: message,
+	}
+	h.render.RenderHTTP(w, "error.html", code, data)
+}
+
+// renderDomainError maps common domain errors to appropriate HTTP responses.
+func (h *Handler) renderDomainError(w http.ResponseWriter, r *http.Request, err error) {
+	msg := friendlyError(err)
+	switch {
+	case strings.Contains(msg, "not found") || strings.Contains(err.Error(), "no rows"):
+		h.renderError(w, r, http.StatusNotFound, msg)
+	case strings.Contains(msg, "stale version") || strings.Contains(err.Error(), "conflict"):
+		h.renderError(w, r, http.StatusConflict, msg)
+	case strings.Contains(err.Error(), "not authorized") || strings.Contains(err.Error(), "forbidden"):
+		h.renderError(w, r, http.StatusForbidden, "You do not have permission to perform this action.")
+	default:
+		h.log.Error("unhandled error", slog.String("error", err.Error()))
+		h.renderError(w, r, http.StatusInternalServerError, "")
+	}
 }

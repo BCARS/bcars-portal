@@ -1,0 +1,16 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Error - BCARS Portal{{end}}
+
+{{define "content"}}
+<div style="max-width: 480px; margin: 40px auto; text-align: center;">
+    <div style="font-size: 3rem; font-weight: 700; color: #94a3b8; margin-bottom: 8px;">{{.Code}}</div>
+    <h2 style="margin: 0 0 12px; font-size: 1.25rem; font-weight: 600;">{{.Title}}</h2>
+    <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 24px;">{{.Message}}</p>
+    {{if .RequestID}}
+    <p style="font-size: 0.75rem; color: #94a3b8;">Request ID: {{.RequestID}}</p>
+    {{end}}
+    <a href="javascript:history.back()" class="btn btn-secondary" style="margin-right: 8px;">Go Back</a>
+    <a href="/admin" class="btn btn-primary">Dashboard</a>
+</div>
+{{end}}
