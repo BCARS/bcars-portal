@@ -18,6 +18,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/httpapi"
@@ -73,7 +74,7 @@ Flags:
 			Logger:  logger,
 			Version: version.Get().Version,
 		})
-		httpapi.RegisterAll(api)
+		httpapi.RegisterAll(api, httpapi.Deps{})
 		if err := httpapi.VerifyAll(api); err != nil {
 			logger.Error("startup check failed", slog.String("error", err.Error()))
 			os.Exit(1)
@@ -106,13 +107,27 @@ Flags:
 		}
 	}
 
+	// Build auth services.
+	cookieName := "bcars_session"
+	sessionStore := authn.NewSessionStore(database, authn.SessionConfig{
+		CookieName: cookieName,
+		TTL:        24 * time.Hour,
+	})
+	// TODO: load pepper from environment/config in production.
+	authService := authn.NewAuthService(database, sessionStore, nil)
+
 	// Build the router and register all operations.
 	handler, api := httpapi.NewRouter(httpapi.Config{
 		Logger:  logger,
 		Version: version.Get().Short(),
 		DB:      database,
 	})
-	httpapi.RegisterAll(api)
+	httpapi.RegisterAll(api, httpapi.Deps{
+		DB:           database,
+		AuthService:  authService,
+		SessionStore: sessionStore,
+		CookieName:   cookieName,
+	})
 
 	// Startup check: every operation must have metadata.
 	if err := httpapi.VerifyAll(api); err != nil {
