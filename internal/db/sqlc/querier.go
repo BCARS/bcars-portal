@@ -62,8 +62,6 @@ type Querier interface {
 	IncrementFailedLogin(ctx context.Context, id int64) error
 	ListAcsAresSharingHistory(ctx context.Context, personID int64) ([]AcsAresSharingEvent, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
-	ListAuditEventsByAction(ctx context.Context, arg ListAuditEventsByActionParams) ([]AuditEvent, error)
-	ListAuditEventsByActor(ctx context.Context, arg ListAuditEventsByActorParams) ([]AuditEvent, error)
 	ListAuditEventsByResource(ctx context.Context, arg ListAuditEventsByResourceParams) ([]AuditEvent, error)
 	ListCapabilities(ctx context.Context) ([]Capability, error)
 	ListContactMethods(ctx context.Context, personID int64) ([]ContactMethod, error)
@@ -92,6 +90,12 @@ type Querier interface {
 	RevokeHonoraryGrant(ctx context.Context, arg RevokeHonoraryGrantParams) error
 	RevokeRoleGrant(ctx context.Context, arg RevokeRoleGrantParams) error
 	RevokeSession(ctx context.Context, id string) error
+	// SearchAuditEvents is the general filtered listing behind GET /audit-events.
+	// Every filter is optional (pass NULL to skip it) and all filters compose.
+	// action is matched as a prefix (instr(...) = 1 rather than LIKE, so the
+	// caller's value needs no wildcard escaping); the rest are exact matches.
+	// The tiebreak on id keeps the order total, which offset paging requires.
+	SearchAuditEvents(ctx context.Context, arg SearchAuditEventsParams) ([]AuditEvent, error)
 	SetPrimary(ctx context.Context, id int64) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	TransitionLifecycle(ctx context.Context, arg TransitionLifecycleParams) (Membership, error)

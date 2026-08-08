@@ -3,11 +3,40 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 )
+
+// defaultAuditPageSize is used when the caller omits limit=.
+const defaultAuditPageSize = 50
+
+// decodeOffsetCursor turns the opaque cursor returned by a previous audit-event
+// page back into a row offset.
+//
+// Cursor convention: the raw value is the decimal offset of the first row of
+// the next page, wrapped by EncodeCursor. Offset paging (rather than a keyset
+// cursor on occurred_at) is what the audit table's filters allow without a
+// composite index per filter combination; the ORDER BY carries an id tiebreak
+// so the ordering is total and pages do not overlap for rows written in the
+// same millisecond. Newly written events can still shift a walk in progress,
+// which is acceptable for an append-mostly audit log read newest-first.
+func decodeOffsetCursor(cursor string) (int64, error) {
+	if cursor == "" {
+		return 0, nil
+	}
+	raw, err := DecodeCursor(cursor)
+	if err != nil {
+		return 0, huma.NewError(http.StatusBadRequest, "invalid cursor")
+	}
+	offset, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || offset < 0 {
+		return 0, huma.NewError(http.StatusBadRequest, "invalid cursor")
+	}
+	return offset, nil
+}
 
 // --- Audit event types ---
 
@@ -25,10 +54,10 @@ type AuditEventResponse struct {
 
 type AuditEventsListInput struct {
 	PageQuery
-	Action      string `query:"action"       doc:"Filter by action prefix (e.g. 'member.')."`
-	ActorUserID int64  `query:"actor_user_id" doc:"Filter by actor."`
-	SubjectKind string `query:"subject_kind"`
-	SubjectID   int64  `query:"subject_id"`
+	Action      string `query:"action"       doc:"Filter by action prefix (e.g. 'member.' matches member.create). Prefix, not equality."`
+	ActorUserID int64  `query:"actor_user_id" doc:"Filter by actor user id (exact). Omit or 0 for any actor." minimum:"0"`
+	SubjectKind string `query:"subject_kind"  doc:"Filter by the audited resource kind (exact), e.g. 'member'."`
+	SubjectID   int64  `query:"subject_id"    doc:"Filter by the audited resource id (exact). Omit or 0 for any subject." minimum:"0"`
 }
 type AuditEventsListOutput struct {
 	Body Page[AuditEventResponse]
@@ -77,15 +106,40 @@ func RegisterAudit(api huma.API, deps Deps) {
 
 		limit := int64(input.Limit)
 		if limit <= 0 {
-			limit = 50
+			limit = defaultAuditPageSize
 		}
 
-		events, err := q.ListAuditEvents(ctx, sqlcgen.ListAuditEventsParams{
-			Limit:  limit,
-			Offset: 0,
-		})
+		offset, err := decodeOffsetCursor(input.Cursor)
+		if err != nil {
+			return nil, err
+		}
+
+		params := sqlcgen.SearchAuditEventsParams{
+			// Fetch one extra row: if it comes back there is another page.
+			Limit:  limit + 1,
+			Offset: offset,
+		}
+		if input.Action != "" {
+			params.ActionPrefix = input.Action
+		}
+		if input.ActorUserID != 0 {
+			params.ActorUserID = input.ActorUserID
+		}
+		if input.SubjectKind != "" {
+			params.ResourceKind = input.SubjectKind
+		}
+		if input.SubjectID != 0 {
+			params.ResourceID = input.SubjectID
+		}
+
+		events, err := q.SearchAuditEvents(ctx, params)
 		if err != nil {
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to list audit events")
+		}
+
+		hasMore := int64(len(events)) > limit
+		if hasMore {
+			events = events[:limit]
 		}
 
 		data := make([]AuditEventResponse, len(events))
@@ -93,8 +147,11 @@ func RegisterAudit(api huma.API, deps Deps) {
 			data[i] = auditEventToResponse(e)
 		}
 
-		return &AuditEventsListOutput{
-			Body: Page[AuditEventResponse]{Data: data},
-		}, nil
+		page := Page[AuditEventResponse]{Data: data}
+		if hasMore {
+			page.NextCursor = EncodeCursor(strconv.FormatInt(offset+limit, 10))
+		}
+
+		return &AuditEventsListOutput{Body: page}, nil
 	})
 }
