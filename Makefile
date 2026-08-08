@@ -5,6 +5,7 @@ GO           ?= go
 BIN_DIR      ?= $(CURDIR)/bin
 PKGS         := ./...
 GOBIN				?= $(BIN_DIR)
+GOOSE        := $(BIN_DIR)/goose
 
 # Ensure the toolchain matches go.mod so fmt/lint use the correct Go version.
 export GOTOOLCHAIN := go1.26.0
@@ -20,7 +21,7 @@ GOLANGCI     := $(BIN_DIR)/golangci-lint
 STATICCHECK  := $(BIN_DIR)/staticcheck
 SQLC         := $(BIN_DIR)/sqlc
 
-.PHONY: all build test lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks
+.PHONY: all build test lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks migration-updown
 
 all: build
 
@@ -82,9 +83,24 @@ migrate: build
 run: build
 	$(BIN_DIR)/portal --migrate --db bcars.db
 
+# Migration up/down/up round-trip. Used in CI to verify every migration
+# has a matching Down that leaves the schema consistent for a second Up.
+migration-updown:
+	@if [ ! -x "$(GOOSE)" ]; then \
+		echo "installing goose"; \
+		GOBIN=$(GOBIN) $(GO) install github.com/pressly/goose/v3/cmd/goose@v3.27.3; \
+	fi
+	@TMPDB=$$(mktemp /tmp/bcars-migrate-XXXXXX.db) && \
+	rm -f "$$TMPDB" && \
+	$(GOOSE) -dir internal/db/migrations sqlite "$$TMPDB" up && \
+	$(GOOSE) -dir internal/db/migrations sqlite "$$TMPDB" down && \
+	$(GOOSE) -dir internal/db/migrations sqlite "$$TMPDB" up && \
+	rm -f "$$TMPDB" && \
+	echo "migration-updown: ok"
+
 tools:
-	GOBIN=$(GOBIN) $(GO) install honnef.co/go/tools/cmd/staticcheck@latest
-	GOBIN=$(GOBIN) $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	GOBIN=$(GOBIN) $(GO) install honnef.co/go/tools/cmd/staticcheck@v0.7.0
+	GOBIN=$(GOBIN) $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
 	GOBIN=$(GOBIN) $(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
 clean:

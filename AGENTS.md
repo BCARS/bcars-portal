@@ -159,6 +159,7 @@ out of band, remain under ignored paths such as `data/`, and are never committed
    make build
    make test
    make lint
+   make migration-updown
    make sqlc-diff
    make openapi-diff
    ```

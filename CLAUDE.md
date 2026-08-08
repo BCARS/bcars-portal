@@ -79,6 +79,7 @@ out of band, remain under ignored paths such as `data/`, and are never committed
 make build        # Build ./cmd/portal and ./cmd/portalctl binaries
 make test         # go test -race -count=1 ./...
 make lint         # fmt + vet + staticcheck + golangci-lint + secrets scan
+make migration-updown  # migration up/down/up round-trip
 make sqlc         # Regenerate SQL query code from sqlc.yaml
 make install-hooks  # Install pre-push git hook (blocks direct pushes to main)
 ```
