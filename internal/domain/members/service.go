@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/bcars/bcars-portal/internal/audit"
 	"github.com/bcars/bcars-portal/internal/db"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
@@ -141,7 +142,7 @@ func (s *Service) CreatePerson(ctx context.Context, p *authz.Principal, params C
 		}
 	}
 
-	s.audit(ctx, p, "member.create", "person", person.ID, "success", nil)
+	audit.StampResource(ctx, "person", person.ID)
 	return person, nil
 }
 
@@ -174,7 +175,7 @@ func (s *Service) UpdatePerson(ctx context.Context, p *authz.Principal, params U
 		return sqlcgen.Person{}, fmt.Errorf("members: update person: %w", err)
 	}
 
-	s.audit(ctx, p, "member.update", "person", params.ID, "success", nil)
+	audit.StampResource(ctx, "person", params.ID)
 	return person, nil
 }
 
@@ -189,7 +190,7 @@ func (s *Service) DeactivatePerson(ctx context.Context, p *authz.Principal, id, 
 		return fmt.Errorf("members: deactivate: %w", err)
 	}
 
-	s.audit(ctx, p, "member.deactivate", "person", id, "success", nil)
+	audit.StampResource(ctx, "person", id)
 	return nil
 }
 
@@ -204,7 +205,7 @@ func (s *Service) ReactivatePerson(ctx context.Context, p *authz.Principal, id, 
 		return fmt.Errorf("members: reactivate: %w", err)
 	}
 
-	s.audit(ctx, p, "member.deactivate", "person", id, "success", nil)
+	audit.StampResource(ctx, "person", id)
 	return nil
 }
 
@@ -243,7 +244,7 @@ func (s *Service) ApproveMembership(ctx context.Context, p *authz.Principal, mem
 		return sqlcgen.Membership{}, fmt.Errorf("members: record approval: %w", err)
 	}
 
-	s.audit(ctx, p, "membership.approve", "membership", membershipID, "success", nil)
+	audit.StampResource(ctx, "membership", membershipID)
 	return m, nil
 }
 
@@ -277,7 +278,7 @@ func (s *Service) RejectMembership(ctx context.Context, p *authz.Principal, memb
 		return sqlcgen.Membership{}, fmt.Errorf("members: record rejection: %w", err)
 	}
 
-	s.audit(ctx, p, "membership.approve", "membership", membershipID, "success", nil)
+	audit.StampResource(ctx, "membership", membershipID)
 	return m, nil
 }
 
@@ -306,7 +307,7 @@ func (s *Service) TransitionLifecycle(ctx context.Context, p *authz.Principal, m
 		return sqlcgen.Membership{}, fmt.Errorf("members: transition: %w", err)
 	}
 
-	s.audit(ctx, p, "membership.lifecycle", "membership", membershipID, "success", nil)
+	audit.StampResource(ctx, "membership", membershipID)
 	return m, nil
 }
 
@@ -339,7 +340,7 @@ func (s *Service) VerifyFCC(ctx context.Context, p *authz.Principal, membershipI
 		return sqlcgen.FccVerification{}, fmt.Errorf("members: fcc verify: %w", err)
 	}
 
-	s.audit(ctx, p, "fcc.verify", "membership", membershipID, "success", nil)
+	audit.StampResource(ctx, "membership", membershipID)
 	return v, nil
 }
 
@@ -357,7 +358,7 @@ func (s *Service) RevokeFCCVerification(ctx context.Context, p *authz.Principal,
 		return fmt.Errorf("members: revoke fcc: %w", err)
 	}
 
-	s.audit(ctx, p, "fcc.verify", "fcc_verification", verificationID, "success", nil)
+	audit.StampResource(ctx, "fcc_verification", verificationID)
 	return nil
 }
 
@@ -397,7 +398,7 @@ func (s *Service) CreateHonoraryGrant(ctx context.Context, p *authz.Principal, p
 		return sqlcgen.HonoraryGrant{}, fmt.Errorf("members: create honorary: %w", err)
 	}
 
-	s.audit(ctx, p, "honorary.grant", "membership", params.MembershipID, "success", nil)
+	audit.StampResource(ctx, "membership", params.MembershipID)
 	return g, nil
 }
 
@@ -417,7 +418,7 @@ func (s *Service) RevokeHonoraryGrant(ctx context.Context, p *authz.Principal, g
 		return fmt.Errorf("members: revoke honorary: %w", err)
 	}
 
-	s.audit(ctx, p, "honorary.grant", "honorary_grant", grantID, "success", nil)
+	audit.StampResource(ctx, "honorary_grant", grantID)
 	return nil
 }
 
@@ -472,7 +473,7 @@ func (s *Service) CreateContactMethod(ctx context.Context, p *authz.Principal, p
 		return sqlcgen.ContactMethod{}, fmt.Errorf("members: create contact: %w", err)
 	}
 
-	s.audit(ctx, p, "contact_method.write", "person", params.PersonID, "success", nil)
+	audit.StampResource(ctx, "person", params.PersonID)
 	return cm, nil
 }
 
@@ -498,7 +499,7 @@ func (s *Service) ArchiveContactMethod(ctx context.Context, p *authz.Principal, 
 		return fmt.Errorf("members: archive contact: %w", err)
 	}
 
-	s.audit(ctx, p, "contact_method.write", "contact_method", contactMethodID, "success", nil)
+	audit.StampResource(ctx, "contact_method", contactMethodID)
 	return nil
 }
 
@@ -521,7 +522,7 @@ func (s *Service) MakePrimary(ctx context.Context, p *authz.Principal, contactMe
 		return fmt.Errorf("members: set primary: %w", err)
 	}
 
-	s.audit(ctx, p, "contact_method.write", "contact_method", contactMethodID, "success", nil)
+	audit.StampResource(ctx, "contact_method", contactMethodID)
 	return nil
 }
 
@@ -559,7 +560,7 @@ func (s *Service) CreateNote(ctx context.Context, p *authz.Principal, params Cre
 		return sqlcgen.Note{}, fmt.Errorf("members: create note: %w", err)
 	}
 
-	s.audit(ctx, p, cap, "note", note.ID, "success", nil)
+	audit.StampResource(ctx, "note", note.ID)
 	return note, nil
 }
 
@@ -604,7 +605,7 @@ func (s *Service) UpdateNote(ctx context.Context, p *authz.Principal, noteID, ve
 		return sqlcgen.Note{}, fmt.Errorf("members: update note: %w", err)
 	}
 
-	s.audit(ctx, p, cap, "note", noteID, "success", nil)
+	audit.StampResource(ctx, "note", noteID)
 	return note, nil
 }
 
@@ -644,7 +645,7 @@ func (s *Service) SetDirectoryVisibility(ctx context.Context, p *authz.Principal
 		return sqlcgen.ContactMethodVisibilityEvent{}, fmt.Errorf("members: set visibility: %w", err)
 	}
 
-	s.audit(ctx, p, "sharing_pref.write.officer", "contact_method", contactMethodID, "success", nil)
+	audit.StampResource(ctx, "contact_method", contactMethodID)
 	return ev, nil
 }
 
@@ -672,28 +673,8 @@ func (s *Service) SetAcsAresSharing(ctx context.Context, p *authz.Principal, per
 		return sqlcgen.AcsAresSharingEvent{}, fmt.Errorf("members: set acs/ares: %w", err)
 	}
 
-	s.audit(ctx, p, "sharing_pref.write.officer", "person", personID, "success", nil)
+	audit.StampResource(ctx, "person", personID)
 	return ev, nil
-}
-
-// --- Audit ---
-
-func (s *Service) audit(ctx context.Context, p *authz.Principal, action, resourceKind string, resourceID int64, outcome string, detail map[string]string) {
-	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	var actorID sql.NullInt64
-	if p != nil {
-		actorID = sql.NullInt64{Int64: p.UserID, Valid: true}
-	}
-
-	// Best-effort audit logging — don't fail the operation if audit write fails.
-	_, _ = s.Q.CreateAuditEvent(ctx, sqlcgen.CreateAuditEventParams{
-		OccurredAt:   now,
-		ActorUserID:  actorID,
-		Action:       action,
-		ResourceKind: sqlNullString(resourceKind),
-		ResourceID:   sql.NullInt64{Int64: resourceID, Valid: resourceID > 0},
-		Outcome:      outcome,
-	})
 }
 
 // --- Helpers ---

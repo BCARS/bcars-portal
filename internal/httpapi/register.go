@@ -61,6 +61,16 @@ func Register[I, O any](api huma.API, op huma.Operation, meta OperationMeta, han
 	huma.Register(api, op, handler)
 }
 
+// lookupMeta returns the metadata registered for an operation ID. The second
+// result is false when the operation was never registered through Register,
+// which callers must treat as a denial rather than as an absent requirement.
+func lookupMeta(opID string) (OperationMeta, bool) {
+	metaMu.Lock()
+	defer metaMu.Unlock()
+	meta, ok := opsMeta[opID]
+	return meta, ok
+}
+
 // AllMeta returns a snapshot of all registered operation metadata, keyed by
 // operation ID. Used for capability-catalog generation (WS2.3).
 func AllMeta() map[string]OperationMeta {

@@ -52,8 +52,11 @@ func setupImportTest(t *testing.T) *httptest.Server {
 		"admin@bcars.org", hash)
 	require.NoError(t, err)
 
-	// Grant webmaster role (has import.upload + import.commit).
-	_, err = d.Exec(`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at) VALUES (1, 'webmaster', 1, datetime('now'))`)
+	// Grant president role, which holds import.upload + import.commit.
+	// (webmaster does not — it is the technical role and has no member ops.
+	// These tests passed under webmaster only because capabilities were not
+	// enforced; see bcars-portal-fmc.1.)
+	_, err = d.Exec(`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at) VALUES (1, 'president', 1, datetime('now'))`)
 	require.NoError(t, err)
 
 	ts := httptest.NewServer(wrappedHandler)
