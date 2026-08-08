@@ -7,6 +7,9 @@
     <a href="/admin/imports">Imports</a> <span>&rsaquo;</span> Run #{{.Run.ID}}
 </div>
 
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+
 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
     <div>
         <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Import Run #{{.Run.ID}}</h2>
@@ -23,11 +26,11 @@
     <div style="display: flex; gap: 8px;">
         <form method="post" action="/admin/imports/{{.Run.ID}}/commit">
             <button type="submit" class="btn btn-primary"
-                    onclick="return confirm('Commit this import?');">Commit Import</button>
+                    onclick="return confirm('Commit this import? This will apply all resolved rows to the database.');">Commit Import</button>
         </form>
         <form method="post" action="/admin/imports/{{.Run.ID}}/discard">
             <button type="submit" class="btn btn-danger"
-                    onclick="return confirm('Discard this import?');">Discard</button>
+                    onclick="return confirm('Discard this import? No data will be applied.');">Discard</button>
         </form>
     </div>
     {{end}}
@@ -51,6 +54,9 @@
 {{if .ManualItems}}
 <div class="card">
     <h3>Rows Requiring Manual Review</h3>
+    <p style="font-size: 0.875rem; color: #64748b; margin-bottom: 12px;">
+        These rows need a decision before the import can be committed. Use Skip to exclude a row, or Approve to include it.
+    </p>
     <table>
         <thead>
             <tr>
@@ -59,6 +65,9 @@
                 <th>Action</th>
                 <th>Reason</th>
                 <th>Match</th>
+                {{if or (eq $.Run.Status "validated") (eq $.Run.Status "previewed")}}
+                <th>Decision</th>
+                {{end}}
             </tr>
         </thead>
         <tbody>
@@ -69,6 +78,24 @@
             <td><span class="badge badge-yellow">{{.ProposedAction}}</span></td>
             <td>{{.ManualReason}}</td>
             <td>{{if .MatchMethod}}{{.MatchMethod}}{{else}}-{{end}}</td>
+            {{if or (eq $.Run.Status "validated") (eq $.Run.Status "previewed")}}
+            <td>
+                {{if .RequiresManual}}
+                <div style="display: flex; gap: 4px;">
+                    <form method="post" action="/admin/imports/{{$.Run.ID}}/rows/{{.ID}}/decide" style="display:inline;">
+                        <input type="hidden" name="action" value="skip">
+                        <button type="submit" class="btn btn-sm btn-secondary">Skip</button>
+                    </form>
+                    <form method="post" action="/admin/imports/{{$.Run.ID}}/rows/{{.ID}}/decide" style="display:inline;">
+                        <input type="hidden" name="action" value="approve_create">
+                        <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                    </form>
+                </div>
+                {{else}}
+                <span class="badge badge-green">Resolved</span>
+                {{end}}
+            </td>
+            {{end}}
         </tr>
         {{end}}
         </tbody>
@@ -98,6 +125,7 @@
             <td>
                 {{if eq .ProposedAction "create"}}<span class="badge badge-green">Create</span>
                 {{else if eq .ProposedAction "update"}}<span class="badge badge-blue">Update</span>
+                {{else if eq .ProposedAction "skip"}}<span class="badge badge-gray">Skip</span>
                 {{else}}<span class="badge badge-yellow">{{.ProposedAction}}</span>
                 {{end}}
             </td>

@@ -84,6 +84,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /admin/imports", h.requireAuth(h.importList))
 	mux.Handle("POST /admin/imports/upload", h.requireAuth(h.importUpload))
 	mux.Handle("GET /admin/imports/{id}", h.requireAuth(h.importDetail))
+	mux.Handle("POST /admin/imports/{id}/rows/{rowId}/decide", h.requireAuth(h.importRowDecide))
 	mux.Handle("POST /admin/imports/{id}/preview", h.requireAuth(h.importPreview))
 	mux.Handle("POST /admin/imports/{id}/commit", h.requireAuth(h.importCommit))
 	mux.Handle("POST /admin/imports/{id}/discard", h.requireAuth(h.importDiscard))
@@ -555,12 +556,19 @@ func (h *Handler) importList(w http.ResponseWriter, r *http.Request) {
 	runs, _ := h.queries.ListImportRuns(ctx, sqlcgen.ListImportRunsParams{Limit: 50, Offset: 0})
 
 	type data struct {
-		Runs []sqlcgen.ImportRun
+		Runs    []sqlcgen.ImportRun
+		Error   string
+		Success string
 	}
-	h.render.RenderHTTP(w, "imports.html", http.StatusOK, data{Runs: runs})
+	h.render.RenderHTTP(w, "imports.html", http.StatusOK, data{
+		Runs:    runs,
+		Error:   r.URL.Query().Get("error"),
+		Success: r.URL.Query().Get("success"),
+	})
 }
 
 type importDetailRow struct {
+	ID             int64
 	SourceRowIndex int64
 	DisplayName    string
 	CallSign       string
@@ -577,6 +585,8 @@ type importDetailData struct {
 	ManualRows  int
 	ManualItems []importDetailRow
 	AllItems    []importDetailRow
+	Error       string
+	Success     string
 }
 
 func (h *Handler) importDetail(w http.ResponseWriter, r *http.Request) {
@@ -593,7 +603,12 @@ func (h *Handler) importDetail(w http.ResponseWriter, r *http.Request) {
 		ImportRunID: id, Limit: 1000, Offset: 0,
 	})
 
-	data := importDetailData{Run: run, TotalRows: len(rows)}
+	data := importDetailData{
+		Run:       run,
+		TotalRows: len(rows),
+		Error:     r.URL.Query().Get("error"),
+		Success:   r.URL.Query().Get("success"),
+	}
 
 	for _, row := range rows {
 		item := stagedToRow(row)
@@ -611,6 +626,7 @@ func (h *Handler) importDetail(w http.ResponseWriter, r *http.Request) {
 
 func stagedToRow(row sqlcgen.StagedImportRow) importDetailRow {
 	item := importDetailRow{
+		ID:             row.ID,
 		SourceRowIndex: row.SourceRowIndex,
 		ProposedAction: row.ProposedAction,
 		RequiresManual: row.RequiresManual == 1,
@@ -676,6 +692,36 @@ func (h *Handler) importUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d", result.RunID), http.StatusSeeOther)
+}
+
+func (h *Handler) importRowDecide(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	principal := h.principal(r)
+	if principal == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	id := parseID(r, "id")
+	rowID := parseID(r, "rowId")
+	action := r.FormValue("action")
+
+	if action == "" {
+		action = "skip" // default
+	}
+
+	_, err := h.imports.RecordDecision(ctx, id, importd.DecisionInput{
+		RowID:     rowID,
+		DecidedBy: principal.UserID,
+		Action:    action,
+	})
+	if err != nil {
+		h.log.Error("import row decision", slog.String("error", err.Error()))
+		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?success=Decision+recorded", id), http.StatusSeeOther)
 }
 
 func (h *Handler) importPreview(w http.ResponseWriter, r *http.Request) {
