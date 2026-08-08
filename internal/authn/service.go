@@ -1,6 +1,7 @@
 package authn
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -100,6 +101,56 @@ func (s *AuthService) SignIn(email, password, ipHash, userAgent string) (string,
 // SignOut revokes the given session.
 func (s *AuthService) SignOut(sessionID string) error {
 	return s.store.Revoke(sessionID)
+}
+
+// SetPassword updates a user's password hash.
+func (s *AuthService) SetPassword(ctx context.Context, userID int64, newPassword string) error {
+	hash, err := HashPassword(newPassword, s.pepper, DefaultParams())
+	if err != nil {
+		return fmt.Errorf("authn: hash password: %w", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE users SET password_hash = ?, version = version + 1, updated_at = ? WHERE id = ?`,
+		hash, now, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("authn: set password: %w", err)
+	}
+	return nil
+}
+
+// LoginByUserID creates a session for an already-authenticated user (e.g. after
+// recovery or invitation). Returns the session ID.
+func (s *AuthService) LoginByUserID(ctx context.Context, userID int64, store *SessionStore) (string, error) {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, _ = s.db.ExecContext(ctx,
+		`UPDATE users SET last_login_at = ?, failed_login_count = 0, locked_until = NULL, version = version + 1, updated_at = ? WHERE id = ?`,
+		now, now, userID,
+	)
+
+	sessionID, err := store.Create(userID, "", "recovery/invitation")
+	if err != nil {
+		return "", fmt.Errorf("authn: create session: %w", err)
+	}
+	return sessionID, nil
+}
+
+// CreateUser creates a new user with the given email and password. Returns the user ID.
+func (s *AuthService) CreateUser(ctx context.Context, email, password string) (int64, error) {
+	hash, err := HashPassword(password, s.pepper, DefaultParams())
+	if err != nil {
+		return 0, fmt.Errorf("authn: hash password: %w", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	res, err := s.db.ExecContext(ctx,
+		`INSERT INTO users (email, password_hash, is_active, created_at, updated_at, version) VALUES (?, ?, 1, ?, ?, 1)`,
+		email, hash, now, now,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("authn: create user: %w", err)
+	}
+	return res.LastInsertId()
 }
 
 func (s *AuthService) recordFailedLogin(userID int64, currentCount int) {

@@ -219,7 +219,8 @@ func RegisterSessions(api huma.API, deps Deps) {
 		}, nil
 	})
 
-	// Recovery and invitation endpoints remain as stubs (separate bead: bcars-portal-34s).
+	// --- Recovery and invitation endpoints ---
+
 	Register(api, huma.Operation{
 		OperationID: "auth-recovery-request",
 		Method:      http.MethodPost,
@@ -232,7 +233,12 @@ func RegisterSessions(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RecoveryRequestInput) (*RecoveryRequestOutput, error) {
-		return nil, ErrNotImplemented()
+		if deps.EmailLinkService == nil {
+			return nil, ErrNotImplemented()
+		}
+		// Always return success to prevent email enumeration.
+		_ = deps.EmailLinkService.RequestRecovery(ctx, input.Body.Email, "")
+		return &RecoveryRequestOutput{}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -247,7 +253,35 @@ func RegisterSessions(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RecoveryConsumeInput) (*RecoveryConsumeOutput, error) {
-		return nil, ErrNotImplemented()
+		if deps.EmailLinkService == nil || deps.AuthService == nil || deps.SessionStore == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		link, err := deps.EmailLinkService.ConsumeLink(input.Body.Token)
+		if err != nil {
+			return nil, huma.NewError(http.StatusBadRequest, "invalid or expired recovery link")
+		}
+		if link.Purpose != "recovery" || link.UserID == nil {
+			return nil, huma.NewError(http.StatusBadRequest, "invalid recovery link")
+		}
+
+		if err := deps.AuthService.SetPassword(ctx, *link.UserID, input.Body.NewPassword); err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to set password")
+		}
+
+		sessionID, err := deps.AuthService.LoginByUserID(ctx, *link.UserID, deps.SessionStore)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "password reset but login failed")
+		}
+		sess, _ := deps.SessionStore.Get(sessionID)
+
+		return &RecoveryConsumeOutput{
+			Body: sessionInfo{
+				UserID:    *link.UserID,
+				Email:     link.Email,
+				ExpiresAt: sess.ExpiresAt.Format(time.RFC3339),
+			},
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -262,7 +296,37 @@ func RegisterSessions(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *InvitationConsumeInput) (*InvitationConsumeOutput, error) {
-		return nil, ErrNotImplemented()
+		if deps.EmailLinkService == nil || deps.AuthService == nil || deps.SessionStore == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		link, err := deps.EmailLinkService.ConsumeLink(input.Body.Token)
+		if err != nil {
+			return nil, huma.NewError(http.StatusBadRequest, "invalid or expired invitation link")
+		}
+		if link.Purpose != "invitation" {
+			return nil, huma.NewError(http.StatusBadRequest, "invalid invitation link")
+		}
+
+		// Create user account from invitation email.
+		userID, err := deps.AuthService.CreateUser(ctx, link.Email, input.Body.NewPassword)
+		if err != nil {
+			return nil, huma.NewError(http.StatusConflict, "account already exists for this email")
+		}
+
+		sessionID, err := deps.AuthService.LoginByUserID(ctx, userID, deps.SessionStore)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "account created but login failed")
+		}
+		sess, _ := deps.SessionStore.Get(sessionID)
+
+		return &InvitationConsumeOutput{
+			Body: sessionInfo{
+				UserID:    userID,
+				Email:     link.Email,
+				ExpiresAt: sess.ExpiresAt.Format(time.RFC3339),
+			},
+		}, nil
 	})
 }
 
