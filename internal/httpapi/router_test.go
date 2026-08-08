@@ -30,7 +30,7 @@ func openTestDB(t *testing.T) *sql.DB {
 // TestHealthz verifies that GET /healthz returns 200 OK with no body.
 func TestHealthz(t *testing.T) {
 	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test"})
-	httpapi.RegisterAll(api)
+	httpapi.RegisterAll(api, httpapi.Deps{})
 	require.NoError(t, httpapi.VerifyAll(api))
 
 	rec := httptest.NewRecorder()
@@ -110,7 +110,7 @@ func TestReadyzSchemaMismatch(t *testing.T) {
 // TestOpenAPIEndpoint verifies that GET /openapi.json returns a JSON document.
 func TestOpenAPIEndpoint(t *testing.T) {
 	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test"})
-	httpapi.RegisterAll(api)
+	httpapi.RegisterAll(api, httpapi.Deps{})
 	require.NoError(t, httpapi.VerifyAll(api))
 
 	rec := httptest.NewRecorder()
