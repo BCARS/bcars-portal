@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "bcars_portal",
+  "project_id": "b7fa4563-b0e2-414e-b7e5-90f22459191a"
+}
