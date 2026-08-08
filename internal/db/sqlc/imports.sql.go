@@ -56,6 +56,55 @@ func (q *Queries) CommitImportRun(ctx context.Context, arg CommitImportRunParams
 	return i, err
 }
 
+const countStagedRowsByAction = `-- name: CountStagedRowsByAction :many
+SELECT proposed_action, count(*) as cnt FROM staged_import_rows
+WHERE import_run_id = ?
+GROUP BY proposed_action
+`
+
+type CountStagedRowsByActionRow struct {
+	ProposedAction string
+	Cnt            int64
+}
+
+func (q *Queries) CountStagedRowsByAction(ctx context.Context, importRunID int64) ([]CountStagedRowsByActionRow, error) {
+	rows, err := q.db.QueryContext(ctx, countStagedRowsByAction, importRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountStagedRowsByActionRow{}
+	for rows.Next() {
+		var i CountStagedRowsByActionRow
+		if err := rows.Scan(&i.ProposedAction, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countUnresolvedManualRows = `-- name: CountUnresolvedManualRows :one
+SELECT count(*) FROM staged_import_rows
+WHERE import_run_id = ? AND requires_manual = 1
+AND id NOT IN (
+    SELECT DISTINCT staged_import_row_id FROM reconciliation_decisions
+)
+`
+
+func (q *Queries) CountUnresolvedManualRows(ctx context.Context, importRunID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnresolvedManualRows, importRunID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createExternalID = `-- name: CreateExternalID :one
 INSERT INTO external_ids (entity_kind, entity_id, system, external_id)
 VALUES (?, ?, ?, ?)
@@ -252,6 +301,32 @@ SELECT id, source_kind, source_filename, source_sha256, uploaded_by, uploaded_at
 
 func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error) {
 	row := q.db.QueryRowContext(ctx, getImportRun, id)
+	var i ImportRun
+	err := row.Scan(
+		&i.ID,
+		&i.SourceKind,
+		&i.SourceFilename,
+		&i.SourceSha256,
+		&i.UploadedBy,
+		&i.UploadedAt,
+		&i.Status,
+		&i.IdempotencyKey,
+		&i.CommittedBy,
+		&i.CommittedAt,
+		&i.ResultSummaryJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const getImportRunByIdempotencyKey = `-- name: GetImportRunByIdempotencyKey :one
+SELECT id, source_kind, source_filename, source_sha256, uploaded_by, uploaded_at, status, idempotency_key, committed_by, committed_at, result_summary_json, created_at, updated_at, version FROM import_runs WHERE idempotency_key = ?
+`
+
+func (q *Queries) GetImportRunByIdempotencyKey(ctx context.Context, idempotencyKey string) (ImportRun, error) {
+	row := q.db.QueryRowContext(ctx, getImportRunByIdempotencyKey, idempotencyKey)
 	var i ImportRun
 	err := row.Scan(
 		&i.ID,
@@ -556,6 +631,47 @@ func (q *Queries) UpdateImportRunStatus(ctx context.Context, arg UpdateImportRun
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+	)
+	return i, err
+}
+
+const updateStagedRowAction = `-- name: UpdateStagedRowAction :one
+UPDATE staged_import_rows
+SET proposed_action = ?, requires_manual = ?, manual_reason = ?
+WHERE id = ?
+RETURNING id, import_run_id, source_row_index, source_external_id, raw_json, normalized_json, match_person_id, match_method, proposed_action, proposed_changes_json, validation_errors_json, requires_manual, manual_reason, created_at
+`
+
+type UpdateStagedRowActionParams struct {
+	ProposedAction string
+	RequiresManual int64
+	ManualReason   sql.NullString
+	ID             int64
+}
+
+func (q *Queries) UpdateStagedRowAction(ctx context.Context, arg UpdateStagedRowActionParams) (StagedImportRow, error) {
+	row := q.db.QueryRowContext(ctx, updateStagedRowAction,
+		arg.ProposedAction,
+		arg.RequiresManual,
+		arg.ManualReason,
+		arg.ID,
+	)
+	var i StagedImportRow
+	err := row.Scan(
+		&i.ID,
+		&i.ImportRunID,
+		&i.SourceRowIndex,
+		&i.SourceExternalID,
+		&i.RawJson,
+		&i.NormalizedJson,
+		&i.MatchPersonID,
+		&i.MatchMethod,
+		&i.ProposedAction,
+		&i.ProposedChangesJson,
+		&i.ValidationErrorsJson,
+		&i.RequiresManual,
+		&i.ManualReason,
+		&i.CreatedAt,
 	)
 	return i, err
 }

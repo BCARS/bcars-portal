@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -14,7 +15,19 @@ import (
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 )
 
-// Service orchestrates the import pipeline: upload → parse → normalize → match → stage.
+// Errors returned by the import service.
+var (
+	ErrInvalidTransition  = errors.New("importd: invalid state transition")
+	ErrUnresolvedManual   = errors.New("importd: unresolved manual rows remain")
+	ErrRowNotManual       = errors.New("importd: row does not require manual review")
+	ErrRowNotInRun        = errors.New("importd: row does not belong to this run")
+	ErrRunNotFound        = errors.New("importd: run not found")
+	ErrRowNotFound        = errors.New("importd: row not found")
+	ErrIdempotentConflict = errors.New("importd: idempotency key already used for a different operation")
+)
+
+// Service orchestrates the import pipeline per ADR-0008:
+// upload → validated → previewed → committed / discarded / failed.
 type Service struct {
 	DB *sql.DB
 	Q  *sqlcgen.Queries
@@ -41,7 +54,17 @@ type UploadResult struct {
 
 // Upload parses a file, normalizes all records, matches against existing data,
 // and stages them in the database. sourceKind is "csv" or "json".
+// On success the run transitions to "validated".
 func (s *Service) Upload(ctx context.Context, r io.Reader, sourceKind, filename string, uploadedBy int64, idempotencyKey string) (*UploadResult, error) {
+	// Check idempotency: if a run already exists with this key, return an error.
+	_, err := s.Q.GetImportRunByIdempotencyKey(ctx, idempotencyKey)
+	if err == nil {
+		return nil, fmt.Errorf("importd: duplicate idempotency key %q", idempotencyKey)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("importd: check idempotency: %w", err)
+	}
+
 	// Read all content for hashing.
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -67,7 +90,7 @@ func (s *Service) Upload(ctx context.Context, r io.Reader, sourceKind, filename 
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 
-	// Create import run.
+	// Create import run (starts as "uploaded").
 	run, err := s.Q.CreateImportRun(ctx, sqlcgen.CreateImportRunParams{
 		SourceKind:     sourceKind,
 		SourceFilename: filename,
@@ -135,14 +158,212 @@ func (s *Service) Upload(ctx context.Context, r io.Reader, sourceKind, filename 
 		}
 	}
 
-	// Transition to staged.
+	// Transition to "validated" (ADR-0008 state machine).
 	_, err = s.Q.UpdateImportRunStatus(ctx, sqlcgen.UpdateImportRunStatusParams{
-		Status:  "staged",
+		Status:  "validated",
 		ID:      run.ID,
 		Version: run.Version,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("importd: update run status: %w", err)
+	}
+
+	return result, nil
+}
+
+// ListRuns returns import runs ordered by creation date (newest first).
+func (s *Service) ListRuns(ctx context.Context, limit, offset int64) ([]sqlcgen.ImportRun, error) {
+	return s.Q.ListImportRuns(ctx, sqlcgen.ListImportRunsParams{
+		Limit:  limit,
+		Offset: offset,
+	})
+}
+
+// GetRun returns a single import run by ID.
+func (s *Service) GetRun(ctx context.Context, runID int64) (sqlcgen.ImportRun, error) {
+	run, err := s.Q.GetImportRun(ctx, runID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return run, ErrRunNotFound
+		}
+		return run, fmt.Errorf("importd: get run: %w", err)
+	}
+	return run, nil
+}
+
+// ListRows returns staged rows for an import run.
+func (s *Service) ListRows(ctx context.Context, runID int64, limit, offset int64) ([]sqlcgen.StagedImportRow, error) {
+	return s.Q.ListStagedRows(ctx, sqlcgen.ListStagedRowsParams{
+		ImportRunID: runID,
+		Limit:       limit,
+		Offset:      offset,
+	})
+}
+
+// GetRow returns a single staged row by ID.
+func (s *Service) GetRow(ctx context.Context, rowID int64) (sqlcgen.StagedImportRow, error) {
+	row, err := s.Q.GetStagedRow(ctx, rowID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return row, ErrRowNotFound
+		}
+		return row, fmt.Errorf("importd: get row: %w", err)
+	}
+	return row, nil
+}
+
+// DecisionInput is the input for recording a reconciliation decision.
+type DecisionInput struct {
+	RowID       int64
+	DecidedBy   int64
+	Action      string // "approve_create", "approve_update", "skip", "override_action"
+	PayloadJSON string // optional JSON with override details
+}
+
+// RecordDecision appends an officer reconciliation decision to a staged row.
+// The row must belong to the given run and require manual review.
+// After recording, if action is "approve_create" or "approve_update",
+// the row's requires_manual flag is cleared and proposed_action is updated.
+func (s *Service) RecordDecision(ctx context.Context, runID int64, input DecisionInput) (sqlcgen.ReconciliationDecision, error) {
+	var empty sqlcgen.ReconciliationDecision
+
+	// Validate run state: decisions only allowed in "validated" or "previewed".
+	run, err := s.Q.GetImportRun(ctx, runID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return empty, ErrRunNotFound
+		}
+		return empty, fmt.Errorf("importd: get run: %w", err)
+	}
+	if run.Status != "validated" && run.Status != "previewed" {
+		return empty, fmt.Errorf("%w: cannot add decisions in status %q", ErrInvalidTransition, run.Status)
+	}
+
+	// Validate row belongs to run.
+	row, err := s.Q.GetStagedRow(ctx, input.RowID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return empty, ErrRowNotFound
+		}
+		return empty, fmt.Errorf("importd: get row: %w", err)
+	}
+	if row.ImportRunID != runID {
+		return empty, ErrRowNotInRun
+	}
+	if row.RequiresManual == 0 {
+		return empty, ErrRowNotManual
+	}
+
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+
+	decision, err := s.Q.CreateReconciliationDecision(ctx, sqlcgen.CreateReconciliationDecisionParams{
+		StagedImportRowID: input.RowID,
+		DecidedBy:         input.DecidedBy,
+		DecidedAt:         now,
+		Action:            input.Action,
+		PayloadJson:       sqlNullString(input.PayloadJSON),
+	})
+	if err != nil {
+		return empty, fmt.Errorf("importd: create decision: %w", err)
+	}
+
+	// Update the staged row based on the decision action.
+	switch input.Action {
+	case "approve_create":
+		_, err = s.Q.UpdateStagedRowAction(ctx, sqlcgen.UpdateStagedRowActionParams{
+			ProposedAction: "create",
+			RequiresManual: 0,
+			ID:             input.RowID,
+		})
+	case "approve_update":
+		_, err = s.Q.UpdateStagedRowAction(ctx, sqlcgen.UpdateStagedRowActionParams{
+			ProposedAction: "update",
+			RequiresManual: 0,
+			ID:             input.RowID,
+		})
+	case "skip":
+		_, err = s.Q.UpdateStagedRowAction(ctx, sqlcgen.UpdateStagedRowActionParams{
+			ProposedAction: "skip",
+			RequiresManual: 0,
+			ID:             input.RowID,
+		})
+	}
+	if err != nil {
+		return empty, fmt.Errorf("importd: update row after decision: %w", err)
+	}
+
+	return decision, nil
+}
+
+// PreviewResult summarizes what will happen on commit.
+type PreviewResult struct {
+	RunID            int64
+	TotalRows        int
+	CreateCount      int
+	UpdateCount      int
+	SkipCount        int
+	ManualCount      int
+	UnresolvedManual int
+	Ready            bool // true if no unresolved manual rows remain
+}
+
+// Preview recomputes the import summary and transitions to "previewed".
+// Can be called from "validated" or "previewed" (re-preview after decisions).
+func (s *Service) Preview(ctx context.Context, runID int64) (*PreviewResult, error) {
+	run, err := s.Q.GetImportRun(ctx, runID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRunNotFound
+		}
+		return nil, fmt.Errorf("importd: get run: %w", err)
+	}
+	if run.Status != "validated" && run.Status != "previewed" {
+		return nil, fmt.Errorf("%w: cannot preview from status %q", ErrInvalidTransition, run.Status)
+	}
+
+	// Count rows by action.
+	actionCounts, err := s.Q.CountStagedRowsByAction(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("importd: count rows: %w", err)
+	}
+
+	// Count unresolved manual rows.
+	unresolvedCount, err := s.Q.CountUnresolvedManualRows(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("importd: count unresolved: %w", err)
+	}
+
+	result := &PreviewResult{
+		RunID:            runID,
+		UnresolvedManual: int(unresolvedCount),
+		Ready:            unresolvedCount == 0,
+	}
+
+	for _, ac := range actionCounts {
+		count := int(ac.Cnt)
+		result.TotalRows += count
+		switch ac.ProposedAction {
+		case "create":
+			result.CreateCount = count
+		case "update":
+			result.UpdateCount = count
+		case "skip":
+			result.SkipCount = count
+		case "manual":
+			result.ManualCount = count
+		}
+	}
+
+	// Transition to "previewed" if still "validated".
+	if run.Status == "validated" {
+		_, err = s.Q.UpdateImportRunStatus(ctx, sqlcgen.UpdateImportRunStatusParams{
+			Status:  "previewed",
+			ID:      run.ID,
+			Version: run.Version,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("importd: transition to previewed: %w", err)
+		}
 	}
 
 	return result, nil
@@ -156,23 +377,56 @@ type CommitResult struct {
 	Errors  int
 }
 
-// Commit applies all auto-resolvable staged rows to the database.
-// Rows that require manual review are skipped.
+// Commit applies all staged rows in a single transaction.
+// Refuses to run if any manual rows remain unresolved.
+// Idempotent: if the run is already committed, returns the stored result.
 func (s *Service) Commit(ctx context.Context, runID int64, committedBy int64) (*CommitResult, error) {
 	run, err := s.Q.GetImportRun(ctx, runID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRunNotFound
+		}
 		return nil, fmt.Errorf("importd: get run: %w", err)
 	}
-	if run.Status != "staged" {
-		return nil, fmt.Errorf("importd: run %d has status %q, expected \"staged\"", runID, run.Status)
+
+	// Idempotent retry: if already committed, return the stored result.
+	if run.Status == "committed" {
+		if run.ResultSummaryJson.Valid {
+			var stored CommitResult
+			if err := json.Unmarshal([]byte(run.ResultSummaryJson.String), &stored); err == nil {
+				return &stored, nil
+			}
+		}
+		return &CommitResult{}, nil
 	}
 
+	if run.Status != "previewed" {
+		return nil, fmt.Errorf("%w: cannot commit from status %q, must be \"previewed\"", ErrInvalidTransition, run.Status)
+	}
+
+	// Refuse if any manual rows are unresolved.
+	unresolvedCount, err := s.Q.CountUnresolvedManualRows(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("importd: count unresolved: %w", err)
+	}
+	if unresolvedCount > 0 {
+		return nil, fmt.Errorf("%w: %d rows still need decisions", ErrUnresolvedManual, unresolvedCount)
+	}
+
+	// Execute in a single transaction.
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("importd: begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := s.Q.WithTx(tx)
 	result := &CommitResult{}
 
-	// Process rows in batches.
+	// Process all rows.
 	const batchSize = 500
 	for offset := int64(0); ; offset += batchSize {
-		rows, err := s.Q.ListStagedRows(ctx, sqlcgen.ListStagedRowsParams{
+		rows, err := qtx.ListStagedRows(ctx, sqlcgen.ListStagedRowsParams{
 			ImportRunID: runID,
 			Limit:       batchSize,
 			Offset:      offset,
@@ -185,20 +439,16 @@ func (s *Service) Commit(ctx context.Context, runID int64, committedBy int64) (*
 		}
 
 		for _, row := range rows {
-			if row.RequiresManual == 1 {
-				result.Skipped++
-				continue
-			}
-
-			if err := s.applyRow(ctx, row, committedBy); err != nil {
-				result.Errors++
-				continue
-			}
-
 			switch row.ProposedAction {
 			case "create":
+				if err := s.applyCreateTx(ctx, qtx, row, committedBy); err != nil {
+					return nil, fmt.Errorf("importd: apply create row %d: %w", row.SourceRowIndex, err)
+				}
 				result.Created++
 			case "update":
+				if err := s.applyUpdateTx(ctx, qtx, row, committedBy); err != nil {
+					return nil, fmt.Errorf("importd: apply update row %d: %w", row.SourceRowIndex, err)
+				}
 				result.Updated++
 			default:
 				result.Skipped++
@@ -206,9 +456,9 @@ func (s *Service) Commit(ctx context.Context, runID int64, committedBy int64) (*
 		}
 	}
 
-	// Mark committed.
+	// Mark committed within the transaction.
 	summaryJSON, _ := json.Marshal(result)
-	_, err = s.Q.CommitImportRun(ctx, sqlcgen.CommitImportRunParams{
+	_, err = qtx.CommitImportRun(ctx, sqlcgen.CommitImportRunParams{
 		CommittedBy:       sql.NullInt64{Int64: committedBy, Valid: true},
 		ResultSummaryJson: sql.NullString{String: string(summaryJSON), Valid: true},
 		ID:                runID,
@@ -218,17 +468,24 @@ func (s *Service) Commit(ctx context.Context, runID int64, committedBy int64) (*
 		return nil, fmt.Errorf("importd: commit run: %w", err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("importd: commit tx: %w", err)
+	}
+
 	return result, nil
 }
 
-// Discard marks an import run as discarded. Staged rows remain for audit but are not applied.
+// Discard marks an import run as discarded. Allowed from "validated" or "previewed".
 func (s *Service) Discard(ctx context.Context, runID int64) error {
 	run, err := s.Q.GetImportRun(ctx, runID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrRunNotFound
+		}
 		return fmt.Errorf("importd: get run: %w", err)
 	}
-	if run.Status != "staged" {
-		return fmt.Errorf("importd: run %d has status %q, expected \"staged\"", runID, run.Status)
+	if run.Status != "validated" && run.Status != "previewed" {
+		return fmt.Errorf("%w: cannot discard from status %q", ErrInvalidTransition, run.Status)
 	}
 
 	_, err = s.Q.UpdateImportRunStatus(ctx, sqlcgen.UpdateImportRunStatusParams{
@@ -242,8 +499,8 @@ func (s *Service) Discard(ctx context.Context, runID int64) error {
 	return nil
 }
 
-// applyRow applies a single staged row to the database.
-func (s *Service) applyRow(ctx context.Context, staged sqlcgen.StagedImportRow, actorID int64) error {
+// applyCreateTx creates a person and related records within a transaction.
+func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, staged sqlcgen.StagedImportRow, actorID int64) error {
 	var norm NormalizedRecord
 	if err := json.Unmarshal([]byte(staged.NormalizedJson), &norm); err != nil {
 		return fmt.Errorf("unmarshal normalized: %w", err)
@@ -251,19 +508,8 @@ func (s *Service) applyRow(ctx context.Context, staged sqlcgen.StagedImportRow, 
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 
-	switch staged.ProposedAction {
-	case "create":
-		return s.applyCreate(ctx, staged, norm, actorID, now)
-	case "update":
-		return s.applyUpdate(ctx, staged, norm, actorID, now)
-	default:
-		return nil // skip
-	}
-}
-
-func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRow, norm NormalizedRecord, actorID int64, now string) error {
 	// Create person.
-	person, err := s.Q.CreatePerson(ctx, sqlcgen.CreatePersonParams{
+	person, err := qtx.CreatePerson(ctx, sqlcgen.CreatePersonParams{
 		DisplayName: norm.DisplayName,
 		SortName:    norm.SortName,
 		CallSign:    sqlNullString(norm.CallSign),
@@ -274,7 +520,7 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 
 	// Link external ID if present.
 	if norm.ExternalID != "" {
-		_, err = s.Q.CreateExternalID(ctx, sqlcgen.CreateExternalIDParams{
+		_, err = qtx.CreateExternalID(ctx, sqlcgen.CreateExternalIDParams{
 			EntityKind: "person",
 			EntityID:   person.ID,
 			System:     "groupsio.contact_row",
@@ -287,7 +533,7 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 
 	// Create contact methods.
 	if norm.Email != "" {
-		_, err = s.Q.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
+		_, err = qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
 			PersonID:  person.ID,
 			Kind:      "email",
 			ValueRaw:  norm.Email,
@@ -302,7 +548,7 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 	if norm.Phone != "" && norm.PhoneValid {
 		var raw RawRecord
 		_ = json.Unmarshal([]byte(staged.RawJson), &raw)
-		_, err = s.Q.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
+		_, err = qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
 			PersonID:  person.ID,
 			Kind:      "phone",
 			ValueRaw:  raw.Phone,
@@ -314,7 +560,7 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 	}
 
 	if norm.StreetAddress != "" {
-		_, err = s.Q.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
+		_, err = qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
 			PersonID:         person.ID,
 			Kind:             "postal",
 			ValueRaw:         norm.StreetAddress,
@@ -331,7 +577,7 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 
 	// Create membership if base type is known.
 	if norm.BaseType != "" {
-		m, err := s.Q.CreateMembership(ctx, sqlcgen.CreateMembershipParams{
+		m, err := qtx.CreateMembership(ctx, sqlcgen.CreateMembershipParams{
 			PersonID: person.ID,
 			BaseType: norm.BaseType,
 		})
@@ -339,8 +585,7 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 			return fmt.Errorf("create membership: %w", err)
 		}
 
-		// Auto-approve with legacy current_until.
-		_, err = s.Q.ApproveMembership(ctx, sqlcgen.ApproveMembershipParams{
+		_, err = qtx.ApproveMembership(ctx, sqlcgen.ApproveMembershipParams{
 			BaseType: norm.BaseType,
 			JoinedOn: sqlNullString(now[:10]),
 			ID:       m.ID,
@@ -350,8 +595,7 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 			return fmt.Errorf("approve membership: %w", err)
 		}
 
-		// Record approval.
-		_, err = s.Q.CreateMembershipApproval(ctx, sqlcgen.CreateMembershipApprovalParams{
+		_, err = qtx.CreateMembershipApproval(ctx, sqlcgen.CreateMembershipApprovalParams{
 			MembershipID: m.ID,
 			Decision:     "approved",
 			ApprovedType: sqlNullString(norm.BaseType),
@@ -367,13 +611,19 @@ func (s *Service) applyCreate(ctx context.Context, staged sqlcgen.StagedImportRo
 	return nil
 }
 
-func (s *Service) applyUpdate(ctx context.Context, staged sqlcgen.StagedImportRow, norm NormalizedRecord, actorID int64, now string) error {
+// applyUpdateTx updates an existing person within a transaction.
+func (s *Service) applyUpdateTx(ctx context.Context, qtx *sqlcgen.Queries, staged sqlcgen.StagedImportRow, actorID int64) error {
 	if !staged.MatchPersonID.Valid {
 		return nil
 	}
 	personID := staged.MatchPersonID.Int64
 
-	person, err := s.Q.GetPerson(ctx, personID)
+	var norm NormalizedRecord
+	if err := json.Unmarshal([]byte(staged.NormalizedJson), &norm); err != nil {
+		return fmt.Errorf("unmarshal normalized: %w", err)
+	}
+
+	person, err := qtx.GetPerson(ctx, personID)
 	if err != nil {
 		return fmt.Errorf("get person: %w", err)
 	}
@@ -398,7 +648,7 @@ func (s *Service) applyUpdate(ctx context.Context, staged sqlcgen.StagedImportRo
 	}
 
 	if needsUpdate {
-		_, err = s.Q.UpdatePerson(ctx, sqlcgen.UpdatePersonParams{
+		_, err = qtx.UpdatePerson(ctx, sqlcgen.UpdatePersonParams{
 			DisplayName: displayName,
 			SortName:    sortName,
 			CallSign:    callSign,
@@ -412,12 +662,12 @@ func (s *Service) applyUpdate(ctx context.Context, staged sqlcgen.StagedImportRo
 
 	// Link external ID if not already linked.
 	if norm.ExternalID != "" {
-		_, err := s.Q.FindExternalID(ctx, sqlcgen.FindExternalIDParams{
+		_, err := qtx.FindExternalID(ctx, sqlcgen.FindExternalIDParams{
 			System:     "groupsio.contact_row",
 			ExternalID: norm.ExternalID,
 		})
 		if err == sql.ErrNoRows {
-			_, err = s.Q.CreateExternalID(ctx, sqlcgen.CreateExternalIDParams{
+			_, err = qtx.CreateExternalID(ctx, sqlcgen.CreateExternalIDParams{
 				EntityKind: "person",
 				EntityID:   personID,
 				System:     "groupsio.contact_row",

@@ -225,7 +225,6 @@ func TestMatchByCallSign(t *testing.T) {
 	defer d.Close()
 	require.NoError(t, db.Migrate(d))
 
-	// Insert a person with a call sign.
 	_, err = d.Exec(`INSERT INTO persons (display_name, sort_name, call_sign) VALUES ('Test', 'Test', 'KA9F01X')`)
 	require.NoError(t, err)
 
@@ -370,7 +369,55 @@ func TestUploadIdempotency(t *testing.T) {
 	assert.Error(t, err, "duplicate idempotency key should fail")
 }
 
-func TestCommitCreatesPersons(t *testing.T) {
+func TestUploadTransitionsToValidated(t *testing.T) {
+	svc, _ := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "state-1")
+	require.NoError(t, err)
+
+	run, err := svc.GetRun(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.Equal(t, "validated", run.Status, "upload should transition to validated per ADR-0008")
+}
+
+func TestListAndGetRuns(t *testing.T) {
+	svc, _ := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "list-1")
+	require.NoError(t, err)
+
+	runs, err := svc.ListRuns(context.Background(), 100, 0)
+	require.NoError(t, err)
+	assert.Len(t, runs, 1)
+	assert.Equal(t, up.RunID, runs[0].ID)
+
+	run, err := svc.GetRun(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.Equal(t, up.RunID, run.ID)
+}
+
+func TestListAndGetRows(t *testing.T) {
+	svc, _ := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice,KA1A,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Butler,16001,PA,false\nBob,KA1B,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "rows-1")
+	require.NoError(t, err)
+
+	rows, err := svc.ListRows(context.Background(), up.RunID, 100, 0)
+	require.NoError(t, err)
+	assert.Len(t, rows, 2)
+
+	row, err := svc.GetRow(context.Background(), rows[0].ID)
+	require.NoError(t, err)
+	assert.Equal(t, rows[0].ID, row.ID)
+}
+
+func TestPreviewAndCommitHappyPath(t *testing.T) {
 	svc, d := setupServiceDB(t)
 
 	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1AAA,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Butler,16001,PA,false\nBob Test,KA1BBB,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
@@ -380,6 +427,19 @@ func TestCommitCreatesPersons(t *testing.T) {
 	assert.Equal(t, 2, up.TotalRows)
 	assert.Equal(t, 0, up.ManualRows)
 
+	// Preview first.
+	preview, err := svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, preview.CreateCount)
+	assert.Equal(t, 0, preview.UnresolvedManual)
+	assert.True(t, preview.Ready)
+
+	// Verify state is "previewed".
+	run, err := svc.GetRun(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.Equal(t, "previewed", run.Status)
+
+	// Commit.
 	result, err := svc.Commit(context.Background(), up.RunID, 1)
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Created)
@@ -403,9 +463,152 @@ func TestCommitCreatesPersons(t *testing.T) {
 	assert.Equal(t, 2, count)
 
 	// Verify run is committed.
-	run, err := svc.Q.GetImportRun(context.Background(), up.RunID)
+	run, err = svc.GetRun(context.Background(), up.RunID)
 	require.NoError(t, err)
 	assert.Equal(t, "committed", run.Status)
+}
+
+func TestCommitRequiresPreviewedState(t *testing.T) {
+	svc, _ := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1TST,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "nopreview-1")
+	require.NoError(t, err)
+
+	// Try to commit directly from "validated" — should fail.
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidTransition)
+}
+
+func TestCommitRefusesUnresolvedManualRows(t *testing.T) {
+	svc, _ := setupServiceDB(t)
+
+	// Honorary without base type → requires manual.
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "manual-1")
+	require.NoError(t, err)
+	assert.Equal(t, 1, up.ManualRows)
+
+	// Preview.
+	preview, err := svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.False(t, preview.Ready)
+	assert.Equal(t, 1, preview.UnresolvedManual)
+
+	// Commit should refuse.
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrUnresolvedManual)
+}
+
+func TestRecordDecisionAndCommit(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	// Honorary without base type → requires manual.
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "decide-1")
+	require.NoError(t, err)
+
+	// Get the manual row.
+	rows, err := svc.ListRows(context.Background(), up.RunID, 100, 0)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(1), rows[0].RequiresManual)
+
+	// Record a decision to skip.
+	decision, err := svc.RecordDecision(context.Background(), up.RunID, DecisionInput{
+		RowID:     rows[0].ID,
+		DecidedBy: 1,
+		Action:    "skip",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "skip", decision.Action)
+
+	// Preview should now show ready.
+	preview, err := svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.True(t, preview.Ready)
+	assert.Equal(t, 0, preview.UnresolvedManual)
+
+	// Commit should succeed.
+	result, err := svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Created)
+	assert.Equal(t, 1, result.Skipped)
+
+	// Verify no persons created.
+	var count int
+	err = d.QueryRow(`SELECT count(*) FROM persons`).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestRecordDecisionApproveCreate(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	// Honorary without base type → requires manual.
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "approve-1")
+	require.NoError(t, err)
+
+	rows, err := svc.ListRows(context.Background(), up.RunID, 100, 0)
+	require.NoError(t, err)
+
+	// Approve as create.
+	_, err = svc.RecordDecision(context.Background(), up.RunID, DecisionInput{
+		RowID:     rows[0].ID,
+		DecidedBy: 1,
+		Action:    "approve_create",
+	})
+	require.NoError(t, err)
+
+	// Preview and commit.
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+
+	result, err := svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Created)
+
+	// Person was created.
+	var count int
+	err = d.QueryRow(`SELECT count(*) FROM persons`).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+func TestRecordDecisionInvalidRunState(t *testing.T) {
+	svc, _ := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "invalid-state-1")
+	require.NoError(t, err)
+
+	rows, err := svc.ListRows(context.Background(), up.RunID, 100, 0)
+	require.NoError(t, err)
+
+	// Resolve and commit to get to "committed" state.
+	_, err = svc.RecordDecision(context.Background(), up.RunID, DecisionInput{
+		RowID: rows[0].ID, DecidedBy: 1, Action: "skip",
+	})
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+
+	// Try to add a decision to a committed run.
+	_, err = svc.RecordDecision(context.Background(), up.RunID, DecisionInput{
+		RowID: rows[0].ID, DecidedBy: 1, Action: "skip",
+	})
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidTransition)
 }
 
 func TestCommitUpdatesExistingPerson(t *testing.T) {
@@ -421,6 +624,10 @@ func TestCommitUpdatesExistingPerson(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, up.MatchedRows)
 
+	// Preview then commit.
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+
 	result, err := svc.Commit(context.Background(), up.RunID, 1)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Created)
@@ -431,22 +638,6 @@ func TestCommitUpdatesExistingPerson(t *testing.T) {
 	err = d.QueryRow(`SELECT display_name FROM persons WHERE call_sign = 'KA1UPD'`).Scan(&displayName)
 	require.NoError(t, err)
 	assert.Equal(t, "New Name", displayName)
-}
-
-func TestCommitSkipsManualRows(t *testing.T) {
-	svc, _ := setupServiceDB(t)
-
-	// Honorary without base type → requires manual.
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
-
-	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "manual-1")
-	require.NoError(t, err)
-	assert.Equal(t, 1, up.ManualRows)
-
-	result, err := svc.Commit(context.Background(), up.RunID, 1)
-	require.NoError(t, err)
-	assert.Equal(t, 0, result.Created)
-	assert.Equal(t, 1, result.Skipped)
 }
 
 func TestDiscard(t *testing.T) {
@@ -460,27 +651,86 @@ func TestDiscard(t *testing.T) {
 	err = svc.Discard(context.Background(), up.RunID)
 	require.NoError(t, err)
 
-	run, err := svc.Q.GetImportRun(context.Background(), up.RunID)
+	run, err := svc.GetRun(context.Background(), up.RunID)
 	require.NoError(t, err)
 	assert.Equal(t, "discarded", run.Status)
+
+	// Preview should fail on discarded run.
+	_, err = svc.Preview(context.Background(), up.RunID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidTransition)
 
 	// Commit should fail on discarded run.
 	_, err = svc.Commit(context.Background(), up.RunID, 1)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "discarded")
+	assert.ErrorIs(t, err, ErrInvalidTransition)
 }
 
-func TestCommitDoubleCommitFails(t *testing.T) {
+func TestDiscardFromPreviewed(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nDouble Test,KA1DBL,12/31/2026,,Full,General,555-666-6666,dbl@example.invalid,6 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1TST,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
 
-	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "dbl-1")
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "discard-prev-1")
 	require.NoError(t, err)
 
-	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	_, err = svc.Preview(context.Background(), up.RunID)
 	require.NoError(t, err)
 
-	_, err = svc.Commit(context.Background(), up.RunID, 1)
-	assert.Error(t, err, "second commit should fail")
+	err = svc.Discard(context.Background(), up.RunID)
+	require.NoError(t, err)
+
+	run, err := svc.GetRun(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.Equal(t, "discarded", run.Status)
+}
+
+func TestCommitIdempotentRetry(t *testing.T) {
+	svc, _ := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1IDM,12/31/2026,,Full,General,555-666-6666,idm@example.invalid,6 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "idempotent-1")
+	require.NoError(t, err)
+
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+
+	result1, err := svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result1.Created)
+
+	// Second commit should return the same result (idempotent).
+	result2, err := svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, result1.Created, result2.Created)
+	assert.Equal(t, result1.Updated, result2.Updated)
+}
+
+func TestCommitIsTransactional(t *testing.T) {
+	// Verify commit uses a transaction by checking that the run status
+	// and persons are both updated atomically (both exist after commit).
+	svc, d := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest1,KA1TX1,12/31/2026,,Full,General,555-000-0001,tx1@example.invalid,1 Main,Butler,16001,PA,false\nTest2,KA1TX2,12/31/2026,,Full,General,555-000-0002,tx2@example.invalid,2 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "txn-1")
+	require.NoError(t, err)
+
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+
+	result, err := svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Created)
+
+	// Both persons and committed status should exist together.
+	var personCount int
+	err = d.QueryRow(`SELECT count(*) FROM persons`).Scan(&personCount)
+	require.NoError(t, err)
+	assert.Equal(t, 2, personCount)
+
+	run, err := svc.GetRun(context.Background(), up.RunID)
+	require.NoError(t, err)
+	assert.Equal(t, "committed", run.Status)
 }

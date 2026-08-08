@@ -16,6 +16,8 @@ type Querier interface {
 	ClearPrimaryForPerson(ctx context.Context, personID int64) error
 	CommitImportRun(ctx context.Context, arg CommitImportRunParams) (ImportRun, error)
 	ConsumeEmailLink(ctx context.Context, id int64) error
+	CountStagedRowsByAction(ctx context.Context, importRunID int64) ([]CountStagedRowsByActionRow, error)
+	CountUnresolvedManualRows(ctx context.Context, importRunID int64) (int64, error)
 	CreateAcsAresSharingEvent(ctx context.Context, arg CreateAcsAresSharingEventParams) (AcsAresSharingEvent, error)
 	CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) (AuditEvent, error)
 	CreateCapabilityGrant(ctx context.Context, arg CreateCapabilityGrantParams) (UserCapabilityGrant, error)
@@ -46,6 +48,7 @@ type Querier interface {
 	GetFCCVerification(ctx context.Context, id int64) (FccVerification, error)
 	GetHonoraryGrant(ctx context.Context, id int64) (HonoraryGrant, error)
 	GetImportRun(ctx context.Context, id int64) (ImportRun, error)
+	GetImportRunByIdempotencyKey(ctx context.Context, idempotencyKey string) (ImportRun, error)
 	GetLatestAcsAresSharing(ctx context.Context, personID int64) (AcsAresSharingEvent, error)
 	GetLatestVisibility(ctx context.Context, contactMethodID int64) (ContactMethodVisibilityEvent, error)
 	GetMembership(ctx context.Context, id int64) (Membership, error)
@@ -97,6 +100,7 @@ type Querier interface {
 	UpdateImportRunStatus(ctx context.Context, arg UpdateImportRunStatusParams) (ImportRun, error)
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error)
 	UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error)
+	UpdateStagedRowAction(ctx context.Context, arg UpdateStagedRowActionParams) (StagedImportRow, error)
 	UpdateUserLastLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 }

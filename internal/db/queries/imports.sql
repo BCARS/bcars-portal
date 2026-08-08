@@ -58,6 +58,27 @@ SELECT * FROM reconciliation_decisions
 WHERE staged_import_row_id = ?
 ORDER BY decided_at;
 
+-- name: CountUnresolvedManualRows :one
+SELECT count(*) FROM staged_import_rows
+WHERE import_run_id = ? AND requires_manual = 1
+AND id NOT IN (
+    SELECT DISTINCT staged_import_row_id FROM reconciliation_decisions
+);
+
+-- name: GetImportRunByIdempotencyKey :one
+SELECT * FROM import_runs WHERE idempotency_key = ?;
+
+-- name: UpdateStagedRowAction :one
+UPDATE staged_import_rows
+SET proposed_action = ?, requires_manual = ?, manual_reason = ?
+WHERE id = ?
+RETURNING *;
+
+-- name: CountStagedRowsByAction :many
+SELECT proposed_action, count(*) as cnt FROM staged_import_rows
+WHERE import_run_id = ?
+GROUP BY proposed_action;
+
 -- name: CreateExternalID :one
 INSERT INTO external_ids (entity_kind, entity_id, system, external_id)
 VALUES (?, ?, ?, ?)
