@@ -32,5 +32,5 @@ func RegisterAll(api huma.API, deps Deps) {
 	RegisterImports(api)
 	RegisterExports(api)
 	RegisterAudit(api)
-	RegisterAdmin(api)
+	RegisterAdmin(api, deps)
 }
