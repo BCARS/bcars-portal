@@ -221,7 +221,7 @@
         ],
         "type": "object"
       },
-      "AuditEvent": {
+      "AuditEventResponse": {
         "additionalProperties": false,
         "properties": {
           "action": {
@@ -232,7 +232,7 @@
             "format": "int64",
             "type": "integer"
           },
-          "detail": {
+          "detail_json": {
             "description": "JSON-encoded structured detail.",
             "type": "string"
           },
@@ -244,20 +244,24 @@
             "format": "date-time",
             "type": "string"
           },
+          "outcome": {
+            "type": "string"
+          },
           "request_id": {
             "type": "string"
           },
-          "subject_id": {
+          "resource_id": {
             "format": "int64",
             "type": "integer"
           },
-          "subject_kind": {
+          "resource_kind": {
             "type": "string"
           }
         },
         "required": [
           "id",
           "action",
+          "outcome",
           "occurred_at"
         ],
         "type": "object"
@@ -1526,13 +1530,13 @@
         ],
         "type": "object"
       },
-      "PageAuditEvent": {
+      "PageAuditEventResponse": {
         "additionalProperties": false,
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
             "examples": [
-              "/api/v1/schemas/PageAuditEvent.json"
+              "/api/v1/schemas/PageAuditEventResponse.json"
             ],
             "format": "uri",
             "readOnly": true,
@@ -1541,7 +1545,7 @@
           "data": {
             "description": "Slice of results for this page.",
             "items": {
-              "$ref": "#/components/schemas/AuditEvent"
+              "$ref": "#/components/schemas/AuditEventResponse"
             },
             "type": [
               "array",
@@ -2373,28 +2377,6 @@
               "format": "int64",
               "type": "integer"
             }
-          },
-          {
-            "description": "Return events on or after this timestamp.",
-            "explode": false,
-            "in": "query",
-            "name": "since",
-            "schema": {
-              "description": "Return events on or after this timestamp.",
-              "format": "date-time",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Return events before this timestamp.",
-            "explode": false,
-            "in": "query",
-            "name": "until",
-            "schema": {
-              "description": "Return events before this timestamp.",
-              "format": "date-time",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -2402,7 +2384,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageAuditEvent"
+                  "$ref": "#/components/schemas/PageAuditEventResponse"
                 }
               }
             },
