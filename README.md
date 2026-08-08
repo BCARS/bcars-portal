@@ -44,6 +44,7 @@ make install-hooks          # ONE-TIME: blocks direct pushes to main
 make build
 make test
 make lint
+make migration-updown       # verify migration round-trip
 make sqlc-diff
 make openapi-diff
 ./bin/portal --version
@@ -68,7 +69,7 @@ install-hooks`). All work goes through a pull request:
 ```sh
 git switch -c ws2/short-topic-name
 # ... edits ...
-make build && go test -race ./... && ./scripts/check-no-secrets.sh
+make build && make test && make lint && make migration-updown && make sqlc-diff && make openapi-diff && ./scripts/check-no-secrets.sh
 git push -u origin HEAD
 gh pr create --fill
 gh run watch                 # wait for CI green
