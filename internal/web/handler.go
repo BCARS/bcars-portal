@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/bcars/bcars-portal/internal/authn"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/members"
@@ -21,7 +23,11 @@ type Handler struct {
 	queries *sqlcgen.Queries
 	db      *sql.DB
 	log     *slog.Logger
+	auth    *authn.AuthService
+	sess    *authn.SessionStore
 }
+
+const sessionCookieName = "portal_session"
 
 // NewHandler creates a web handler with template rendering and domain services.
 func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
@@ -34,10 +40,11 @@ func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
 		logger = slog.Default()
 	}
 
-	// Ensure bootstrap admin user exists (FK target for all officer actions).
-	if err := ensureBootstrapUser(database); err != nil {
-		return nil, fmt.Errorf("web: bootstrap user: %w", err)
-	}
+	sessStore := authn.NewSessionStore(database, authn.SessionConfig{
+		CookieName: sessionCookieName,
+		TTL:        24 * time.Hour,
+	})
+	authSvc := authn.NewAuthService(database, sessStore, nil)
 
 	return &Handler{
 		render:  r,
@@ -45,35 +52,34 @@ func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
 		queries: sqlcgen.New(database),
 		db:      database,
 		log:     logger,
+		auth:    authSvc,
+		sess:    sessStore,
 	}, nil
-}
-
-// ensureBootstrapUser creates user ID 1 if it doesn't already exist.
-// This is the FK target for all officer actions in the Phase 1 single-user UI.
-func ensureBootstrapUser(database *sql.DB) error {
-	_, err := database.Exec(
-		`INSERT OR IGNORE INTO users (id, email, is_active) VALUES (1, 'admin@portal.local', 1)`,
-	)
-	return err
 }
 
 // RegisterRoutes registers all admin UI routes on the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("GET /admin/", h.logged(h.dashboard))
-	mux.Handle("GET /admin/members", h.logged(h.memberList))
-	mux.Handle("GET /admin/members/new", h.logged(h.memberNew))
-	mux.Handle("POST /admin/members/new", h.logged(h.memberCreate))
-	mux.Handle("GET /admin/members/{id}", h.logged(h.memberDetail))
-	mux.Handle("GET /admin/members/{id}/edit", h.logged(h.memberEdit))
-	mux.Handle("POST /admin/members/{id}/edit", h.logged(h.memberUpdate))
-	mux.Handle("POST /admin/members/{id}/deactivate", h.logged(h.memberDeactivate))
-	mux.Handle("POST /admin/members/{id}/reactivate", h.logged(h.memberReactivate))
-	mux.Handle("POST /admin/members/{id}/memberships/{mid}/approve", h.logged(h.membershipApprove))
-	mux.Handle("POST /admin/members/{id}/notes", h.logged(h.noteCreate))
-	mux.Handle("GET /admin/members/{id}/contacts/new", h.logged(h.contactNew))
-	mux.Handle("POST /admin/members/{id}/contacts/new", h.logged(h.contactCreate))
-	mux.Handle("GET /admin/imports", h.logged(h.importList))
-	mux.Handle("GET /admin/imports/{id}", h.logged(h.importDetail))
+	// Public: login/logout.
+	mux.Handle("GET /login", h.logged(h.loginPage))
+	mux.Handle("POST /login", h.logged(h.loginSubmit))
+	mux.Handle("POST /logout", h.logged(h.logout))
+
+	// Admin routes — require authenticated session.
+	mux.Handle("GET /admin/", h.requireAuth(h.dashboard))
+	mux.Handle("GET /admin/members", h.requireAuth(h.memberList))
+	mux.Handle("GET /admin/members/new", h.requireAuth(h.memberNew))
+	mux.Handle("POST /admin/members/new", h.requireAuth(h.memberCreate))
+	mux.Handle("GET /admin/members/{id}", h.requireAuth(h.memberDetail))
+	mux.Handle("GET /admin/members/{id}/edit", h.requireAuth(h.memberEdit))
+	mux.Handle("POST /admin/members/{id}/edit", h.requireAuth(h.memberUpdate))
+	mux.Handle("POST /admin/members/{id}/deactivate", h.requireAuth(h.memberDeactivate))
+	mux.Handle("POST /admin/members/{id}/reactivate", h.requireAuth(h.memberReactivate))
+	mux.Handle("POST /admin/members/{id}/memberships/{mid}/approve", h.requireAuth(h.membershipApprove))
+	mux.Handle("POST /admin/members/{id}/notes", h.requireAuth(h.noteCreate))
+	mux.Handle("GET /admin/members/{id}/contacts/new", h.requireAuth(h.contactNew))
+	mux.Handle("POST /admin/members/{id}/contacts/new", h.requireAuth(h.contactCreate))
+	mux.Handle("GET /admin/imports", h.requireAuth(h.importList))
+	mux.Handle("GET /admin/imports/{id}", h.requireAuth(h.importDetail))
 }
 
 // logged wraps an http.HandlerFunc with request/response logging.
@@ -87,14 +93,112 @@ func (h *Handler) logged(next http.HandlerFunc) http.Handler {
 	})
 }
 
-// principal returns the admin principal. In Phase 1 the admin UI is
-// single-user behind network access controls; WS4 session middleware
-// will replace this with the authenticated user's principal.
-func (h *Handler) principal() *authz.Principal {
-	return &authz.Principal{
-		UserID:       1,
-		Capabilities: authz.Codes(),
+// requireAuth wraps a handler with logging + session authentication.
+// Redirects to /login if no valid session exists.
+func (h *Handler) requireAuth(next http.HandlerFunc) http.Handler {
+	return h.logged(func(w http.ResponseWriter, r *http.Request) {
+		p := h.principalFromRequest(r)
+		if p == nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	})
+}
+
+// principalFromRequest resolves the authenticated principal from the session
+// cookie. Returns nil if unauthenticated.
+func (h *Handler) principalFromRequest(r *http.Request) *authz.Principal {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return nil
 	}
+
+	sess, err := h.sess.Get(cookie.Value)
+	if err != nil {
+		return nil
+	}
+
+	_ = h.sess.Touch(sess.ID)
+
+	// Load effective capabilities from DB.
+	capLoader := &authn.SQLCapabilityLoader{DB: h.db}
+	caps, err := capLoader.EffectiveCapabilities(sess.UserID)
+	if err != nil {
+		h.log.Error("load capabilities failed", slog.Int64("user_id", sess.UserID), slog.String("error", err.Error()))
+		return nil
+	}
+
+	return &authz.Principal{
+		UserID:       sess.UserID,
+		Capabilities: caps,
+	}
+}
+
+// principal extracts the principal from the request. Must only be called
+// within requireAuth-protected handlers.
+func (h *Handler) principal(r *http.Request) *authz.Principal {
+	return h.principalFromRequest(r)
+}
+
+// --- Login / Logout ---
+
+type loginData struct {
+	Email string
+	Error string
+}
+
+func (h *Handler) loginPage(w http.ResponseWriter, r *http.Request) {
+	h.render.RenderHTTP(w, "login.html", http.StatusOK, loginData{})
+}
+
+func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form data", http.StatusBadRequest)
+		return
+	}
+
+	email := r.FormValue("email")
+	password := r.FormValue("password")
+
+	sessionID, err := h.auth.SignIn(email, password, "", r.UserAgent())
+	if err != nil {
+		h.log.Info("login failed", slog.String("email", email), slog.String("error", err.Error()))
+		h.render.RenderHTTP(w, "login.html", http.StatusUnauthorized, loginData{
+			Email: email,
+			Error: "Invalid email or password.",
+		})
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	h.log.Info("login succeeded", slog.String("email", email))
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+}
+
+func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil {
+		_ = h.auth.SignOut(cookie.Value)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 // --- Dashboard ---
@@ -142,7 +246,7 @@ type memberRow struct {
 
 func (h *Handler) memberList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	query := r.URL.Query().Get("q")
 	offset, _ := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
 	const limit = 50
@@ -190,7 +294,7 @@ type memberDetailData struct {
 
 func (h *Handler) memberDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	person, err := h.members.GetPerson(ctx, p, id)
@@ -221,7 +325,7 @@ func (h *Handler) memberNew(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form data", http.StatusBadRequest)
@@ -244,7 +348,7 @@ func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) memberEdit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	person, err := h.members.GetPerson(ctx, p, id)
@@ -259,7 +363,7 @@ func (h *Handler) memberEdit(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
@@ -291,7 +395,7 @@ func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) memberDeactivate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
@@ -311,7 +415,7 @@ func (h *Handler) memberDeactivate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) memberReactivate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
@@ -331,7 +435,7 @@ func (h *Handler) memberReactivate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 	mid := parseID(r, "mid")
 
@@ -354,7 +458,7 @@ func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) noteCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
@@ -387,7 +491,7 @@ type contactFormData struct {
 
 func (h *Handler) contactNew(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	person, err := h.members.GetPerson(ctx, p, id)
@@ -405,7 +509,7 @@ func (h *Handler) contactNew(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) contactCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	p := h.principal()
+	p := h.principal(r)
 	id := parseID(r, "id")
 
 	if err := r.ParseForm(); err != nil {
