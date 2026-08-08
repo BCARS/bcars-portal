@@ -3,9 +3,12 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
@@ -13,6 +16,13 @@ import (
 	"github.com/bcars/bcars-portal/internal/obs"
 	"github.com/bcars/bcars-portal/internal/web"
 )
+
+// ReadyzTimeout is the maximum time readyz waits for the database check.
+const ReadyzTimeout = 3 * time.Second
+
+// ExpectedMigrationVersion is the goose migration version the readyz check
+// expects. Bump this when adding new migrations.
+const ExpectedMigrationVersion = 4
 
 // Config holds all dependencies needed to assemble the HTTP router.
 type Config struct {
@@ -35,8 +45,7 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 
 	// Health checks — no auth, no private data.
 	mux.HandleFunc("GET /healthz", handleHealthz)
-	// /readyz is a stub; WS8.1 wires in the DB reachability check.
-	mux.HandleFunc("GET /readyz", handleReadyz)
+	mux.HandleFunc("GET /readyz", makeReadyzHandler(cfg.DB))
 
 	// Huma API at /api/v1/*.
 	apiCfg := huma.DefaultConfig("BCARS Portal API", cfg.Version)
@@ -65,7 +74,99 @@ func handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func handleReadyz(w http.ResponseWriter, _ *http.Request) {
-	// WS8.1: check DB reachability and schema version. For now, always 200.
-	w.WriteHeader(http.StatusOK)
+// readyzResult is the JSON body returned by /readyz.
+type readyzResult struct {
+	Status           string `json:"status"` // "ok" or "unavailable"
+	Reason           string `json:"reason,omitempty"`
+	ForeignKeys      bool   `json:"foreign_keys"`
+	JournalMode      string `json:"journal_mode"`
+	MigrationVersion int64  `json:"migration_version"`
+}
+
+// makeReadyzHandler returns a handler that checks DB reachability, required
+// SQLite pragmas, and the expected goose migration version. If db is nil the
+// handler always returns 503.
+func makeReadyzHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if db == nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(readyzResult{
+				Status: "unavailable",
+				Reason: "no database configured",
+			})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), ReadyzTimeout)
+		defer cancel()
+
+		result := readyzResult{Status: "ok"}
+
+		// Check DB reachability.
+		if err := db.PingContext(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(readyzResult{
+				Status: "unavailable",
+				Reason: "database unreachable",
+			})
+			return
+		}
+
+		// Check foreign_keys pragma.
+		var fk int
+		if err := db.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&fk); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(readyzResult{
+				Status: "unavailable",
+				Reason: "cannot read foreign_keys pragma",
+			})
+			return
+		}
+		result.ForeignKeys = fk == 1
+
+		// Check journal_mode pragma.
+		if err := db.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&result.JournalMode); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(readyzResult{
+				Status: "unavailable",
+				Reason: "cannot read journal_mode pragma",
+			})
+			return
+		}
+
+		// Check migration version via goose_db_version table.
+		err := db.QueryRowContext(ctx,
+			"SELECT COALESCE(MAX(version_id), 0) FROM goose_db_version WHERE is_applied = 1",
+		).Scan(&result.MigrationVersion)
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(readyzResult{
+				Status: "unavailable",
+				Reason: "cannot read migration version",
+			})
+			return
+		}
+
+		// Validate expected state.
+		if !result.ForeignKeys {
+			result.Status = "unavailable"
+			result.Reason = "foreign_keys pragma is OFF"
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(result)
+			return
+		}
+
+		if result.MigrationVersion != int64(ExpectedMigrationVersion) {
+			result.Status = "unavailable"
+			result.Reason = "schema version mismatch"
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(result)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(result)
+	}
 }

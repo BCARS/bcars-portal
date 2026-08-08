@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,8 +13,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/httpapi"
 )
+
+// openTestDB creates an in-memory SQLite database with all migrations applied.
+func openTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	d, err := db.Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { d.Close() })
+	require.NoError(t, db.Migrate(d))
+	return d
+}
 
 // TestHealthz verifies that GET /healthz returns 200 OK with no body.
 func TestHealthz(t *testing.T) {
@@ -26,6 +38,73 @@ func TestHealthz(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// TestReadyzHealthy verifies readyz returns 200 with a properly migrated DB.
+func TestReadyzHealthy(t *testing.T) {
+	d := openTestDB(t)
+	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test", DB: d})
+	httpapi.RegisterAll(api)
+	require.NoError(t, httpapi.VerifyAll(api))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"status":"ok"`)
+	assert.Contains(t, rec.Body.String(), `"foreign_keys":true`)
+}
+
+// TestReadyzNoDB verifies readyz returns 503 when no database is configured.
+func TestReadyzNoDB(t *testing.T) {
+	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test"})
+	httpapi.RegisterAll(api)
+	require.NoError(t, httpapi.VerifyAll(api))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"unavailable"`)
+}
+
+// TestReadyzClosedDB verifies readyz returns 503 when the database connection is closed.
+func TestReadyzClosedDB(t *testing.T) {
+	d := openTestDB(t)
+	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test", DB: d})
+	httpapi.RegisterAll(api)
+	require.NoError(t, httpapi.VerifyAll(api))
+
+	// Close the DB to simulate unreachable.
+	d.Close()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"unavailable"`)
+}
+
+// TestReadyzSchemaMismatch verifies readyz returns 503 when the migration version is wrong.
+func TestReadyzSchemaMismatch(t *testing.T) {
+	d := openTestDB(t)
+	// Sabotage: add a fake higher migration version.
+	_, err := d.Exec("INSERT INTO goose_db_version (version_id, is_applied) VALUES (999, 1)")
+	require.NoError(t, err)
+
+	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test", DB: d})
+	httpapi.RegisterAll(api)
+	require.NoError(t, httpapi.VerifyAll(api))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"schema version mismatch"`)
 }
 
 // TestOpenAPIEndpoint verifies that GET /openapi.json returns a JSON document.
