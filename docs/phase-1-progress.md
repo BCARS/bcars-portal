@@ -2,96 +2,94 @@
 
 Last reconciled: 2026-08-08
 
-This is the human-readable map of completed and remaining Phase 1 work. Beads
-is the durable source of truth: run `bd bootstrap --yes` on a fresh clone, then
-`bd ready` and `bd show <id>`. Every implementation bead contains its own scope,
-acceptance criteria, dependencies, and required PR/CI completion gate.
+This is the human-readable map of Phase 1 work. Beads is the durable source of
+truth: run `bd bootstrap --yes` on a fresh clone, then `bd ready` and
+`bd show <id>`.
 
 ## Target outcome
 
 An authorized officer can sign in, manage canonical member records, stage and
 reconcile a Groups.io CSV/JSON export, commit it atomically, inspect audit
 history, and operate a documented single-instance deployment with tested
-backup/restore. Phase 1 is local and API-first. It does not require live
-Groups.io access, automated FCC lookup, production hosting credentials, or a
-finished visual design system.
+backup/restore. Phase 1 is local and API-first.
 
-## Completed foundation
+## Status: ✅ COMPLETE
 
-| Area | Implemented evidence |
-| --- | --- |
-| Repository and safety | Go module, Makefile, secret/PII guard, ignored private-data paths, pre-push protection |
-| Architecture | Product plan, Phase 1 design/plan, ADRs 0000–0009 |
-| API contracts | Huma router, operation metadata guard, errors, pagination, idempotency/If-Match helpers, generated OpenAPI and capability catalog |
-| Database | SQLite WAL/foreign keys, Goose up/down migrations, sqlc queries, capability/role seeds, optimistic concurrency tests |
-| Authentication domain | Argon2id+pepper passwords, SQLite sessions, email-link service, filelog/SMTP adapters, policy layer, bootstrap-admin |
-| Import foundation | Synthetic CSV/JSON parsers, normalization, matching, staging schema, initial upload/commit/discard service |
-| Member domain | Person/member operations, contacts, memberships, notes, manual FCC records, honorary grant basics, auditing |
-| Base admin UI | Login/logout, dashboard, member search/detail/edit, basic membership/contact/note actions, import list/detail GET pages |
-| Test baseline | Package tests cover authentication, database, policy, imports, members, HTTP metadata/contracts, mail, logging, versioning, and web handlers |
+All Phase 1 implementation beads are closed. Both completion gates have been
+satisfied. The remaining items are deferred interactive/external tasks that
+require owner participation.
 
-The synthetic fixtures are implemented and tested; `bcars-portal-h6h` remains
-open only to revalidate and close after the CI baseline is green. The CI
-workflow exists, but `bcars-portal-05w` remains open to pin tools, reconcile all
-gates, and prove a green PR baseline before autonomous implementation begins.
+### Completion gates
 
-## Remaining local MVP work
-
-### Wave 0 — make autonomous work reliable
-
-| Bead | Scope |
-| --- | --- |
-| `bcars-portal-05w` | Harden and verify the CI pipeline; establish a green required-check baseline |
-| `bcars-portal-sbd` | Validate a fresh standalone clone, Beads hydration, tools, tests, and absence of sibling dependencies |
-
-All implementation work is blocked by the standalone-clone gate, which itself
-depends on the CI baseline.
-
-### Wave 1 — independent domain/API and operations slices
-
-| Bead | Scope |
-| --- | --- |
-| `bcars-portal-7qe` | Complete reconciliation, preview, state machine, atomic commit, and idempotency required by ADR-0008 |
-| `bcars-portal-909` | Session sign-in/sign-out/current API |
-| `bcars-portal-sx1` | Person CRUD and member-list API |
-| `bcars-portal-d00` | Contact methods and sharing-preference domain/API |
-| `bcars-portal-e3q` | Membership lifecycle API |
-| `bcars-portal-cme` | Manual/offline FCC verification-record API |
-| `bcars-portal-8kf` | Honorary-grant domain/API completion |
-| `bcars-portal-81o` | Notes API |
-| `bcars-portal-exo` | Member timeline and expanded search |
-| `bcars-portal-g34` | Authorized local member export |
-| `bcars-portal-sv7` | Capability, role, user, and role-grant API |
-| `bcars-portal-02f` | Audit-event query API |
-| `bcars-portal-149` | Functional accessible HTML/HTMX error rendering |
-| `bcars-portal-a9h` | Real database/schema readiness check |
-| `bcars-portal-k4f` | Encrypted backup/restore CLI and runbook |
-| `bcars-portal-xvk` | Log redaction and retention guidance |
-
-The member-operation completion gate is `bcars-portal-5eg`; it becomes ready
-only after all eight scoped member child tasks merge.
-
-### Wave 2 — adapters that depend on Wave 1
-
-| Bead | Dependency | Scope |
+| Gate | Bead | Status |
 | --- | --- | --- |
-| `bcars-portal-8hm` | `7qe` | Wire all eight import API operations |
-| `bcars-portal-34s` | `909` | Recovery and invitation API |
-| `bcars-portal-bzy` | `a9h` | Reproducible local deployment package and runbook |
+| Phase 1 member operations | `bcars-portal-5eg` | ✅ Closed — all 8 dependencies merged |
+| Phase 1 administrative MVP | `bcars-portal-dz0` | ✅ Closed — all 15 dependencies merged |
 
-### Wave 3 — functional MVP UI and handoff
+## Completed work
 
-| Bead | Dependency | Scope |
-| --- | --- | --- |
-| `bcars-portal-ypg` | `8hm` | Import upload/commit/discard UI routes |
-| `bcars-portal-hvv` | `34s` | Recovery/invitation UI |
-| `bcars-portal-52g` | `5eg` | Remaining member workflows in the base admin UI |
-| `bcars-portal-8kz` | Core UI and operations | Non-developer officer handoff guide |
+### Wave 0 — foundation (PRs #1–#8)
 
-`bcars-portal-dz0` is the Phase 1 completion gate. It closes only after every
-non-deferred local MVP dependency has merged and main is green.
+| Bead | PR | Scope | Status |
+| --- | --- | --- | --- |
+| `bcars-portal-05w` | #8 | CI pipeline hardening, green required-check baseline | ✅ |
+| `bcars-portal-sbd` | #7 | Standalone clone validation, Beads hydration, tools | ✅ |
 
-## Deferred interactive/external work
+### Wave 1 — domain/API and operations (PRs #9–#24)
+
+| Bead | PR | Scope | Status |
+| --- | --- | --- | --- |
+| `bcars-portal-7qe` | #9 | Import domain ADR-0008 compliance, state machine | ✅ |
+| `bcars-portal-a9h` | #10 | Health/readiness endpoints | ✅ |
+| `bcars-portal-909` | #11 | Session sign-in/sign-out/current API | ✅ |
+| `bcars-portal-sx1` | #12 | Person CRUD and member-list API | ✅ |
+| `bcars-portal-sv7` | #13 | Capability, role, user, role-grant APIs | ✅ |
+| `bcars-portal-e3q` | #14 | Membership lifecycle API | ✅ |
+| `bcars-portal-8hm` | #15 | Wire all import API handlers | ✅ |
+| `bcars-portal-ypg` | #16 | Import UI POST routes (upload/commit/discard) | ✅ |
+| `bcars-portal-81o` | #19 | Notes list/create/update API | ✅ |
+| `bcars-portal-d00` | #20 | Contact methods and sharing-preference APIs | ✅ |
+| `bcars-portal-02f` | #21 | Audit-event query API | ✅ |
+| `bcars-portal-g34` | #22 | Authorized member export (CSV/JSON) | ✅ |
+| `bcars-portal-cme` | #23 | FCC verification record APIs | ✅ |
+| `bcars-portal-8kf` | #23 | Honorary grant domain/APIs | ✅ |
+| `bcars-portal-exo` | #24 | Member timeline and search | ✅ |
+
+### Wave 2 — adapters and operations (PRs #25–#28)
+
+| Bead | PR | Scope | Status |
+| --- | --- | --- | --- |
+| `bcars-portal-149` | #25 | Error templates for admin UI | ✅ |
+| `bcars-portal-34s` | #26 | Recovery/invitation API handlers | ✅ |
+| `bcars-portal-k4f` | #27 | portalctl backup + restore | ✅ |
+| `bcars-portal-xvk` | #28 | Log redaction and retention docs | ✅ |
+
+### Wave 3 — UI and handoff (PRs #29–#31)
+
+| Bead | PR | Scope | Status |
+| --- | --- | --- | --- |
+| `bcars-portal-hvv` | #29 | Recovery/invitation UI pages | ✅ |
+| `bcars-portal-52g` | #30 | Remaining member UI pages | ✅ |
+| `bcars-portal-bzy` | #30 | Deployment package and docs | ✅ |
+| `bcars-portal-8kz` | #31 | Officer handoff checklist | ✅ |
+| `bcars-portal-h6h` | #31 | Fixture validation tests | ✅ |
+
+### Additional PRs (import improvements)
+
+| PR | Scope |
+| --- | --- |
+| #17 | Manual row decisions + flash messages for import UI |
+| #18 | Import notes with sentence-level deduplication |
+
+### Meta tasks
+
+| Bead | Status |
+| --- | --- |
+| `bcars-portal-9sr` | ✅ Closed — backlog reconciliation complete |
+| `bcars-portal-5eg` | ✅ Closed — member operations gate |
+| `bcars-portal-dz0` | ✅ Closed — admin MVP gate |
+
+## Deferred interactive/external work (Phase 2+)
 
 These beads are deliberately excluded from autonomous MVP execution. Agents
 must not start them until the repository owner participates and supplies any
@@ -99,16 +97,24 @@ required access out of band.
 
 | Bead | Why deferred |
 | --- | --- |
-| `bcars-portal-go6` | Explore Groups.io APIs, permissions, rate limits, and live synchronization after the file-import MVP |
-| `bcars-portal-66i` | Select and explore an authoritative FCC data source; manual officer verification remains the MVP path |
+| `bcars-portal-go6` | Explore Groups.io APIs, permissions, rate limits, and live synchronization |
+| `bcars-portal-66i` | Select and explore an authoritative FCC data source |
 | `bcars-portal-8ou` | Validate production SMTP with temporary owner-provided credentials |
 | `bcars-portal-eet` | Deploy to an owner-selected production host |
 | `bcars-portal-g21` | Run the real export through a human-supervised reconciliation and import |
-| `bcars-portal-6pz` | Collaborative UI design and visual-polish session after functional workflows exist |
+| `bcars-portal-6pz` | Collaborative UI design and visual-polish session |
 
-Real exports, databases, credentials, backups, uploaded content, and logs with
-member data remain outside Git. The real import uses an ignored local `data/`
-directory and is never converted into a committed fixture.
+### Not yet planned (Phase 2)
+
+The following are described in ADR-0007 and the Phase 1 design doc (Section 10)
+but have no beads yet:
+
+- **Treasurer/payment workflow**: `dues_rates`, `coverage_events`, `payments`,
+  `payment_batches` tables; payment recording; coverage period calculation;
+  membership status derived from coverage (replacing hardcoded "approved")
+- **Membership renewal**: expiration tracking, renewal reminders, lapsed status
+- **Treasurer dashboard**: payment history, dues standing, batch operations
+- **Legacy backfill migration**: convert `legacy_current_until` → `coverage_events`
 
 ## Definition of completion for every implementation bead
 
