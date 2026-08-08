@@ -707,6 +707,98 @@ func TestCommitIdempotentRetry(t *testing.T) {
 	assert.Equal(t, result1.Updated, result2.Updated)
 }
 
+// --- Note splitting tests ---
+
+func TestSplitNotes(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected []string
+	}{
+		{"", nil},
+		{"Simple note", []string{"Simple note"}},
+		{"Paid via PayPal on 1/1/2024. Paid via PayPal on 1/2/2025.", []string{"Paid via PayPal on 1/1/2024", "Paid via PayPal on 1/2/2025"}},
+		{"Duplicate. Duplicate.", []string{"Duplicate"}},
+		{"First. Second. First.", []string{"First", "Second"}},
+		{"Trailing period.", []string{"Trailing period"}},
+		{"  Whitespace  .  Trimmed  ", []string{"Whitespace", "Trimmed"}},
+	}
+	for _, tc := range cases {
+		got := splitNotes(tc.input)
+		assert.Equal(t, tc.expected, got, "input: %q", tc.input)
+	}
+}
+
+func TestCommitCreatesNotes(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1NTE,12/31/2026,Paid via PayPal on 1/1/2024. Paid via PayPal on 1/2/2025.,Full,General,555-111-1111,alice@example.invalid,1 Main,Butler,16001,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "notes-1")
+	require.NoError(t, err)
+
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+
+	result, err := svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Created)
+
+	// Verify notes were created — should be 2 unique sentences.
+	var noteCount int
+	err = d.QueryRow(`SELECT count(*) FROM notes WHERE subject_kind = 'person'`).Scan(&noteCount)
+	require.NoError(t, err)
+	assert.Equal(t, 2, noteCount, "should create 2 deduplicated notes")
+
+	// Verify note contents and source.
+	type noteRow struct {
+		Body   string
+		Source string
+	}
+	noteRows, err := d.Query(`SELECT body, source FROM notes WHERE subject_kind = 'person' ORDER BY id`)
+	require.NoError(t, err)
+	var notes []noteRow
+	for noteRows.Next() {
+		var n noteRow
+		require.NoError(t, noteRows.Scan(&n.Body, &n.Source))
+		notes = append(notes, n)
+	}
+	noteRows.Close()
+	require.Len(t, notes, 2)
+	assert.Equal(t, "Paid via PayPal on 1/1/2024", notes[0].Body)
+	assert.Equal(t, "Paid via PayPal on 1/2/2025", notes[1].Body)
+	assert.Equal(t, "groupsio_import", notes[0].Source)
+}
+
+func TestCommitNoteDedup(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	// First import with a note.
+	csv1 := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nBob Test,KA1DDP,12/31/2026,Original note,Full,General,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
+
+	up1, err := svc.Upload(context.Background(), strings.NewReader(csv1), "csv", "test.csv", 1, "dedup-1")
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up1.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up1.RunID, 1)
+	require.NoError(t, err)
+
+	// Second import with same call sign — update path, same note + new note.
+	csv2 := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nBob Test,KA1DDP,12/31/2026,Original note. New note added,Full,General,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
+
+	up2, err := svc.Upload(context.Background(), strings.NewReader(csv2), "csv", "test.csv", 1, "dedup-2")
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up2.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up2.RunID, 1)
+	require.NoError(t, err)
+
+	// Should have 2 notes total (original + new), not 3 (no duplicate of original).
+	var noteCount int
+	err = d.QueryRow(`SELECT count(*) FROM notes WHERE subject_kind = 'person'`).Scan(&noteCount)
+	require.NoError(t, err)
+	assert.Equal(t, 2, noteCount, "should deduplicate 'Original note' across imports")
+}
+
 func TestCommitIsTransactional(t *testing.T) {
 	// Verify commit uses a transaction by checking that the run status
 	// and persons are both updated atomically (both exist after commit).
