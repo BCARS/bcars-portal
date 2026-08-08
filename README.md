@@ -10,7 +10,9 @@ and AI transcripts are never committed. See `.gitignore` and
 
 ## Status
 
-Phase 1 (Administrative Membership MVP). See:
+Phase 1 (Administrative Membership MVP) is in progress. Beads is the source of
+truth for remaining work; `docs/phase-1-progress.md` is the human-readable
+overview. See:
 
 - `PLANNING.md` — product plan and decisions.
 - `docs/phase-1-design.md` — technical design.
@@ -22,6 +24,7 @@ Phase 1 (Administrative Membership MVP). See:
 - Go 1.26.0 (auto-downloaded via the `toolchain` directive if you have any
   recent Go installed and `GOTOOLCHAIN=auto`, which is the default).
 - `make`, `git`.
+- `bd` (Beads) for development task hydration and coordination.
 
 Optional developer tools:
 
@@ -31,14 +34,31 @@ Optional developer tools:
 ## Getting started
 
 ```sh
+git clone git@github.com:BCARS/bcars-portal.git
+cd bcars-portal
+bd bootstrap --yes          # hydrate the Beads database from refs/dolt/data
+bd prime
+bd ready
 cp .env.sample .env         # then edit; do NOT commit .env
-make install-hooks          # ONE-TIME: installs pre-push guard against direct pushes to main
-make build                  # builds cmd/portal and cmd/portalctl
-make test                   # runs unit tests
-make lint                   # gofmt + go vet + staticcheck + golangci-lint + secrets check
+make install-hooks          # ONE-TIME: blocks direct pushes to main
+make build
+make test
+make lint
+make sqlc-diff
+make openapi-diff
 ./bin/portal --version
 ./bin/portalctl --help
 ```
+
+After bootstrap, run `bd dolt pull` before selecting later work so the local
+task database includes claims, closures, and newly discovered dependencies from
+other agents.
+
+The repository is standalone: no parent or sibling checkout is required. Real
+Groups.io exports are copied separately into the ignored `data/` directory when
+the owner is ready to run the supervised import. Never commit real exports,
+SQLite databases, uploaded files, backups, extracted text, credentials, or logs
+containing member data.
 
 ## Development workflow
 
@@ -55,6 +75,12 @@ gh run watch                 # wait for CI green
 gh pr merge --squash --delete-branch
 git switch main && git pull --ff-only
 ```
+
+Repository agents may complete this workflow autonomously for a claimed Beads
+task: create a branch, commit, push, open a PR, wait for every required CI check,
+fix failures, and squash-merge once CI is green. The task is closed and its Beads
+state pushed only after the merge. External or interactive tasks remain deferred
+until the owner explicitly supplies access and participates.
 
 Emergency bypass (initial repo push, hotfix): `PORTAL_ALLOW_PUSH_MAIN=1 git
 push`. Every use of the bypass should be justifiable in the commit message.

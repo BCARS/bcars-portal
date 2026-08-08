@@ -40,6 +40,11 @@ fi
 # 2. Email pattern outside allowed locations.
 ALLOWED_EMAIL_PATHS='^(fixtures/synthetic/|docs/|README\.md$|\.env\.sample$|scripts/check-no-secrets\.sh$|PLANNING\.md$)'
 EMAIL_RE='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+# Git SSH remotes contain the transport identity `git@github.com`. It is not
+# an email address or secret, so exclude that exact token after extracting
+# email-like matches. Keep the exception token-specific rather than allowing
+# an entire file such as .beads/config.yaml.
+SAFE_SCM_IDENTITY_RE='^git@github\.com$'
 
 # Use git grep only over tracked files; ignore files that don't exist yet.
 if git ls-files -z >/tmp/.bcars_tracked 2>/dev/null; then
@@ -48,7 +53,9 @@ if git ls-files -z >/tmp/.bcars_tracked 2>/dev/null; then
     case "$f" in
       fixtures/synthetic/*|docs/*|README.md|.env.sample|scripts/check-no-secrets.sh|PLANNING.md|*_test.go|internal/web/handler.go|cmd/portalctl/main.go) continue ;;
     esac
-    if LC_ALL=C grep -E -I -q "$EMAIL_RE" "$f" 2>/dev/null; then
+    EMAIL_MATCHES=$(LC_ALL=C grep -E -I -o "$EMAIL_RE" "$f" 2>/dev/null \
+      | grep -Ev "$SAFE_SCM_IDENTITY_RE" || true)
+    if [ -n "$EMAIL_MATCHES" ]; then
       # Allow the well-known bcars.org placeholders in code comments only if
       # the file was already listed above; otherwise reject.
       fail "email-like value found in tracked file: $f"

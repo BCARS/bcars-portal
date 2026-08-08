@@ -2,10 +2,11 @@
 
 ## Status
 
-This is a fresh implementation. The abandoned 2025 proof of concept is preserved in
-`../bmp-archive/` for requirements and implementation reference only. Existing source
-code, databases, authentication, generated queries, and migrations are not carried
-forward automatically.
+This is a fresh, self-contained implementation. An abandoned 2025 proof of concept
+existed during initial planning, but it is not part of this repository and is never a
+prerequisite for development. All active requirements and decisions needed to work on
+the portal live in this repository. No source code, databases, authentication,
+generated queries, or migrations are inherited from the prototype.
 
 Real membership exports, databases, uploaded files, extracted document text, API
 credentials, and AI conversation data must never be committed to source control.

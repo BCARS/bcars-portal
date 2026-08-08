@@ -126,3 +126,50 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
+
+## Repository Execution Profile
+
+This repository explicitly opts into the **team-maintainer** workflow for a
+claimed Beads task. An agent may create a feature branch, commit scoped changes,
+push the branch, open a pull request, wait for all required CI checks, fix CI
+failures, and squash-merge the PR into `main` once every required check passes.
+Delete the merged branch. A current user instruction not to commit, push, or
+merge still overrides this profile.
+
+The portal must work from a standalone clone. Do not depend on files, data, or
+source code in a parent directory or sibling repository. Checked-in synthetic
+fixtures are the only member-like data allowed in tests. Real exports,
+databases, credentials, uploads, backups, and logs with member data are supplied
+out of band, remain under ignored paths such as `data/`, and are never committed.
+
+### Task Workflow
+
+1. On a fresh clone, run `bd bootstrap --yes`; otherwise run `bd dolt pull`.
+2. Run `bd prime`, `bd ready`, and `bd show <id>`. Choose only a ready task.
+3. Claim it with `bd update <id> --claim`, then publish the claim with
+   `bd dolt push`. Never force-push Beads data; pull and resolve if it moved.
+4. Create a branch named `codex/<bead-id>-short-topic`. Keep one bead per PR
+   unless its acceptance criteria explicitly say otherwise.
+5. Implement exactly the bead scope. Record newly discovered durable work in a
+   new bead instead of expanding the PR. Do not start deferred `external` or
+   `interactive` beads without the repository owner.
+6. Before opening the PR, run all repository gates:
+
+   ```bash
+   make build
+   make test
+   make lint
+   make sqlc-diff
+   make openapi-diff
+   ```
+
+7. Review `git status`, `git diff`, generated artifacts, and the secret/PII
+   check. Commit, push, and open the PR.
+8. Wait for every required GitHub check. Fix failures on the same branch and
+   rerun the local gates. Do not merge red CI.
+9. Squash-merge and delete the branch. Update local `main`, close the bead with
+   a reason that names the PR, then run `bd dolt pull` and `bd dolt push`.
+
+Functional MVP UI tasks may make reasonable accessible layout, wording, and
+interaction decisions. A separate deferred interactive task owns the later
+visual-design and polish session.
