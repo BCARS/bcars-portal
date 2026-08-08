@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
@@ -608,6 +609,11 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		}
 	}
 
+	// Import notes (deduplicated sentences).
+	if err := createImportNotes(ctx, qtx, person.ID, norm.Note, actorID); err != nil {
+		return fmt.Errorf("create notes: %w", err)
+	}
+
 	return nil
 }
 
@@ -679,6 +685,86 @@ func (s *Service) applyUpdateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		}
 	}
 
+	// Import notes (deduplicated sentences) for updates too.
+	if err := createImportNotes(ctx, qtx, personID, norm.Note, actorID); err != nil {
+		return fmt.Errorf("create notes: %w", err)
+	}
+
+	return nil
+}
+
+// splitNotes splits a note string into individual deduplicated sentences.
+// Notes from Groups.io are period-separated: "Paid via PayPal on 1/1/2024. Paid via PayPal on 1/2/2025."
+func splitNotes(note string) []string {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return nil
+	}
+
+	// Split on ". " (period-space) to separate sentences.
+	// Also handle trailing period.
+	parts := strings.Split(note, ". ")
+	seen := make(map[string]bool)
+	var unique []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.TrimRight(p, ".")
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		lower := strings.ToLower(p)
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		unique = append(unique, p)
+	}
+	return unique
+}
+
+// createImportNotes splits a note field into deduplicated sentences and creates
+// one note per unique sentence, checking for existing notes to avoid duplicates
+// across re-imports.
+func createImportNotes(ctx context.Context, qtx *sqlcgen.Queries, personID int64, noteField string, actorID int64) error {
+	sentences := splitNotes(noteField)
+	if len(sentences) == 0 {
+		return nil
+	}
+
+	// Load existing notes for this person to deduplicate across imports.
+	existing, err := qtx.ListNotes(ctx, sqlcgen.ListNotesParams{
+		SubjectKind: "person",
+		SubjectID:   personID,
+		Limit:       1000,
+		Offset:      0,
+	})
+	if err != nil {
+		return fmt.Errorf("list existing notes: %w", err)
+	}
+
+	existingBodies := make(map[string]bool)
+	for _, n := range existing {
+		existingBodies[strings.ToLower(strings.TrimSpace(n.Body))] = true
+	}
+
+	for _, sentence := range sentences {
+		if existingBodies[strings.ToLower(sentence)] {
+			continue
+		}
+		_, err := qtx.CreateNote(ctx, sqlcgen.CreateNoteParams{
+			SubjectKind: "person",
+			SubjectID:   personID,
+			Category:    "general",
+			Visibility:  "officer",
+			Body:        sentence,
+			AuthorID:    actorID,
+			Source:      "groupsio_import",
+		})
+		if err != nil {
+			return fmt.Errorf("create note: %w", err)
+		}
+	}
 	return nil
 }
 
