@@ -128,6 +128,9 @@
             ],
             "type": "string"
           },
+          "reason": {
+            "type": "string"
+          },
           "version": {
             "format": "int64",
             "type": "integer"
