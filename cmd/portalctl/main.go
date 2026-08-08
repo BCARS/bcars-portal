@@ -37,9 +37,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "portalctl seed-demo: %v\n", err)
 			os.Exit(1)
 		}
-	case "backup", "restore":
-		fmt.Fprintln(os.Stderr, "portalctl "+os.Args[1]+": not yet implemented (WS8.2).")
-		os.Exit(0)
+	case "backup":
+		if err := runBackup(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "portalctl backup: %v\n", err)
+			os.Exit(1)
+		}
+	case "restore":
+		if err := runRestore(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "portalctl restore: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "portalctl: unknown command %q\n", os.Args[1])
 		usage(os.Stderr)
