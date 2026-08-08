@@ -3,6 +3,9 @@
 {{define "title"}}Import Review - BCARS Portal{{end}}
 
 {{define "content"}}
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
     <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Import Review</h2>
 </div>
