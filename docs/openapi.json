@@ -505,8 +505,10 @@
           },
           "category": {
             "enum": [
-              "officer",
-              "treasurer"
+              "general",
+              "approval",
+              "honorary",
+              "coverage"
             ],
             "type": "string"
           },
@@ -520,12 +522,21 @@
               "membership"
             ],
             "type": "string"
+          },
+          "visibility": {
+            "enum": [
+              "officer",
+              "treasurer",
+              "system"
+            ],
+            "type": "string"
           }
         },
         "required": [
           "subject_kind",
           "subject_id",
           "category",
+          "visibility",
           "body"
         ],
         "type": "object"
@@ -1439,27 +1450,26 @@
             "readOnly": true,
             "type": "string"
           },
+          "author_id": {
+            "format": "int64",
+            "type": "integer"
+          },
           "body": {
             "type": "string"
           },
           "category": {
-            "enum": [
-              "officer",
-              "treasurer"
-            ],
             "type": "string"
           },
           "created_at": {
             "format": "date-time",
             "type": "string"
           },
-          "created_by_id": {
-            "format": "int64",
-            "type": "integer"
-          },
           "id": {
             "format": "int64",
             "type": "integer"
+          },
+          "source": {
+            "type": "string"
           },
           "subject_id": {
             "format": "int64",
@@ -1479,6 +1489,9 @@
           "version": {
             "format": "int64",
             "type": "integer"
+          },
+          "visibility": {
+            "type": "string"
           }
         },
         "required": [
@@ -1486,8 +1499,10 @@
           "subject_kind",
           "subject_id",
           "category",
+          "visibility",
           "body",
-          "created_by_id",
+          "author_id",
+          "source",
           "version",
           "created_at",
           "updated_at"
@@ -2157,6 +2172,9 @@
           },
           "body": {
             "minLength": 1,
+            "type": "string"
+          },
+          "edit_reason": {
             "type": "string"
           },
           "version": {
@@ -4381,6 +4399,7 @@
             "explode": false,
             "in": "query",
             "name": "subject_kind",
+            "required": true,
             "schema": {
               "description": "Filter by subject_kind (person, membership).",
               "type": "string"
@@ -4391,6 +4410,7 @@
             "explode": false,
             "in": "query",
             "name": "subject_id",
+            "required": true,
             "schema": {
               "description": "Filter by subject_id.",
               "format": "int64",
