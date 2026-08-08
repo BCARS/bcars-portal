@@ -1,92 +1,127 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/bcars/bcars-portal/internal/authn"
+	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
+	"github.com/bcars/bcars-portal/internal/domain/importd"
 )
+
+// maxUploadSize limits import file uploads to 10 MB.
+const maxUploadSize = 10 << 20
 
 // --- Import types ---
 
-type ImportRun struct {
+type ImportRunResponse struct {
 	ID             int64  `json:"id"`
 	Status         string `json:"status" enum:"uploaded,validated,previewed,committed,discarded"`
-	SourceFormat   string `json:"source_format" enum:"groupsio_json,groupsio_csv"`
-	FileHash       string `json:"file_hash" doc:"SHA-256 of the uploaded file."`
-	TotalRows      int    `json:"total_rows"`
-	RequiresManual int    `json:"requires_manual" doc:"Rows that need a reconciliation decision."`
-	CreatedByID    int64  `json:"created_by_id"`
-	CreatedAt      string `json:"created_at" format:"date-time"`
+	SourceKind     string `json:"source_kind" enum:"csv,json"`
+	SourceFilename string `json:"source_filename"`
+	SourceSHA256   string `json:"source_sha256" doc:"SHA-256 of the uploaded file."`
+	UploadedBy     int64  `json:"uploaded_by"`
+	UploadedAt     string `json:"uploaded_at" format:"date-time"`
 	CommittedAt    string `json:"committed_at,omitempty" format:"date-time"`
+	Version        int64  `json:"version"`
+	CreatedAt      string `json:"created_at" format:"date-time"`
+	UpdatedAt      string `json:"updated_at" format:"date-time"`
 }
 
-type StagedImportRow struct {
-	ID               int64    `json:"id"`
-	ImportID         int64    `json:"import_id"`
-	ExternalID       string   `json:"external_id,omitempty"`
-	DisplayName      string   `json:"display_name,omitempty"`
-	Email            string   `json:"email,omitempty"`
-	CallSign         string   `json:"call_sign,omitempty"`
-	MatchMethod      string   `json:"match_method,omitempty" enum:"external_id,call_sign,email,manual,none"`
-	MatchedPersonID  int64    `json:"matched_person_id,omitempty"`
-	RequiresManual   bool     `json:"requires_manual"`
-	ProposedAction   string   `json:"proposed_action,omitempty" enum:"create,update,skip,conflict"`
-	ValidationErrors []string `json:"validation_errors,omitempty"`
-}
-
-type ReconciliationDecision struct {
-	Decision string `json:"decision" enum:"create_new,link_to,skip"`
-	LinkToID int64  `json:"link_to_id,omitempty" doc:"Person ID when decision is link_to."`
+type StagedRowResponse struct {
+	ID             int64  `json:"id"`
+	ImportRunID    int64  `json:"import_run_id"`
+	SourceRowIndex int64  `json:"source_row_index"`
+	ExternalID     string `json:"external_id,omitempty"`
+	NormalizedJSON string `json:"normalized_json"`
+	MatchPersonID  int64  `json:"match_person_id,omitempty"`
+	MatchMethod    string `json:"match_method,omitempty"`
+	ProposedAction string `json:"proposed_action" enum:"create,update,skip,manual"`
+	RequiresManual bool   `json:"requires_manual"`
+	ManualReason   string `json:"manual_reason,omitempty"`
 }
 
 type ImportPreviewSummary struct {
-	Creates   int `json:"creates"`
-	Updates   int `json:"updates"`
-	Skips     int `json:"skips"`
-	Conflicts int `json:"conflicts"`
-	Manuals   int `json:"requires_manual"`
+	RunID            int64 `json:"run_id"`
+	TotalRows        int   `json:"total_rows"`
+	Creates          int   `json:"creates"`
+	Updates          int   `json:"updates"`
+	Skips            int   `json:"skips"`
+	Manuals          int   `json:"manuals"`
+	UnresolvedManual int   `json:"unresolved_manual"`
+	Ready            bool  `json:"ready" doc:"True when all manual rows are resolved and commit is allowed."`
+}
+
+type ImportCommitResult struct {
+	Created int `json:"created"`
+	Updated int `json:"updated"`
+	Skipped int `json:"skipped"`
 }
 
 // --- Import inputs / outputs ---
 
+type UploadImportForm struct {
+	File huma.FormFile `form:"file" required:"true" doc:"The Groups.io export file (CSV or JSON)."`
+}
 type UploadImportInput struct {
-	RawBody []byte `doc:"Multipart form upload of the import file." contentType:"multipart/form-data"`
+	IdempotencyKey string `header:"Idempotency-Key" required:"true" doc:"Client-generated key for safe retry."`
+	RawBody        huma.MultipartFormFiles[UploadImportForm]
 }
 type UploadImportOutput struct {
-	Body ImportRun
+	Body struct {
+		Run        ImportRunResponse `json:"run"`
+		TotalRows  int               `json:"total_rows"`
+		AutoRows   int               `json:"auto_rows"`
+		ManualRows int               `json:"manual_rows"`
+	}
 }
 
 type ImportsListInput struct {
 	PageQuery
 }
 type ImportsListOutput struct {
-	Body Page[ImportRun]
+	Body Page[ImportRunResponse]
 }
 
 type ImportGetInput struct {
 	ID int64 `path:"id"`
 }
 type ImportGetOutput struct {
-	Body ImportRun
+	Body ImportRunResponse
 }
 
 type ImportRowsListInput struct {
 	ID int64 `path:"id"`
 	PageQuery
-	RequiresManual string `query:"requires_manual" doc:"Filter to rows needing a decision: 'true' or 'false'."`
+	RequiresManual string `query:"requires_manual" doc:"Filter: 'true' for manual rows only."`
 }
 type ImportRowsListOutput struct {
-	Body Page[StagedImportRow]
+	Body Page[StagedRowResponse]
 }
 
+type ImportRowDecisionBody struct {
+	Action      string `json:"action" enum:"approve_create,approve_update,skip" doc:"Decision action."`
+	PayloadJSON string `json:"payload_json,omitempty" doc:"Optional JSON with override details."`
+}
 type ImportRowDecisionInput struct {
 	ID    int64 `path:"id"`
 	RowID int64 `path:"rowId"`
-	Body  ReconciliationDecision
+	Body  ImportRowDecisionBody
 }
 type ImportRowDecisionOutput struct {
-	Body StagedImportRow
+	Body struct {
+		DecisionID int64  `json:"decision_id"`
+		Action     string `json:"action"`
+	}
 }
 
 type ImportPreviewInput struct {
@@ -97,11 +132,10 @@ type ImportPreviewOutput struct {
 }
 
 type ImportCommitInput struct {
-	ID             int64  `path:"id"`
-	IdempotencyKey string `header:"Idempotency-Key" required:"true" doc:"Client-generated UUID for safe retry."`
+	ID int64 `path:"id"`
 }
 type ImportCommitOutput struct {
-	Body ImportPreviewSummary
+	Body ImportCommitResult
 }
 
 type ImportDiscardInput struct {
@@ -109,8 +143,51 @@ type ImportDiscardInput struct {
 }
 type ImportDiscardOutput struct{}
 
+// mapImportError converts import domain errors to Huma HTTP errors.
+func mapImportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, importd.ErrRunNotFound) {
+		return huma.NewError(http.StatusNotFound, "import run not found")
+	}
+	if errors.Is(err, importd.ErrRowNotFound) {
+		return huma.NewError(http.StatusNotFound, "staged row not found")
+	}
+	if errors.Is(err, importd.ErrInvalidTransition) {
+		return huma.NewError(http.StatusConflict, err.Error())
+	}
+	if errors.Is(err, importd.ErrUnresolvedManual) {
+		return huma.NewError(http.StatusConflict, err.Error())
+	}
+	if errors.Is(err, importd.ErrRowNotManual) {
+		return huma.NewError(http.StatusBadRequest, err.Error())
+	}
+	if errors.Is(err, importd.ErrRowNotInRun) {
+		return huma.NewError(http.StatusBadRequest, err.Error())
+	}
+	if strings.Contains(err.Error(), "duplicate idempotency key") {
+		return huma.NewError(http.StatusConflict, err.Error())
+	}
+	return huma.NewError(http.StatusInternalServerError, err.Error())
+}
+
+// detectSourceKind guesses the format from filename extension.
+func detectSourceKind(filename string) string {
+	lower := strings.ToLower(filename)
+	if strings.HasSuffix(lower, ".json") {
+		return "json"
+	}
+	return "csv"
+}
+
 // RegisterImports registers all import workflow endpoints.
-func RegisterImports(api huma.API) {
+func RegisterImports(api huma.API, deps Deps) {
+	var importSvc *importd.Service
+	if deps.DB != nil {
+		importSvc = importd.NewService(deps.DB)
+	}
+
 	Register(api, huma.Operation{
 		OperationID:   "import-upload",
 		Method:        http.MethodPost,
@@ -124,7 +201,55 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *UploadImportInput) (*UploadImportOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal := authn.PrincipalFrom(ctx)
+		if principal == nil {
+			return nil, huma.NewError(http.StatusUnauthorized, "not authenticated")
+		}
+
+		formData := input.RawBody.Data()
+		file := formData.File
+
+		// Read file with size limit.
+		data, err := io.ReadAll(io.LimitReader(file, maxUploadSize+1))
+		if err != nil {
+			return nil, huma.NewError(http.StatusBadRequest, "failed to read upload")
+		}
+		if len(data) > maxUploadSize {
+			return nil, huma.NewError(http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("file exceeds %d byte limit", maxUploadSize))
+		}
+
+		filename := file.Filename
+		if filename == "" {
+			filename = "upload"
+		}
+		sourceKind := detectSourceKind(filename)
+
+		idemKey := input.IdempotencyKey
+		if idemKey == "" {
+			return nil, huma.NewError(http.StatusBadRequest, "Idempotency-Key header is required")
+		}
+
+		result, err := importSvc.Upload(ctx, bytes.NewReader(data), sourceKind, filename, principal.UserID, idemKey)
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		run, err := importSvc.GetRun(ctx, result.RunID)
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		out := &UploadImportOutput{}
+		out.Body.Run = importRunToResponse(run)
+		out.Body.TotalRows = result.TotalRows
+		out.Body.AutoRows = result.AutoRows
+		out.Body.ManualRows = result.ManualRows
+		return out, nil
 	})
 
 	Register(api, huma.Operation{
@@ -138,7 +263,52 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *ImportsListInput) (*ImportsListOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		_, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		limit := int64(input.Limit)
+		if limit <= 0 {
+			limit = 50
+		}
+		var offset int64
+		if input.Cursor != "" {
+			raw, err := DecodeCursor(input.Cursor)
+			if err != nil {
+				return nil, huma.NewError(http.StatusBadRequest, "invalid cursor")
+			}
+			offset, err = strconv.ParseInt(raw, 10, 64)
+			if err != nil {
+				return nil, huma.NewError(http.StatusBadRequest, "invalid cursor")
+			}
+		}
+
+		runs, err := importSvc.ListRuns(ctx, limit+1, offset)
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		data := make([]ImportRunResponse, 0, len(runs))
+		for i, r := range runs {
+			if int64(i) >= limit {
+				break
+			}
+			data = append(data, importRunToResponse(r))
+		}
+
+		var nextCursor string
+		if int64(len(runs)) > limit {
+			nextCursor = EncodeCursor(fmt.Sprintf("%d", offset+limit))
+		}
+
+		return &ImportsListOutput{
+			Body: Page[ImportRunResponse]{Data: data, NextCursor: nextCursor},
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -152,7 +322,21 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *ImportGetInput) (*ImportGetOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		_, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		run, err := importSvc.GetRun(ctx, input.ID)
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		return &ImportGetOutput{Body: importRunToResponse(run)}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -166,7 +350,86 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportRowsListInput) (*ImportRowsListOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		_, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		limit := int64(input.Limit)
+		if limit <= 0 {
+			limit = 50
+		}
+		var offset int64
+		if input.Cursor != "" {
+			raw, err := DecodeCursor(input.Cursor)
+			if err != nil {
+				return nil, huma.NewError(http.StatusBadRequest, "invalid cursor")
+			}
+			offset, err = strconv.ParseInt(raw, 10, 64)
+			if err != nil {
+				return nil, huma.NewError(http.StatusBadRequest, "invalid cursor")
+			}
+		}
+
+		rows, err := importSvc.ListRows(ctx, input.ID, limit+1, offset)
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		data := make([]StagedRowResponse, 0, len(rows))
+		for i, r := range rows {
+			if int64(i) >= limit {
+				break
+			}
+			// Optionally filter by requires_manual.
+			if input.RequiresManual == "true" && r.RequiresManual == 0 {
+				continue
+			}
+			if input.RequiresManual == "false" && r.RequiresManual == 1 {
+				continue
+			}
+
+			var normDisplay, normEmail, normCallSign string
+			var norm struct {
+				DisplayName string `json:"DisplayName"`
+				Email       string `json:"Email"`
+				CallSign    string `json:"CallSign"`
+			}
+			if err := json.Unmarshal([]byte(r.NormalizedJson), &norm); err == nil {
+				normDisplay = norm.DisplayName
+				normEmail = norm.Email
+				normCallSign = norm.CallSign
+			}
+			_ = normDisplay
+			_ = normEmail
+			_ = normCallSign
+
+			data = append(data, StagedRowResponse{
+				ID:             r.ID,
+				ImportRunID:    r.ImportRunID,
+				SourceRowIndex: r.SourceRowIndex,
+				ExternalID:     r.SourceExternalID.String,
+				NormalizedJSON: r.NormalizedJson,
+				MatchPersonID:  r.MatchPersonID.Int64,
+				MatchMethod:    r.MatchMethod.String,
+				ProposedAction: r.ProposedAction,
+				RequiresManual: r.RequiresManual == 1,
+				ManualReason:   r.ManualReason.String,
+			})
+		}
+
+		var nextCursor string
+		if int64(len(rows)) > limit {
+			nextCursor = EncodeCursor(fmt.Sprintf("%d", offset+limit))
+		}
+
+		return &ImportRowsListOutput{
+			Body: Page[StagedRowResponse]{Data: data, NextCursor: nextCursor},
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -181,7 +444,34 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportRowDecisionInput) (*ImportRowDecisionOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal := authn.PrincipalFrom(ctx)
+		if principal == nil {
+			return nil, huma.NewError(http.StatusUnauthorized, "not authenticated")
+		}
+
+		decision, err := importSvc.RecordDecision(ctx, input.ID, importd.DecisionInput{
+			RowID:       input.RowID,
+			DecidedBy:   principal.UserID,
+			Action:      input.Body.Action,
+			PayloadJSON: input.Body.PayloadJSON,
+		})
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		return &ImportRowDecisionOutput{
+			Body: struct {
+				DecisionID int64  `json:"decision_id"`
+				Action     string `json:"action"`
+			}{
+				DecisionID: decision.ID,
+				Action:     decision.Action,
+			},
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -195,7 +485,32 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportPreviewInput) (*ImportPreviewOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		_, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		preview, err := importSvc.Preview(ctx, input.ID)
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		return &ImportPreviewOutput{
+			Body: ImportPreviewSummary{
+				RunID:            preview.RunID,
+				TotalRows:        preview.TotalRows,
+				Creates:          preview.CreateCount,
+				Updates:          preview.UpdateCount,
+				Skips:            preview.SkipCount,
+				Manuals:          preview.ManualCount,
+				UnresolvedManual: preview.UnresolvedManual,
+				Ready:            preview.Ready,
+			},
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -210,7 +525,27 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "explicit-confirm",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportCommitInput) (*ImportCommitOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal := authn.PrincipalFrom(ctx)
+		if principal == nil {
+			return nil, huma.NewError(http.StatusUnauthorized, "not authenticated")
+		}
+
+		result, err := importSvc.Commit(ctx, input.ID, principal.UserID)
+		if err != nil {
+			return nil, mapImportError(err)
+		}
+
+		return &ImportCommitOutput{
+			Body: ImportCommitResult{
+				Created: result.Created,
+				Updated: result.Updated,
+				Skipped: result.Skipped,
+			},
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -226,6 +561,36 @@ func RegisterImports(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportDiscardInput) (*ImportDiscardOutput, error) {
-		return nil, ErrNotImplemented()
+		if importSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		_, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := importSvc.Discard(ctx, input.ID); err != nil {
+			return nil, mapImportError(err)
+		}
+
+		return nil, nil
 	})
+}
+
+// importRunToResponse converts a sqlcgen.ImportRun to the API response type.
+func importRunToResponse(r sqlcgen.ImportRun) ImportRunResponse {
+	return ImportRunResponse{
+		ID:             r.ID,
+		Status:         r.Status,
+		SourceKind:     r.SourceKind,
+		SourceFilename: r.SourceFilename,
+		SourceSHA256:   r.SourceSha256,
+		UploadedBy:     r.UploadedBy,
+		UploadedAt:     r.UploadedAt,
+		CommittedAt:    r.CommittedAt.String,
+		Version:        r.Version,
+		CreatedAt:      r.CreatedAt,
+		UpdatedAt:      r.UpdatedAt,
+	}
 }

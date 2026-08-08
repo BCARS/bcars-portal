@@ -859,6 +859,38 @@
         ],
         "type": "object"
       },
+      "ImportCommitResult": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ImportCommitResult.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "created": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "skipped": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "skipped"
+        ],
+        "type": "object"
+      },
       "ImportPreviewSummary": {
         "additionalProperties": false,
         "properties": {
@@ -871,19 +903,31 @@
             "readOnly": true,
             "type": "string"
           },
-          "conflicts": {
-            "format": "int64",
-            "type": "integer"
-          },
           "creates": {
             "format": "int64",
             "type": "integer"
           },
-          "requires_manual": {
+          "manuals": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ready": {
+            "description": "True when all manual rows are resolved and commit is allowed.",
+            "type": "boolean"
+          },
+          "run_id": {
             "format": "int64",
             "type": "integer"
           },
           "skips": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_rows": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unresolved_manual": {
             "format": "int64",
             "type": "integer"
           },
@@ -893,21 +937,81 @@
           }
         },
         "required": [
+          "run_id",
+          "total_rows",
           "creates",
           "updates",
           "skips",
-          "conflicts",
-          "requires_manual"
+          "manuals",
+          "unresolved_manual",
+          "ready"
         ],
         "type": "object"
       },
-      "ImportRun": {
+      "ImportRowDecisionBody": {
         "additionalProperties": false,
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
             "examples": [
-              "/api/v1/schemas/ImportRun.json"
+              "/api/v1/schemas/ImportRowDecisionBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action": {
+            "description": "Decision action.",
+            "enum": [
+              "approve_create",
+              "approve_update",
+              "skip"
+            ],
+            "type": "string"
+          },
+          "payload_json": {
+            "description": "Optional JSON with override details.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "ImportRowDecisionOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ImportRowDecisionOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "decision_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "decision_id",
+          "action"
+        ],
+        "type": "object"
+      },
+      "ImportRunResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ImportRunResponse.json"
             ],
             "format": "uri",
             "readOnly": true,
@@ -921,28 +1025,22 @@
             "format": "date-time",
             "type": "string"
           },
-          "created_by_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "file_hash": {
-            "description": "SHA-256 of the uploaded file.",
-            "type": "string"
-          },
           "id": {
             "format": "int64",
             "type": "integer"
           },
-          "requires_manual": {
-            "description": "Rows that need a reconciliation decision.",
-            "format": "int64",
-            "type": "integer"
+          "source_filename": {
+            "type": "string"
           },
-          "source_format": {
+          "source_kind": {
             "enum": [
-              "groupsio_json",
-              "groupsio_csv"
+              "csv",
+              "json"
             ],
+            "type": "string"
+          },
+          "source_sha256": {
+            "description": "SHA-256 of the uploaded file.",
             "type": "string"
           },
           "status": {
@@ -955,7 +1053,19 @@
             ],
             "type": "string"
           },
-          "total_rows": {
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "uploaded_by": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
             "format": "int64",
             "type": "integer"
           }
@@ -963,12 +1073,14 @@
         "required": [
           "id",
           "status",
-          "source_format",
-          "file_hash",
-          "total_rows",
-          "requires_manual",
-          "created_by_id",
-          "created_at"
+          "source_kind",
+          "source_filename",
+          "source_sha256",
+          "uploaded_by",
+          "uploaded_at",
+          "version",
+          "created_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -1446,13 +1558,13 @@
         ],
         "type": "object"
       },
-      "PageImportRun": {
+      "PageImportRunResponse": {
         "additionalProperties": false,
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
             "examples": [
-              "/api/v1/schemas/PageImportRun.json"
+              "/api/v1/schemas/PageImportRunResponse.json"
             ],
             "format": "uri",
             "readOnly": true,
@@ -1461,7 +1573,7 @@
           "data": {
             "description": "Slice of results for this page.",
             "items": {
-              "$ref": "#/components/schemas/ImportRun"
+              "$ref": "#/components/schemas/ImportRunResponse"
             },
             "type": [
               "array",
@@ -1542,13 +1654,13 @@
         ],
         "type": "object"
       },
-      "PageStagedImportRow": {
+      "PageStagedRowResponse": {
         "additionalProperties": false,
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
             "examples": [
-              "/api/v1/schemas/PageStagedImportRow.json"
+              "/api/v1/schemas/PageStagedRowResponse.json"
             ],
             "format": "uri",
             "readOnly": true,
@@ -1557,7 +1669,7 @@
           "data": {
             "description": "Slice of results for this page.",
             "items": {
-              "$ref": "#/components/schemas/StagedImportRow"
+              "$ref": "#/components/schemas/StagedRowResponse"
             },
             "type": [
               "array",
@@ -1656,37 +1768,6 @@
         },
         "required": [
           "audience"
-        ],
-        "type": "object"
-      },
-      "ReconciliationDecision": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "/api/v1/schemas/ReconciliationDecision.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "decision": {
-            "enum": [
-              "create_new",
-              "link_to",
-              "skip"
-            ],
-            "type": "string"
-          },
-          "link_to_id": {
-            "description": "Person ID when decision is link_to.",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "decision"
         ],
         "type": "object"
       },
@@ -1927,27 +2008,9 @@
         ],
         "type": "object"
       },
-      "StagedImportRow": {
+      "StagedRowResponse": {
         "additionalProperties": false,
         "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "/api/v1/schemas/StagedImportRow.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "call_sign": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
           "external_id": {
             "type": "string"
           },
@@ -1955,49 +2018,46 @@
             "format": "int64",
             "type": "integer"
           },
-          "import_id": {
+          "import_run_id": {
             "format": "int64",
             "type": "integer"
           },
-          "match_method": {
-            "enum": [
-              "external_id",
-              "call_sign",
-              "email",
-              "manual",
-              "none"
-            ],
+          "manual_reason": {
             "type": "string"
           },
-          "matched_person_id": {
+          "match_method": {
+            "type": "string"
+          },
+          "match_person_id": {
             "format": "int64",
             "type": "integer"
+          },
+          "normalized_json": {
+            "type": "string"
           },
           "proposed_action": {
             "enum": [
               "create",
               "update",
               "skip",
-              "conflict"
+              "manual"
             ],
             "type": "string"
           },
           "requires_manual": {
             "type": "boolean"
           },
-          "validation_errors": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
+          "source_row_index": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
           "id",
-          "import_id",
+          "import_run_id",
+          "source_row_index",
+          "normalized_json",
+          "proposed_action",
           "requires_manual"
         ],
         "type": "object"
@@ -2107,6 +2167,42 @@
         "required": [
           "body",
           "version"
+        ],
+        "type": "object"
+      },
+      "UploadImportOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UploadImportOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "auto_rows": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "manual_rows": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "run": {
+            "$ref": "#/components/schemas/ImportRunResponse"
+          },
+          "total_rows": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run",
+          "total_rows",
+          "auto_rows",
+          "manual_rows"
         ],
         "type": "object"
       },
@@ -2978,7 +3074,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageImportRun"
+                  "$ref": "#/components/schemas/PageImportRunResponse"
                 }
               }
             },
@@ -3002,16 +3098,50 @@
       },
       "post": {
         "operationId": "import-upload",
+        "parameters": [
+          {
+            "description": "Client-generated key for safe retry.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Client-generated key for safe retry.",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
-          "content": {},
-          "required": true
+          "content": {
+            "multipart/form-data": {
+              "encoding": {
+                "file": {
+                  "contentType": "application/octet-stream"
+                }
+              },
+              "schema": {
+                "properties": {
+                  "file": {
+                    "contentEncoding": "binary",
+                    "contentMediaType": "application/octet-stream",
+                    "description": "The Groups.io export file (CSV or JSON).",
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          }
         },
         "responses": {
           "201": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImportRun"
+                  "$ref": "#/components/schemas/UploadImportOutputBody"
                 }
               }
             },
@@ -3053,7 +3183,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImportRun"
+                  "$ref": "#/components/schemas/ImportRunResponse"
                 }
               }
             },
@@ -3088,16 +3218,6 @@
               "format": "int64",
               "type": "integer"
             }
-          },
-          {
-            "description": "Client-generated UUID for safe retry.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "description": "Client-generated UUID for safe retry.",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -3105,7 +3225,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImportPreviewSummary"
+                  "$ref": "#/components/schemas/ImportCommitResult"
                 }
               }
             },
@@ -3243,12 +3363,12 @@
             }
           },
           {
-            "description": "Filter to rows needing a decision: 'true' or 'false'.",
+            "description": "Filter: 'true' for manual rows only.",
             "explode": false,
             "in": "query",
             "name": "requires_manual",
             "schema": {
-              "description": "Filter to rows needing a decision: 'true' or 'false'.",
+              "description": "Filter: 'true' for manual rows only.",
               "type": "string"
             }
           }
@@ -3258,7 +3378,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageStagedImportRow"
+                  "$ref": "#/components/schemas/PageStagedRowResponse"
                 }
               }
             },
@@ -3308,7 +3428,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReconciliationDecision"
+                "$ref": "#/components/schemas/ImportRowDecisionBody"
               }
             }
           },
@@ -3319,7 +3439,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StagedImportRow"
+                  "$ref": "#/components/schemas/ImportRowDecisionOutputBody"
                 }
               }
             },
