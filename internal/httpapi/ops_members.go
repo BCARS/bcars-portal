@@ -2,9 +2,19 @@ package httpapi
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/bcars/bcars-portal/internal/authn"
+	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/sqlc"
+	"github.com/bcars/bcars-portal/internal/domain/authz"
+	"github.com/bcars/bcars-portal/internal/domain/members"
 )
 
 // --- Member / person types ---
@@ -109,8 +119,69 @@ type MemberTimelineOutput struct {
 	Body Page[TimelineEvent]
 }
 
+// toAuthzPrincipal converts an authn.Principal to an authz.Principal.
+func toAuthzPrincipal(p *authn.Principal) *authz.Principal {
+	if p == nil {
+		return nil
+	}
+	return &authz.Principal{
+		UserID:       p.UserID,
+		Capabilities: p.Capabilities,
+	}
+}
+
+// requirePrincipal extracts the authn principal from context and returns
+// an authz principal. Returns a Huma error if unauthenticated.
+func requirePrincipal(ctx context.Context) (*authz.Principal, error) {
+	p := authn.PrincipalFrom(ctx)
+	if p == nil {
+		return nil, huma.NewError(http.StatusUnauthorized, "not authenticated")
+	}
+	return toAuthzPrincipal(p), nil
+}
+
+// mapDomainError converts domain-layer errors to Huma HTTP errors.
+func mapDomainError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, authz.ErrUnauthenticated) {
+		return huma.NewError(http.StatusUnauthorized, "not authenticated")
+	}
+	if errors.Is(err, authz.ErrDenied) {
+		return huma.NewError(http.StatusForbidden, "insufficient capabilities")
+	}
+	if errors.Is(err, db.ErrStale) {
+		return ErrStale("resource was modified by another request; re-fetch and retry")
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return huma.NewError(http.StatusNotFound, "resource not found")
+	}
+	return huma.NewError(http.StatusInternalServerError, err.Error())
+}
+
+// personToDetail converts a sqlcgen.Person to the API MemberDetail type.
+func personToDetail(p sqlcgen.Person) MemberDetail {
+	return MemberDetail{
+		ID:            p.ID,
+		DisplayName:   p.DisplayName,
+		SortName:      p.SortName,
+		CallSign:      p.CallSign.String,
+		DeceasedAt:    p.DeceasedAt.String,
+		DeactivatedAt: p.DeactivatedAt.String,
+		Version:       p.Version,
+		CreatedAt:     p.CreatedAt,
+		UpdatedAt:     p.UpdatedAt,
+	}
+}
+
 // RegisterMembers registers all member / person endpoints.
-func RegisterMembers(api huma.API) {
+func RegisterMembers(api huma.API, deps Deps) {
+	var memberSvc *members.Service
+	if deps.DB != nil {
+		memberSvc = members.NewService(deps.DB)
+	}
+
 	Register(api, huma.Operation{
 		OperationID: "members-list",
 		Method:      http.MethodGet,
@@ -122,7 +193,64 @@ func RegisterMembers(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *MembersListInput) (*MembersListOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		limit := int64(input.Limit)
+		if limit <= 0 {
+			limit = 50
+		}
+		var offset int64
+		if input.Cursor != "" {
+			raw, err := DecodeCursor(input.Cursor)
+			if err != nil {
+				return nil, huma.NewError(http.StatusBadRequest, "invalid cursor")
+			}
+			offset, err = strconv.ParseInt(raw, 10, 64)
+			if err != nil {
+				return nil, huma.NewError(http.StatusBadRequest, "invalid cursor")
+			}
+		}
+
+		results, err := memberSvc.ListPersons(ctx, principal, members.ListPersonsParams{
+			Query:  input.Name,
+			Limit:  limit + 1, // fetch one extra to detect next page
+			Offset: offset,
+		})
+		if err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		data := make([]MemberSummary, 0, len(results))
+		for i, r := range results {
+			if int64(i) >= limit {
+				break
+			}
+			data = append(data, MemberSummary{
+				ID:          r.ID,
+				DisplayName: r.DisplayName,
+				SortName:    r.SortName,
+				CallSign:    r.CallSign.String,
+			})
+		}
+
+		var nextCursor string
+		if int64(len(results)) > limit {
+			nextCursor = EncodeCursor(fmt.Sprintf("%d", offset+limit))
+		}
+
+		return &MembersListOutput{
+			Body: Page[MemberSummary]{
+				Data:       data,
+				NextCursor: nextCursor,
+			},
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -138,7 +266,28 @@ func RegisterMembers(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *CreateMemberInput) (*CreateMemberOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		person, err := memberSvc.CreatePerson(ctx, principal, members.CreatePersonParams{
+			DisplayName: input.Body.DisplayName,
+			SortName:    input.Body.SortName,
+			CallSign:    input.Body.CallSign,
+			BaseType:    input.Body.BaseType,
+		})
+		if err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		return &CreateMemberOutput{
+			Body: personToDetail(person),
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -152,7 +301,23 @@ func RegisterMembers(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *MemberGetInput) (*MemberGetOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		person, err := memberSvc.GetPerson(ctx, principal, input.ID)
+		if err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		return &MemberGetOutput{
+			Body: personToDetail(person),
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -167,7 +332,29 @@ func RegisterMembers(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *MemberUpdateInput) (*MemberUpdateOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		person, err := memberSvc.UpdatePerson(ctx, principal, members.UpdatePersonParams{
+			ID:          input.ID,
+			DisplayName: input.Body.DisplayName,
+			SortName:    input.Body.SortName,
+			CallSign:    input.Body.CallSign,
+			Version:     input.Body.Version,
+		})
+		if err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		return &MemberUpdateOutput{
+			Body: personToDetail(person),
+		}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -183,7 +370,20 @@ func RegisterMembers(api huma.API) {
 		ConfirmationLevel:  "explicit-confirm",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *MemberDeactivateInput) (*MemberDeactivateOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := memberSvc.DeactivatePerson(ctx, principal, input.ID, input.Body.Version); err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		return nil, nil
 	})
 
 	Register(api, huma.Operation{
@@ -199,9 +399,23 @@ func RegisterMembers(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *MemberReactivateInput) (*MemberReactivateOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := memberSvc.ReactivatePerson(ctx, principal, input.ID, input.Body.Version); err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		return nil, nil
 	})
 
+	// Timeline remains a stub — separate bead bcars-portal-exo.
 	Register(api, huma.Operation{
 		OperationID: "member-timeline",
 		Method:      http.MethodGet,

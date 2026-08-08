@@ -25,7 +25,7 @@ type Deps struct {
 // raw huma.Register calls that bypassed the metadata wrapper.
 func RegisterAll(api huma.API, deps Deps) {
 	RegisterSessions(api, deps)
-	RegisterMembers(api)
+	RegisterMembers(api, deps)
 	RegisterContactMethods(api)
 	RegisterMemberships(api)
 	RegisterNotes(api)
