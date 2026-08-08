@@ -19,14 +19,15 @@ import (
 
 // Handler serves the admin UI pages.
 type Handler struct {
-	render  *Renderer
-	members *members.Service
-	imports *importd.Service
-	queries *sqlcgen.Queries
-	db      *sql.DB
-	log     *slog.Logger
-	auth    *authn.AuthService
-	sess    *authn.SessionStore
+	render     *Renderer
+	members    *members.Service
+	imports    *importd.Service
+	queries    *sqlcgen.Queries
+	db         *sql.DB
+	log        *slog.Logger
+	auth       *authn.AuthService
+	sess       *authn.SessionStore
+	emailLinks *authn.EmailLinkService
 }
 
 const sessionCookieName = "portal_session"
@@ -48,24 +49,36 @@ func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
 	})
 	authSvc := authn.NewAuthService(database, sessStore, nil)
 
+	emailLinks := authn.NewEmailLinkService(database, nil, authn.EmailLinkConfig{
+		BaseURL: "http://localhost:8080",
+		TTL:     24 * time.Hour,
+	})
+
 	return &Handler{
-		render:  r,
-		members: members.NewService(database),
-		imports: importd.NewService(database),
-		queries: sqlcgen.New(database),
-		db:      database,
-		log:     logger,
-		auth:    authSvc,
-		sess:    sessStore,
+		render:     r,
+		members:    members.NewService(database),
+		imports:    importd.NewService(database),
+		queries:    sqlcgen.New(database),
+		db:         database,
+		log:        logger,
+		auth:       authSvc,
+		sess:       sessStore,
+		emailLinks: emailLinks,
 	}, nil
 }
 
 // RegisterRoutes registers all admin UI routes on the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	// Public: login/logout.
+	// Public: login/logout, recovery, invitation.
 	mux.Handle("GET /login", h.logged(h.loginPage))
 	mux.Handle("POST /login", h.logged(h.loginSubmit))
 	mux.Handle("POST /logout", h.logged(h.logout))
+	mux.Handle("GET /forgot-password", h.logged(h.forgotPasswordPage))
+	mux.Handle("POST /forgot-password", h.logged(h.forgotPasswordSubmit))
+	mux.Handle("GET /reset-password", h.logged(h.resetPasswordPage))
+	mux.Handle("POST /reset-password", h.logged(h.resetPasswordSubmit))
+	mux.Handle("GET /auth/invitations/consume", h.logged(h.invitationPage))
+	mux.Handle("POST /auth/invitations/consume", h.logged(h.invitationSubmit))
 
 	// Admin routes — require authenticated session.
 	mux.Handle("GET /admin/", h.requireAuth(h.dashboard))
@@ -789,6 +802,170 @@ func friendlyError(err error) string {
 		return "This record was modified by another user. Please reload and try again."
 	}
 	return msg
+}
+
+// --- Recovery/invitation handlers ---
+
+func (h *Handler) setSessionCookie(w http.ResponseWriter, sessionID string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *Handler) forgotPasswordPage(w http.ResponseWriter, r *http.Request) {
+	type data struct {
+		Error   string
+		Success bool
+	}
+	h.render.RenderHTTP(w, "forgot_password.html", http.StatusOK, data{})
+}
+
+func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	type data struct {
+		Error   string
+		Success bool
+	}
+	if err := r.ParseForm(); err != nil {
+		h.render.RenderHTTP(w, "forgot_password.html", http.StatusBadRequest, data{Error: "Invalid form data."})
+		return
+	}
+
+	email := r.FormValue("email")
+	if email != "" && h.emailLinks != nil {
+		_ = h.emailLinks.RequestRecovery(r.Context(), email, "")
+	}
+
+	// Always show success to prevent email enumeration.
+	h.render.RenderHTTP(w, "forgot_password.html", http.StatusOK, data{Success: true})
+}
+
+func (h *Handler) resetPasswordPage(w http.ResponseWriter, r *http.Request) {
+	type data struct {
+		Token string
+		Error string
+	}
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "Missing recovery token. Please use the link from your email."})
+		return
+	}
+	h.render.RenderHTTP(w, "reset_password.html", http.StatusOK, data{Token: token})
+}
+
+func (h *Handler) resetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	type data struct {
+		Token string
+		Error string
+	}
+	if err := r.ParseForm(); err != nil {
+		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "Invalid form data."})
+		return
+	}
+
+	token := r.FormValue("token")
+	password := r.FormValue("password")
+	confirm := r.FormValue("confirm")
+
+	if password != confirm {
+		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Token: token, Error: "Passwords do not match."})
+		return
+	}
+	if len(password) < 12 {
+		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Token: token, Error: "Password must be at least 12 characters."})
+		return
+	}
+
+	link, err := h.emailLinks.ConsumeLink(token)
+	if err != nil {
+		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "This recovery link is invalid or has expired. Please request a new one."})
+		return
+	}
+	if link.Purpose != "recovery" || link.UserID == nil {
+		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "Invalid recovery link."})
+		return
+	}
+
+	if err := h.auth.SetPassword(r.Context(), *link.UserID, password); err != nil {
+		h.log.Error("reset password", slog.String("error", err.Error()))
+		h.render.RenderHTTP(w, "reset_password.html", http.StatusInternalServerError, data{Error: "Failed to reset password. Please try again."})
+		return
+	}
+
+	// Sign in automatically.
+	sessionID, err := h.auth.LoginByUserID(r.Context(), *link.UserID, h.sess)
+	if err != nil {
+		h.log.Error("auto-login after reset", slog.String("error", err.Error()))
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	h.setSessionCookie(w, sessionID)
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+}
+
+func (h *Handler) invitationPage(w http.ResponseWriter, r *http.Request) {
+	type data struct {
+		Token string
+		Error string
+	}
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "Missing invitation token."})
+		return
+	}
+	h.render.RenderHTTP(w, "accept_invitation.html", http.StatusOK, data{Token: token})
+}
+
+func (h *Handler) invitationSubmit(w http.ResponseWriter, r *http.Request) {
+	type data struct {
+		Token string
+		Error string
+	}
+	if err := r.ParseForm(); err != nil {
+		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "Invalid form data."})
+		return
+	}
+
+	token := r.FormValue("token")
+	password := r.FormValue("password")
+	confirm := r.FormValue("confirm")
+
+	if password != confirm {
+		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Token: token, Error: "Passwords do not match."})
+		return
+	}
+	if len(password) < 12 {
+		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Token: token, Error: "Password must be at least 12 characters."})
+		return
+	}
+
+	link, err := h.emailLinks.ConsumeLink(token)
+	if err != nil {
+		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "This invitation link is invalid or has expired."})
+		return
+	}
+	if link.Purpose != "invitation" {
+		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "Invalid invitation link."})
+		return
+	}
+
+	userID, err := h.auth.CreateUser(r.Context(), link.Email, password)
+	if err != nil {
+		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusConflict, data{Error: "An account already exists for this email. Please sign in instead."})
+		return
+	}
+
+	sessionID, err := h.auth.LoginByUserID(r.Context(), userID, h.sess)
+	if err != nil {
+		h.log.Error("auto-login after invitation", slog.String("error", err.Error()))
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	h.setSessionCookie(w, sessionID)
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
 }
 
 type errorPageData struct {
