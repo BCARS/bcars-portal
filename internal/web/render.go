@@ -43,6 +43,16 @@ func NewRenderer() (*Renderer, error) {
 		r.templates[page] = tmpl
 	}
 
+	// Standalone templates (no layout).
+	standalone := []string{"login.html"}
+	for _, page := range standalone {
+		tmpl, err := template.ParseFS(templateFS, "templates/"+page)
+		if err != nil {
+			return nil, err
+		}
+		r.templates[page] = tmpl
+	}
+
 	return r, nil
 }
 

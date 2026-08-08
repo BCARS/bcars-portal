@@ -32,6 +32,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "portalctl bootstrap-admin: %v\n", err)
 			os.Exit(1)
 		}
+	case "seed-demo":
+		if err := runSeedDemo(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "portalctl seed-demo: %v\n", err)
+			os.Exit(1)
+		}
 	case "backup", "restore":
 		fmt.Fprintln(os.Stderr, "portalctl "+os.Args[1]+": not yet implemented (WS8.2).")
 		os.Exit(0)
@@ -107,11 +112,96 @@ func bootstrapAdmin(d *sql.DB, email string, force bool, baseURL string) error {
 	return nil
 }
 
+func runSeedDemo(args []string) error {
+	fs := flag.NewFlagSet("seed-demo", flag.ExitOnError)
+	dbPath := fs.String("db", "", "Path to SQLite database (required)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *dbPath == "" {
+		fs.Usage()
+		return fmt.Errorf("--db is required")
+	}
+
+	d, err := db.Open(*dbPath)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer d.Close()
+
+	if err := db.Migrate(d); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
+	return seedDemo(d)
+}
+
+type demoUser struct {
+	Email    string
+	Password string
+	Role     string
+}
+
+func seedDemo(d *sql.DB) error {
+	users := []demoUser{
+		{Email: "admin@demo.local", Password: "admin", Role: "administrator"},
+		{Email: "treasurer@demo.local", Password: "treasurer", Role: "treasurer"},
+		{Email: "joe@demo.local", Password: "joe", Role: "member"},
+	}
+
+	for _, u := range users {
+		hash, err := authn.HashPassword(u.Password, nil, authn.DefaultParams())
+		if err != nil {
+			return fmt.Errorf("hash password for %s: %w", u.Email, err)
+		}
+
+		// Upsert user.
+		res, err := d.Exec(
+			`INSERT INTO users (email, password_hash, password_algo_params, is_active)
+			 VALUES (?, ?, 'argon2id', 1)
+			 ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')`,
+			u.Email, hash,
+		)
+		if err != nil {
+			return fmt.Errorf("upsert user %s: %w", u.Email, err)
+		}
+
+		userID, _ := res.LastInsertId()
+		if userID == 0 {
+			// ON CONFLICT updated — look up the ID.
+			if err := d.QueryRow(`SELECT id FROM users WHERE email = ?`, u.Email).Scan(&userID); err != nil {
+				return fmt.Errorf("lookup user %s: %w", u.Email, err)
+			}
+		}
+
+		// Grant role (skip if already granted).
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		_, err = d.Exec(
+			`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at, reason)
+			 SELECT ?, ?, ?, ?, 'seed-demo'
+			 WHERE NOT EXISTS (
+			   SELECT 1 FROM user_role_grants WHERE user_id = ? AND role_code = ? AND revoked_at IS NULL
+			 )`,
+			userID, u.Role, userID, now, userID, u.Role,
+		)
+		if err != nil {
+			return fmt.Errorf("grant role %s to %s: %w", u.Role, u.Email, err)
+		}
+
+		fmt.Printf("  %-28s  role=%-15s  password=%s\n", u.Email, u.Role, u.Password)
+	}
+
+	fmt.Println("\nDemo users seeded. Sign in at /login")
+	return nil
+}
+
 func usage(w *os.File) {
 	fmt.Fprintln(w, `portalctl — BCARS members portal admin CLI.
 
 Commands:
   bootstrap-admin --email <addr> --db <path>   Create the first administrator.
+  seed-demo --db <path>                        Create demo users (admin, treasurer, member).
   backup --to <dir>                            Encrypted database backup (WS8.2).
   restore --from <path> --into <dir>           Restore an encrypted backup (WS8.2).
   version                                      Print detailed build info.
