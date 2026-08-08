@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/bcars/bcars-portal/internal/db"
@@ -696,6 +697,86 @@ func (s *Service) audit(ctx context.Context, p *authz.Principal, action, resourc
 }
 
 // --- Helpers ---
+
+// TimelineEvent represents a unified event in a member's history.
+type TimelineEvent struct {
+	Kind       string // "audit", "note", "membership", "import"
+	Detail     string
+	OccurredAt string // RFC3339
+}
+
+// Timeline returns a reverse-chronological merged timeline for a person.
+func (s *Service) Timeline(ctx context.Context, p *authz.Principal, personID int64, limit int) ([]TimelineEvent, error) {
+	if err := authz.Authorize(ctx, p, "member.read", nil); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	var events []TimelineEvent
+
+	// Audit events for this person.
+	auditEvents, err := s.Q.ListAuditEventsByResource(ctx, sqlcgen.ListAuditEventsByResourceParams{
+		ResourceKind: sqlNullString("person"),
+		ResourceID:   sql.NullInt64{Int64: personID, Valid: true},
+		Limit:        int64(limit),
+		Offset:       0,
+	})
+	if err == nil {
+		for _, ae := range auditEvents {
+			events = append(events, TimelineEvent{
+				Kind:       "audit",
+				Detail:     ae.Action + ": " + ae.Outcome,
+				OccurredAt: ae.OccurredAt,
+			})
+		}
+	}
+
+	// Notes for this person.
+	notes, err := s.Q.ListNotes(ctx, sqlcgen.ListNotesParams{
+		SubjectKind: "person",
+		SubjectID:   personID,
+		Limit:       int64(limit),
+		Offset:      0,
+	})
+	if err == nil {
+		for _, n := range notes {
+			detail := n.Body
+			if len(detail) > 120 {
+				detail = detail[:120] + "…"
+			}
+			events = append(events, TimelineEvent{
+				Kind:       "note",
+				Detail:     detail,
+				OccurredAt: n.CreatedAt,
+			})
+		}
+	}
+
+	// Memberships.
+	memberships, err := s.Q.ListMembershipsByPerson(ctx, personID)
+	if err == nil {
+		for _, m := range memberships {
+			events = append(events, TimelineEvent{
+				Kind:       "membership",
+				Detail:     m.BaseType + " — " + m.Lifecycle,
+				OccurredAt: m.CreatedAt,
+			})
+		}
+	}
+
+	// Sort by occurred_at descending.
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].OccurredAt > events[j].OccurredAt
+	})
+
+	if len(events) > limit {
+		events = events[:limit]
+	}
+
+	return events, nil
+}
 
 func sqlNullString(s string) sql.NullString {
 	if s == "" {

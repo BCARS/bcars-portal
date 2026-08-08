@@ -369,7 +369,6 @@ func RegisterMembers(api huma.API, deps Deps) {
 		return nil, nil
 	})
 
-	// Timeline remains a stub — separate bead bcars-portal-exo.
 	Register(api, huma.Operation{
 		OperationID: "member-timeline",
 		Method:      http.MethodGet,
@@ -381,6 +380,36 @@ func RegisterMembers(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *MemberTimelineInput) (*MemberTimelineOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		limit := input.Limit
+		if limit <= 0 {
+			limit = 50
+		}
+
+		events, err := memberSvc.Timeline(ctx, principal, input.ID, limit)
+		if err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		data := make([]TimelineEvent, len(events))
+		for i, e := range events {
+			data[i] = TimelineEvent{
+				Kind:      e.Kind,
+				Detail:    e.Detail,
+				OccuredAt: e.OccurredAt,
+			}
+		}
+
+		return &MemberTimelineOutput{
+			Body: Page[TimelineEvent]{Data: data},
+		}, nil
 	})
 }
