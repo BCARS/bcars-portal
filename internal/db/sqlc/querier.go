@@ -41,6 +41,7 @@ type Querier interface {
 	DeactivatePerson(ctx context.Context, arg DeactivatePersonParams) error
 	DeleteExpiredSessions(ctx context.Context) error
 	EffectiveCapabilities(ctx context.Context, arg EffectiveCapabilitiesParams) ([]string, error)
+	ExpireHonoraryGrant(ctx context.Context, arg ExpireHonoraryGrantParams) (HonoraryGrant, error)
 	FindContactMethodByNorm(ctx context.Context, arg FindContactMethodByNormParams) ([]ContactMethod, error)
 	FindExternalID(ctx context.Context, arg FindExternalIDParams) (ExternalID, error)
 	GetContactMethod(ctx context.Context, id int64) (ContactMethod, error)
@@ -96,6 +97,9 @@ type Querier interface {
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	TransitionLifecycle(ctx context.Context, arg TransitionLifecycleParams) (Membership, error)
 	UpdateContactMethod(ctx context.Context, arg UpdateContactMethodParams) (ContactMethod, error)
+	// is_lifetime is written explicitly because the table CHECK forbids a lifetime
+	// grant from carrying an end date; giving a grant an end date converts it to a
+	// term grant.
 	UpdateHonoraryGrant(ctx context.Context, arg UpdateHonoraryGrantParams) (HonoraryGrant, error)
 	UpdateImportRunStatus(ctx context.Context, arg UpdateImportRunStatusParams) (ImportRun, error)
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error)
