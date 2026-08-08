@@ -75,3 +75,9 @@ bd.db
 # They would override fork protection in .git/info/exclude.
 # Config files (metadata.json, config.yaml) are tracked by git by default
 # since no pattern above ignores them.
+
+# Beads interaction log — append-only, Git-tracked for audit/training,
+# but deliberately not synchronized by bd dolt pull/push.
+# In multi-agent workflows this creates unnecessary merge conflicts.
+# The Dolt history preserves task state; Git preserves code changes.
+interactions.jsonl
