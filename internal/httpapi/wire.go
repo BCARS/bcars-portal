@@ -26,11 +26,11 @@ type Deps struct {
 func RegisterAll(api huma.API, deps Deps) {
 	RegisterSessions(api, deps)
 	RegisterMembers(api, deps)
-	RegisterContactMethods(api)
+	RegisterContactMethods(api, deps)
 	RegisterMemberships(api, deps)
-	RegisterNotes(api)
+	RegisterNotes(api, deps)
 	RegisterImports(api, deps)
 	RegisterExports(api, deps)
-	RegisterAudit(api)
+	RegisterAudit(api, deps)
 	RegisterAdmin(api, deps)
 }
