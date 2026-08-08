@@ -30,6 +30,10 @@ func NewRenderer() (*Renderer, error) {
 		"imports.html",
 		"import_detail.html",
 		"contact_form.html",
+		// error.html backs renderError, including the 403 written by
+		// requireCap. The remaining unregistered templates (recovery,
+		// invitation) are bcars-portal-fmc.4.
+		"error.html",
 	}
 
 	for _, page := range pages {

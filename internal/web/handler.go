@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bcars/bcars-portal/internal/audit"
 	"github.com/bcars/bcars-portal/internal/authn"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
@@ -28,6 +30,7 @@ type Handler struct {
 	auth       *authn.AuthService
 	sess       *authn.SessionStore
 	emailLinks *authn.EmailLinkService
+	audit      audit.Recorder
 }
 
 const sessionCookieName = "portal_session"
@@ -64,6 +67,7 @@ func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
 		auth:       authSvc,
 		sess:       sessStore,
 		emailLinks: emailLinks,
+		audit:      audit.NewSQLRecorder(database, logger),
 	}, nil
 }
 
@@ -80,28 +84,63 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /auth/invitations/consume", h.logged(h.invitationPage))
 	mux.Handle("POST /auth/invitations/consume", h.logged(h.invitationSubmit))
 
-	// Admin routes — require authenticated session.
-	mux.Handle("GET /admin/", h.requireAuth(h.dashboard))
-	mux.Handle("GET /admin/members", h.requireAuth(h.memberList))
-	mux.Handle("GET /admin/members/new", h.requireAuth(h.memberNew))
-	mux.Handle("POST /admin/members/new", h.requireAuth(h.memberCreate))
-	mux.Handle("GET /admin/members/{id}", h.requireAuth(h.memberDetail))
-	mux.Handle("GET /admin/members/{id}/edit", h.requireAuth(h.memberEdit))
-	mux.Handle("POST /admin/members/{id}/edit", h.requireAuth(h.memberUpdate))
-	mux.Handle("POST /admin/members/{id}/deactivate", h.requireAuth(h.memberDeactivate))
-	mux.Handle("POST /admin/members/{id}/reactivate", h.requireAuth(h.memberReactivate))
-	mux.Handle("POST /admin/members/{id}/memberships/{mid}/approve", h.requireAuth(h.membershipApprove))
-	mux.Handle("POST /admin/members/{id}/notes", h.requireAuth(h.noteCreate))
-	mux.Handle("POST /admin/members/{id}/memberships/{mid}/reject", h.requireAuth(h.membershipReject))
-	mux.Handle("GET /admin/members/{id}/contacts/new", h.requireAuth(h.contactNew))
-	mux.Handle("POST /admin/members/{id}/contacts/new", h.requireAuth(h.contactCreate))
-	mux.Handle("GET /admin/imports", h.requireAuth(h.importList))
-	mux.Handle("POST /admin/imports/upload", h.requireAuth(h.importUpload))
-	mux.Handle("GET /admin/imports/{id}", h.requireAuth(h.importDetail))
-	mux.Handle("POST /admin/imports/{id}/rows/{rowId}/decide", h.requireAuth(h.importRowDecide))
-	mux.Handle("POST /admin/imports/{id}/preview", h.requireAuth(h.importPreview))
-	mux.Handle("POST /admin/imports/{id}/commit", h.requireAuth(h.importCommit))
-	mux.Handle("POST /admin/imports/{id}/discard", h.requireAuth(h.importDiscard))
+	// Admin routes — each declares the capability it requires and, for
+	// mutations, the audit action it emits. AdminRoutes is the single source
+	// of truth; there is no way to register an admin route without stating a
+	// capability, which is what kept requireAuth-only routes from being
+	// noticed.
+	for _, rt := range h.AdminRoutes() {
+		mux.Handle(rt.Pattern, h.requireCap(rt))
+	}
+}
+
+// AdminRoute binds an admin UI route to the capability it requires.
+type AdminRoute struct {
+	// Pattern is the net/http ServeMux pattern, including method.
+	Pattern string
+	// Capability is the authz capability code the caller must hold.
+	Capability string
+	// AuditAction is the audit event emitted on every call. Empty for
+	// read-only routes, which are still audited when denied.
+	AuditAction string
+	// ResourceKind labels the audit event's subject.
+	ResourceKind string
+
+	handler http.HandlerFunc
+}
+
+// AdminRoutes returns every admin UI route with its capability requirement.
+// Exported so tests can assert coverage across the whole table rather than
+// route by route.
+func (h *Handler) AdminRoutes() []AdminRoute {
+	return []AdminRoute{
+		{Pattern: "GET /admin/", Capability: "session.self.read", ResourceKind: "dashboard", handler: h.dashboard},
+
+		{Pattern: "GET /admin/members", Capability: "member.read", ResourceKind: "person", handler: h.memberList},
+		{Pattern: "GET /admin/members/new", Capability: "member.create", ResourceKind: "person", handler: h.memberNew},
+		{Pattern: "POST /admin/members/new", Capability: "member.create", AuditAction: "member.create", ResourceKind: "person", handler: h.memberCreate},
+		{Pattern: "GET /admin/members/{id}", Capability: "member.read", ResourceKind: "person", handler: h.memberDetail},
+		{Pattern: "GET /admin/members/{id}/edit", Capability: "member.update", ResourceKind: "person", handler: h.memberEdit},
+		{Pattern: "POST /admin/members/{id}/edit", Capability: "member.update", AuditAction: "member.update", ResourceKind: "person", handler: h.memberUpdate},
+		{Pattern: "POST /admin/members/{id}/deactivate", Capability: "member.deactivate", AuditAction: "member.deactivate", ResourceKind: "person", handler: h.memberDeactivate},
+		{Pattern: "POST /admin/members/{id}/reactivate", Capability: "member.deactivate", AuditAction: "member.reactivate", ResourceKind: "person", handler: h.memberReactivate},
+
+		{Pattern: "POST /admin/members/{id}/memberships/{mid}/approve", Capability: "membership.approve", AuditAction: "membership.approve", ResourceKind: "membership", handler: h.membershipApprove},
+		{Pattern: "POST /admin/members/{id}/memberships/{mid}/reject", Capability: "membership.approve", AuditAction: "membership.reject", ResourceKind: "membership", handler: h.membershipReject},
+
+		{Pattern: "POST /admin/members/{id}/notes", Capability: "notes.write.officer", AuditAction: "note.create", ResourceKind: "note", handler: h.noteCreate},
+
+		{Pattern: "GET /admin/members/{id}/contacts/new", Capability: "contact_method.write", ResourceKind: "contact_method", handler: h.contactNew},
+		{Pattern: "POST /admin/members/{id}/contacts/new", Capability: "contact_method.write", AuditAction: "contact_method.create", ResourceKind: "contact_method", handler: h.contactCreate},
+
+		{Pattern: "GET /admin/imports", Capability: "import.upload", ResourceKind: "import_run", handler: h.importList},
+		{Pattern: "POST /admin/imports/upload", Capability: "import.upload", AuditAction: "import.upload", ResourceKind: "import_run", handler: h.importUpload},
+		{Pattern: "GET /admin/imports/{id}", Capability: "import.upload", ResourceKind: "import_run", handler: h.importDetail},
+		{Pattern: "POST /admin/imports/{id}/rows/{rowId}/decide", Capability: "import.upload", AuditAction: "import.row.decide", ResourceKind: "import_run", handler: h.importRowDecide},
+		{Pattern: "POST /admin/imports/{id}/preview", Capability: "import.upload", AuditAction: "import.preview", ResourceKind: "import_run", handler: h.importPreview},
+		{Pattern: "POST /admin/imports/{id}/commit", Capability: "import.commit", AuditAction: "import.commit", ResourceKind: "import_run", handler: h.importCommit},
+		{Pattern: "POST /admin/imports/{id}/discard", Capability: "import.upload", AuditAction: "import.discard", ResourceKind: "import_run", handler: h.importDiscard},
+	}
 }
 
 // logged wraps an http.HandlerFunc with request/response logging.
@@ -115,17 +154,123 @@ func (h *Handler) logged(next http.HandlerFunc) http.Handler {
 	})
 }
 
-// requireAuth wraps a handler with logging + session authentication.
-// Redirects to /login if no valid session exists.
-func (h *Handler) requireAuth(next http.HandlerFunc) http.Handler {
+// principalCtxKey keys the resolved principal in the request context.
+type principalCtxKey struct{}
+
+// requireCap wraps an admin route with logging, session authentication, and
+// the capability check declared by the route. Unauthenticated callers are
+// redirected to /login; authenticated callers missing the capability get 403.
+//
+// The resolved principal is placed in the request context so handlers reuse it
+// instead of re-running the session and capability queries.
+func (h *Handler) requireCap(rt AdminRoute) http.Handler {
 	return h.logged(func(w http.ResponseWriter, r *http.Request) {
 		p := h.principalFromRequest(r)
 		if p == nil {
+			h.recordDenial(r, rt, 0, audit.ReasonUnauthenticated)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		next(w, r)
+
+		if _, ok := p.Capabilities[rt.Capability]; !ok {
+			h.recordDenial(r, rt, p.UserID, audit.ReasonMissingCapability)
+			h.log.Warn("capability denied",
+				slog.Int64("user_id", p.UserID),
+				slog.String("capability", rt.Capability),
+				slog.String("pattern", rt.Pattern),
+			)
+			h.renderError(w, r, http.StatusForbidden,
+				"You do not have permission to perform this action.")
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), principalCtxKey{}, p)
+		ctx = audit.WithResourceSlot(ctx)
+		r = r.WithContext(ctx)
+
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		rt.handler(sw, r)
+
+		if rt.AuditAction != "" {
+			kind, id := rt.ResourceKind, pathID(r)
+			if k, i, ok := audit.StampedResource(r.Context()); ok {
+				kind, id = k, i
+			}
+			h.audit.Record(r.Context(), audit.Event{
+				Action:       rt.AuditAction,
+				ActorUserID:  p.UserID,
+				ResourceKind: kind,
+				ResourceID:   id,
+				Outcome:      outcomeForStatus(sw.status),
+				DetailJSON:   detailJSON(r, rt),
+			})
+		}
 	})
+}
+
+// statusWriter captures the response status so the audit outcome reflects what
+// the handler actually did rather than assuming success.
+type statusWriter struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	if !w.wroteHeader {
+		w.status = code
+		w.wroteHeader = true
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	w.wroteHeader = true
+	return w.ResponseWriter.Write(b)
+}
+
+// outcomeForStatus maps a response status to an audit outcome.
+func outcomeForStatus(status int) string {
+	switch {
+	case status == http.StatusUnauthorized, status == http.StatusForbidden:
+		return audit.OutcomeDenied
+	case status >= 400:
+		return audit.OutcomeFailure
+	default:
+		return audit.OutcomeSuccess
+	}
+}
+
+// recordDenial audits a rejected admin request.
+func (h *Handler) recordDenial(r *http.Request, rt AdminRoute, userID int64, reason string) {
+	action := rt.AuditAction
+	if action == "" {
+		action = "authz.denied.web"
+	}
+	h.audit.Record(r.Context(), audit.Event{
+		Action:       action,
+		ActorUserID:  userID,
+		ResourceKind: rt.ResourceKind,
+		ResourceID:   pathID(r),
+		Outcome:      audit.OutcomeDenied,
+		ReasonCode:   reason,
+		DetailJSON:   detailJSON(r, rt),
+	})
+}
+
+// pathID parses the {id} path parameter, returning 0 when absent or invalid.
+func pathID(r *http.Request) int64 {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+// detailJSON records non-PII request context on an audit event.
+func detailJSON(r *http.Request, rt AdminRoute) string {
+	return fmt.Sprintf(`{"method":%q,"path":%q,"required_capability":%q,"surface":"web"}`,
+		r.Method, r.URL.Path, rt.Capability)
 }
 
 // principalFromRequest resolves the authenticated principal from the session
@@ -158,8 +303,13 @@ func (h *Handler) principalFromRequest(r *http.Request) *authz.Principal {
 }
 
 // principal extracts the principal from the request. Must only be called
-// within requireAuth-protected handlers.
+// within requireCap-protected handlers, which place it in the context; the
+// fallback re-resolves it rather than returning nil to a handler that assumes
+// it is present.
 func (h *Handler) principal(r *http.Request) *authz.Principal {
+	if p, ok := r.Context().Value(principalCtxKey{}).(*authz.Principal); ok {
+		return p
+	}
 	return h.principalFromRequest(r)
 }
 

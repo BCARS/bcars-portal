@@ -13,6 +13,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
+	"github.com/bcars/bcars-portal/internal/audit"
 	"github.com/bcars/bcars-portal/internal/obs"
 	"github.com/bcars/bcars-portal/internal/web"
 )
@@ -51,6 +52,12 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 	apiCfg := huma.DefaultConfig("BCARS Portal API", cfg.Version)
 	apiCfg.Info.Description = "BCARS Members Portal — officers-only administrative API (Phase 1)."
 	api := humago.NewWithPrefix(mux, "/api/v1", apiCfg)
+
+	// Capability enforcement + generic audit. This must be installed before
+	// RegisterAll: huma snapshots api.Middlewares() when each operation is
+	// registered, so a middleware added afterwards would never run. Installing
+	// it here means no assembly can serve traffic without enforcement.
+	api.UseMiddleware(AuthzMiddleware(api, audit.NewSQLRecorder(cfg.DB, cfg.Logger)))
 
 	// Admin UI routes (server-rendered HTML).
 	if cfg.DB != nil {
