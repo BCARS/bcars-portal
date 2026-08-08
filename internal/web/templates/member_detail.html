@@ -88,11 +88,18 @@
             <td>{{if .EndedOn.Valid}}{{.EndedOn.String}}{{else}}-{{end}}</td>
             <td>
                 {{if eq .Lifecycle "pending"}}
-                <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/approve" style="display:inline;">
-                    <input type="hidden" name="version" value="{{.Version}}">
-                    <input type="hidden" name="base_type" value="{{.BaseType}}">
-                    <button type="submit" class="btn btn-sm btn-primary">Approve</button>
-                </form>
+                <div style="display: flex; gap: 4px;">
+                    <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/approve" style="display:inline;">
+                        <input type="hidden" name="version" value="{{.Version}}">
+                        <input type="hidden" name="base_type" value="{{.BaseType}}">
+                        <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                    </form>
+                    <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/reject" style="display:inline;"
+                          onsubmit="return confirm('Reject this membership application?');">
+                        <input type="hidden" name="version" value="{{.Version}}">
+                        <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                    </form>
+                </div>
                 {{end}}
             </td>
         </tr>
@@ -137,4 +144,19 @@
         </div>
     </form>
 </div>
+
+{{if .Timeline}}
+<div class="card" style="margin-top: 16px;">
+    <h3>Activity Timeline</h3>
+    {{range .Timeline}}
+    <div style="border-bottom: 1px solid #f1f5f9; padding: 8px 0; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <span class="badge badge-gray">{{.Kind}}</span>
+            <span style="font-size: 0.875rem; margin-left: 8px;">{{.Detail}}</span>
+        </div>
+        <span style="font-size: 0.75rem; color: #94a3b8; white-space: nowrap;">{{.OccurredAt}}</span>
+    </div>
+    {{end}}
+</div>
+{{end}}
 {{end}}

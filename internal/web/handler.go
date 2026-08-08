@@ -92,6 +92,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /admin/members/{id}/reactivate", h.requireAuth(h.memberReactivate))
 	mux.Handle("POST /admin/members/{id}/memberships/{mid}/approve", h.requireAuth(h.membershipApprove))
 	mux.Handle("POST /admin/members/{id}/notes", h.requireAuth(h.noteCreate))
+	mux.Handle("POST /admin/members/{id}/memberships/{mid}/reject", h.requireAuth(h.membershipReject))
 	mux.Handle("GET /admin/members/{id}/contacts/new", h.requireAuth(h.contactNew))
 	mux.Handle("POST /admin/members/{id}/contacts/new", h.requireAuth(h.contactCreate))
 	mux.Handle("GET /admin/imports", h.requireAuth(h.importList))
@@ -305,11 +306,18 @@ func (h *Handler) memberList(w http.ResponseWriter, r *http.Request) {
 	h.render.RenderHTTP(w, "members.html", http.StatusOK, data)
 }
 
+type timelineItem struct {
+	Kind       string
+	Detail     string
+	OccurredAt string
+}
+
 type memberDetailData struct {
 	Person         sqlcgen.Person
 	Memberships    []sqlcgen.Membership
 	ContactMethods []sqlcgen.ContactMethod
 	Notes          []sqlcgen.Note
+	Timeline       []timelineItem
 	Flash          string
 }
 
@@ -330,6 +338,16 @@ func (h *Handler) memberDetail(w http.ResponseWriter, r *http.Request) {
 	data.ContactMethods, _ = h.members.ListContactMethods(ctx, p, id)
 	data.Notes, _ = h.members.ListNotes(ctx, p, "person", id, 50, 0)
 	data.Flash = r.URL.Query().Get("flash")
+
+	// Load timeline.
+	events, _ := h.members.Timeline(ctx, p, id, 20)
+	for _, e := range events {
+		data.Timeline = append(data.Timeline, timelineItem{
+			Kind:       e.Kind,
+			Detail:     e.Detail,
+			OccurredAt: e.OccurredAt,
+		})
+	}
 
 	h.render.RenderHTTP(w, "member_detail.html", http.StatusOK, data)
 }
@@ -475,6 +493,32 @@ func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Membership+approved", id), http.StatusSeeOther)
+}
+
+func (h *Handler) membershipReject(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := h.principal(r)
+	id := parseID(r, "id")
+	mid := parseID(r, "mid")
+
+	if err := r.ParseForm(); err != nil {
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
+		return
+	}
+	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
+	reason := r.FormValue("reason")
+	if reason == "" {
+		reason = "Rejected via admin UI"
+	}
+
+	_, err := h.members.RejectMembership(ctx, p, mid, version, reason)
+	if err != nil {
+		h.log.Error("reject membership failed", slog.Int64("person_id", id), slog.Int64("membership_id", mid), slog.String("error", err.Error()))
+		h.renderDomainError(w, r, err)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Membership+rejected", id), http.StatusSeeOther)
 }
 
 func (h *Handler) noteCreate(w http.ResponseWriter, r *http.Request) {
