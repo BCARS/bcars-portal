@@ -13,6 +13,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/authn"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
+	"github.com/bcars/bcars-portal/internal/domain/importd"
 	"github.com/bcars/bcars-portal/internal/domain/members"
 )
 
@@ -20,6 +21,7 @@ import (
 type Handler struct {
 	render  *Renderer
 	members *members.Service
+	imports *importd.Service
 	queries *sqlcgen.Queries
 	db      *sql.DB
 	log     *slog.Logger
@@ -49,6 +51,7 @@ func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
 	return &Handler{
 		render:  r,
 		members: members.NewService(database),
+		imports: importd.NewService(database),
 		queries: sqlcgen.New(database),
 		db:      database,
 		log:     logger,
@@ -79,7 +82,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /admin/members/{id}/contacts/new", h.requireAuth(h.contactNew))
 	mux.Handle("POST /admin/members/{id}/contacts/new", h.requireAuth(h.contactCreate))
 	mux.Handle("GET /admin/imports", h.requireAuth(h.importList))
+	mux.Handle("POST /admin/imports/upload", h.requireAuth(h.importUpload))
 	mux.Handle("GET /admin/imports/{id}", h.requireAuth(h.importDetail))
+	mux.Handle("POST /admin/imports/{id}/preview", h.requireAuth(h.importPreview))
+	mux.Handle("POST /admin/imports/{id}/commit", h.requireAuth(h.importCommit))
+	mux.Handle("POST /admin/imports/{id}/discard", h.requireAuth(h.importDiscard))
 }
 
 // logged wraps an http.HandlerFunc with request/response logging.
@@ -625,6 +632,102 @@ func stagedToRow(row sqlcgen.StagedImportRow) importDetailRow {
 		item.CallSign = norm.CallSign
 	}
 	return item
+}
+
+// maxImportUploadSize limits import file uploads to 10 MB.
+const maxImportUploadSize = 10 << 20
+
+func (h *Handler) importUpload(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	principal := h.principal(r)
+	if principal == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	// Parse multipart form with size limit.
+	if err := r.ParseMultipartForm(maxImportUploadSize); err != nil {
+		h.log.Error("import upload: parse form", slog.String("error", err.Error()))
+		http.Redirect(w, r, "/admin/imports?error=File+too+large+or+invalid+form", http.StatusSeeOther)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Redirect(w, r, "/admin/imports?error=No+file+selected", http.StatusSeeOther)
+		return
+	}
+	defer file.Close()
+
+	filename := header.Filename
+	sourceKind := "csv"
+	if strings.HasSuffix(strings.ToLower(filename), ".json") {
+		sourceKind = "json"
+	}
+
+	// Generate an idempotency key from filename + timestamp.
+	idemKey := fmt.Sprintf("ui-%s-%d", filename, time.Now().UnixNano())
+
+	result, err := h.imports.Upload(ctx, file, sourceKind, filename, principal.UserID, idemKey)
+	if err != nil {
+		h.log.Error("import upload", slog.String("error", err.Error()))
+		http.Redirect(w, r, "/admin/imports?error="+friendlyError(err), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d", result.RunID), http.StatusSeeOther)
+}
+
+func (h *Handler) importPreview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := parseID(r, "id")
+
+	_, err := h.imports.Preview(ctx, id)
+	if err != nil {
+		h.log.Error("import preview", slog.String("error", err.Error()))
+		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d", id), http.StatusSeeOther)
+}
+
+func (h *Handler) importCommit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	principal := h.principal(r)
+	if principal == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	id := parseID(r, "id")
+
+	// Auto-preview before commit to ensure state transition.
+	_, _ = h.imports.Preview(ctx, id)
+
+	result, err := h.imports.Commit(ctx, id, principal.UserID)
+	if err != nil {
+		h.log.Error("import commit", slog.String("error", err.Error()))
+		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Import+committed:+%d+created,+%d+updated,+%d+skipped",
+		result.Created, result.Updated, result.Skipped)
+	http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?success=%s", id, msg), http.StatusSeeOther)
+}
+
+func (h *Handler) importDiscard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := parseID(r, "id")
+
+	if err := h.imports.Discard(ctx, id); err != nil {
+		h.log.Error("import discard", slog.String("error", err.Error()))
+		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/admin/imports?success=Import+discarded", http.StatusSeeOther)
 }
 
 // --- Helpers ---
