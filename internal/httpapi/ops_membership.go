@@ -2,9 +2,17 @@ package httpapi
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/bcars/bcars-portal/internal/authn"
+	"github.com/bcars/bcars-portal/internal/db"
+	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
+	"github.com/bcars/bcars-portal/internal/domain/authz"
+	"github.com/bcars/bcars-portal/internal/domain/members"
 )
 
 // --- Membership types ---
@@ -59,6 +67,7 @@ type ApplyMembershipOutput struct {
 
 type ApproveMembershipBody struct {
 	BaseType string `json:"base_type" enum:"full,associate"`
+	Reason   string `json:"reason,omitempty"`
 	Version  int64  `json:"version"`
 }
 type ApproveMembershipInput struct {
@@ -166,8 +175,61 @@ type RevokeHonoraryInput struct {
 }
 type RevokeHonoraryOutput struct{}
 
+// membershipFromDB converts a sqlcgen.Membership to the API type.
+func membershipFromDB(m sqlcgen.Membership) Membership {
+	return Membership{
+		ID:                 m.ID,
+		PersonID:           m.PersonID,
+		BaseType:           m.BaseType,
+		Lifecycle:          m.Lifecycle,
+		JoinedOn:           m.JoinedOn.String,
+		EndedOn:            m.EndedOn.String,
+		LegacyCurrentUntil: m.LegacyCurrentUntil.String,
+		Version:            m.Version,
+		CreatedAt:          m.CreatedAt,
+		UpdatedAt:          m.UpdatedAt,
+	}
+}
+
+// mapMembershipError converts domain errors to HTTP status codes.
+func mapMembershipError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, authz.ErrUnauthenticated) {
+		return huma.NewError(http.StatusUnauthorized, "not authenticated")
+	}
+	if errors.Is(err, authz.ErrDenied) {
+		return huma.NewError(http.StatusForbidden, "insufficient capabilities")
+	}
+	if errors.Is(err, db.ErrStale) {
+		return ErrStale("resource was modified by another request; re-fetch and retry")
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return huma.NewError(http.StatusNotFound, "membership not found")
+	}
+	return huma.NewError(http.StatusInternalServerError, err.Error())
+}
+
+// requireAuthnPrincipal gets the authn principal and converts to authz.
+func requireAuthnPrincipal(ctx context.Context) (*authz.Principal, error) {
+	p := authn.PrincipalFrom(ctx)
+	if p == nil {
+		return nil, huma.NewError(http.StatusUnauthorized, "not authenticated")
+	}
+	return &authz.Principal{
+		UserID:       p.UserID,
+		Capabilities: p.Capabilities,
+	}, nil
+}
+
 // RegisterMemberships registers all membership lifecycle, FCC, and honorary grant endpoints.
-func RegisterMemberships(api huma.API) {
+func RegisterMemberships(api huma.API, deps Deps) {
+	var memberSvc *members.Service
+	if deps.DB != nil {
+		memberSvc = members.NewService(deps.DB)
+	}
+
 	Register(api, huma.Operation{
 		OperationID:   "membership-apply",
 		Method:        http.MethodPost,
@@ -181,7 +243,31 @@ func RegisterMemberships(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *ApplyMembershipInput) (*ApplyMembershipOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// CreatePerson already creates a pending membership; for standalone
+		// apply we use the lower-level query.
+		q := sqlcgen.New(deps.DB)
+		if err := authz.Authorize(ctx, principal, "member.create", nil); err != nil {
+			return nil, mapMembershipError(err)
+		}
+
+		m, err := q.CreateMembership(ctx, sqlcgen.CreateMembershipParams{
+			PersonID: input.MemberID,
+			BaseType: input.Body.BaseType,
+		})
+		if err != nil {
+			return nil, huma.NewError(http.StatusConflict, "failed to create membership: "+err.Error())
+		}
+
+		return &ApplyMembershipOutput{Body: membershipFromDB(m)}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -196,7 +282,22 @@ func RegisterMemberships(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ApproveMembershipInput) (*ApproveMembershipOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		m, err := memberSvc.ApproveMembership(ctx, principal,
+			input.ID, input.Body.Version, input.Body.BaseType, input.Body.Reason)
+		if err != nil {
+			return nil, mapMembershipError(err)
+		}
+
+		return &ApproveMembershipOutput{Body: membershipFromDB(m)}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -211,7 +312,22 @@ func RegisterMemberships(api huma.API) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RejectMembershipInput) (*RejectMembershipOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		m, err := memberSvc.RejectMembership(ctx, principal,
+			input.ID, input.Body.Version, input.Body.Reason)
+		if err != nil {
+			return nil, mapMembershipError(err)
+		}
+
+		return &RejectMembershipOutput{Body: membershipFromDB(m)}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -226,9 +342,25 @@ func RegisterMemberships(api huma.API) {
 		ConfirmationLevel:  "explicit-confirm",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *LifecycleMembershipInput) (*LifecycleMembershipOutput, error) {
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		m, err := memberSvc.TransitionLifecycle(ctx, principal,
+			input.ID, input.Body.Version, input.Body.To)
+		if err != nil {
+			return nil, mapMembershipError(err)
+		}
+
+		return &LifecycleMembershipOutput{Body: membershipFromDB(m)}, nil
 	})
 
+	// FCC and honorary endpoints remain stubs (separate beads: cme, 8kf).
 	Register(api, huma.Operation{
 		OperationID:   "fcc-verification-create",
 		Method:        http.MethodPost,
