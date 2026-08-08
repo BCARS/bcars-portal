@@ -49,7 +49,6 @@
     "category": "membership",
     "ai_tool_eligibility": "read-only",
     "operation_ids": [
-      "contact-method-visibility-get",
       "contact-methods-list",
       "member-acs-ares-get",
       "member-get",
@@ -104,8 +103,7 @@
     "operation_ids": [
       "contact-method-archive",
       "contact-method-create",
-      "contact-method-make-primary",
-      "contact-method-update"
+      "contact-method-make-primary"
     ]
   },
   {
