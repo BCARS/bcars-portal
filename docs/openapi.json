@@ -84,6 +84,63 @@
         ],
         "type": "object"
       },
+      "AdminRole": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "description": "Capability codes granted by this role.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "kind",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "AdminUser": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "is_active",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "ApplyMembershipInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -482,13 +539,13 @@
             "readOnly": true,
             "type": "string"
           },
-          "role_name": {
+          "role_code": {
             "minLength": 1,
             "type": "string"
           }
         },
         "required": [
-          "role_name"
+          "role_code"
         ],
         "type": "object"
       },
@@ -1322,6 +1379,38 @@
         ],
         "type": "object"
       },
+      "PageAdminUser": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PageAdminUser.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "data": {
+            "description": "Slice of results for this page.",
+            "items": {
+              "$ref": "#/components/schemas/AdminUser"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Pass as cursor= to fetch the next page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "PageAuditEvent": {
         "additionalProperties": false,
         "properties": {
@@ -1498,38 +1587,6 @@
             "description": "Slice of results for this page.",
             "items": {
               "$ref": "#/components/schemas/TimelineEvent"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "next_cursor": {
-            "description": "Pass as cursor= to fetch the next page.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "type": "object"
-      },
-      "PageUser": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "/api/v1/schemas/PageUser.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "data": {
-            "description": "Slice of results for this page.",
-            "items": {
-              "$ref": "#/components/schemas/User"
             },
             "type": [
               "array",
@@ -1755,52 +1812,6 @@
         ],
         "type": "object"
       },
-      "RevokeRoleGrantInputBody": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "/api/v1/schemas/RevokeRoleGrantInputBody.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "Role": {
-        "additionalProperties": false,
-        "properties": {
-          "capabilities": {
-            "description": "Capability codes granted by this role.",
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "capabilities"
-        ],
-        "type": "object"
-      },
       "RoleGrant": {
         "additionalProperties": false,
         "properties": {
@@ -1817,7 +1828,7 @@
             "format": "date-time",
             "type": "string"
           },
-          "granted_by_id": {
+          "granted_by": {
             "format": "int64",
             "type": "integer"
           },
@@ -1825,11 +1836,7 @@
             "format": "int64",
             "type": "integer"
           },
-          "revoked_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "role_name": {
+          "role_code": {
             "type": "string"
           },
           "user_id": {
@@ -1840,8 +1847,8 @@
         "required": [
           "id",
           "user_id",
-          "role_name",
-          "granted_by_id",
+          "role_code",
+          "granted_by",
           "granted_at"
         ],
         "type": "object"
@@ -2097,47 +2104,6 @@
         "required": [
           "body",
           "version"
-        ],
-        "type": "object"
-      },
-      "User": {
-        "additionalProperties": false,
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "is_active": {
-            "type": "boolean"
-          },
-          "roles": {
-            "description": "Role names currently granted.",
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "email",
-          "display_name",
-          "roles",
-          "is_active",
-          "created_at"
         ],
         "type": "object"
       },
@@ -4442,16 +4408,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeRoleGrantInputBody"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "204": {
             "description": "No Content"
@@ -4482,7 +4438,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/Role"
+                    "$ref": "#/components/schemas/AdminRole"
                   },
                   "type": [
                     "array",
@@ -4652,7 +4608,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageUser"
+                  "$ref": "#/components/schemas/PageAdminUser"
                 }
               }
             },
