@@ -1,6 +1,6 @@
-# Project Instructions for AI Agents
+# CLAUDE.md
 
-This file provides instructions and context for AI coding agents working on this project.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
 ## Beads Issue Tracker
@@ -60,18 +60,65 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+make build        # Build ./cmd/portal and ./cmd/portalctl binaries
+make test         # go test -race -count=1 ./...
+make lint         # fmt + vet + staticcheck + golangci-lint + secrets scan
+make sqlc         # Regenerate SQL query code from sqlc.yaml
+make install-hooks  # Install pre-push git hook (blocks direct pushes to main)
 ```
+
+Run a single test:
+```bash
+go test -run TestFoo ./internal/...
+```
+
+Requires: Go 1.26.0, `make`, `git`. Optional lint tools: `staticcheck`, `golangci-lint`.
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+API-first Go application targeting SQLite + Goose migrations + sqlc for type-safe queries. Huma v2 for the REST API, server-rendered HTMX admin UI.
 
-## Conventions & Patterns
+### Internal layout
 
-_Add your project-specific conventions here_
+- `cmd/portal` — HTTP server entry point
+- `cmd/portalctl` — Admin CLI (bootstrap-admin, backup/restore)
+- `internal/authn/` — Password hashing (Argon2id), session store, email link service
+- `internal/domain/authz/` — Capability catalog, policy layer (default-deny)
+- `internal/domain/members/` — Member operations domain service
+- `internal/domain/importd/` — Groups.io import pipeline (parse, normalize, match, stage, commit)
+- `internal/httpapi/` — Huma API handlers (registered but mostly stubbed 501s — see phase-1-progress.md)
+- `internal/web/` — Server-rendered admin UI (HTMX, templates)
+- `internal/db/` — Database layer (Goose migrations + sqlc-generated queries)
+- `internal/mail/` — Mail sender interface (filelog + SMTP implementations)
+- `internal/obs/` — Observability (structured logging)
+- `internal/version/` — Build metadata
+- `docs/adr/` — Architecture Decision Records
+- `docs/phase-1-plan.md` — Full task breakdown by workstream
+- `docs/phase-1-progress.md` — Current implementation status
+- `PLANNING.md` — Full product & technical design (~800 lines); read before starting new features
+
+### Key design decisions (from ADRs)
+
+- SQLite with WAL mode for Phase 1 (single-instance simplicity)
+- Capability-based authorization (default-deny; not RBAC)
+- Argon2id for password hashing
+- Immutable preference-history pattern for audit trails
+- Import staging model: validate CSV before committing to DB
+- Sessions stored in SQLite (HttpOnly + SameSite cookies)
+
+## Agent Workflow
+
+When picking up work:
+1. Run `bd ready` to find available tasks
+2. Read `docs/phase-1-progress.md` for current status context
+3. Claim a task with `bd update <id> --claim`
+4. Implement, test (`make test`), lint (`make lint`)
+5. Close with `bd close <id>`
+
+### Key patterns
+
+- **API handlers** in `internal/httpapi/ops_*.go` — most return `ErrNotImplemented()` and need wiring to domain services
+- **Domain services** in `internal/domain/` — these are the real implementations, well-tested
+- **Web handlers** in `internal/web/handler.go` — admin UI, partially wired
+- All API operations must be registered via `httpapi.Register` (not raw `huma.Register`) to enforce capability checks
