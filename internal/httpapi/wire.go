@@ -12,10 +12,11 @@ import (
 // Add fields as handlers are wired up. Nil fields mean the handler
 // returns 501 Not Implemented.
 type Deps struct {
-	DB           *sql.DB
-	AuthService  *authn.AuthService
-	SessionStore *authn.SessionStore
-	CookieName   string
+	DB               *sql.DB
+	AuthService      *authn.AuthService
+	SessionStore     *authn.SessionStore
+	EmailLinkService *authn.EmailLinkService
+	CookieName       string
 }
 
 // RegisterAll registers every API operation on api and panics if any
