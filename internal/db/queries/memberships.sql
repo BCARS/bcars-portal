@@ -66,9 +66,21 @@ INSERT INTO honorary_grants (membership_id, starts_on, ends_on, is_lifetime, rea
 VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
+-- is_lifetime is written explicitly because the table CHECK forbids a lifetime
+-- grant from carrying an end date; giving a grant an end date converts it to a
+-- term grant.
 -- name: UpdateHonoraryGrant :one
 UPDATE honorary_grants
-SET reason = ?, ends_on = ?,
+SET reason = ?, ends_on = ?, is_lifetime = ?,
+    version = version + 1,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND version = ?
+RETURNING *;
+
+-- name: ExpireHonoraryGrant :one
+UPDATE honorary_grants
+SET ends_on = date('now'),
+    is_lifetime = 0,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?

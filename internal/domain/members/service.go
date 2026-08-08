@@ -402,6 +402,92 @@ func (s *Service) CreateHonoraryGrant(ctx context.Context, p *authz.Principal, p
 	return g, nil
 }
 
+// UpdateHonoraryGrantParams contains the mutable fields of an honorary grant.
+// Empty strings mean "leave unchanged", matching PATCH semantics.
+type UpdateHonoraryGrantParams struct {
+	GrantID int64
+	Version int64
+	Reason  string
+	EndsOn  string
+}
+
+// UpdateHonoraryGrant edits an existing honorary grant under optimistic
+// concurrency. Supplying an end date converts a lifetime grant into a term
+// grant, because the schema forbids a lifetime grant from carrying one.
+func (s *Service) UpdateHonoraryGrant(ctx context.Context, p *authz.Principal, params UpdateHonoraryGrantParams) (sqlcgen.HonoraryGrant, error) {
+	if err := authz.Authorize(ctx, p, "honorary.grant", nil); err != nil {
+		return sqlcgen.HonoraryGrant{}, err
+	}
+
+	// Read first so a missing grant is reported as not-found rather than as a
+	// version conflict, and so unset fields keep their current values.
+	existing, err := s.Q.GetHonoraryGrant(ctx, params.GrantID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return sqlcgen.HonoraryGrant{}, err
+		}
+		return sqlcgen.HonoraryGrant{}, fmt.Errorf("members: update honorary: %w", err)
+	}
+
+	reason := params.Reason
+	if reason == "" {
+		reason = existing.Reason
+	}
+	endsOn := existing.EndsOn
+	isLifetime := existing.IsLifetime
+	if params.EndsOn != "" {
+		endsOn = sqlNullString(params.EndsOn)
+		isLifetime = 0
+	}
+
+	g, err := s.Q.UpdateHonoraryGrant(ctx, sqlcgen.UpdateHonoraryGrantParams{
+		Reason:     reason,
+		EndsOn:     endsOn,
+		IsLifetime: isLifetime,
+		ID:         params.GrantID,
+		Version:    params.Version,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return sqlcgen.HonoraryGrant{}, db.ErrStale
+		}
+		return sqlcgen.HonoraryGrant{}, fmt.Errorf("members: update honorary: %w", err)
+	}
+
+	audit.StampResource(ctx, "honorary_grant", params.GrantID)
+	return g, nil
+}
+
+// ExpireHonoraryGrant ends an honorary grant as of today. Expiry is the
+// non-punitive counterpart of revocation: the grant simply stops, so it is
+// recorded as an end date rather than a revocation.
+func (s *Service) ExpireHonoraryGrant(ctx context.Context, p *authz.Principal, grantID, version int64) error {
+	if err := authz.Authorize(ctx, p, "honorary.grant", nil); err != nil {
+		return err
+	}
+
+	// Read first so a missing grant is not misreported as a version conflict.
+	if _, err := s.Q.GetHonoraryGrant(ctx, grantID); err != nil {
+		if err == sql.ErrNoRows {
+			return err
+		}
+		return fmt.Errorf("members: expire honorary: %w", err)
+	}
+
+	if _, err := s.Q.ExpireHonoraryGrant(ctx, sqlcgen.ExpireHonoraryGrantParams{
+		ID:      grantID,
+		Version: version,
+	}); err != nil {
+		if err == sql.ErrNoRows {
+			return db.ErrStale
+		}
+		return fmt.Errorf("members: expire honorary: %w", err)
+	}
+
+	audit.StampResource(ctx, "honorary_grant", grantID)
+	return nil
+}
+
 // RevokeHonoraryGrant revokes an active honorary grant.
 func (s *Service) RevokeHonoraryGrant(ctx context.Context, p *authz.Principal, grantID, version int64, reason string) error {
 	if err := authz.Authorize(ctx, p, "honorary.grant", nil); err != nil {

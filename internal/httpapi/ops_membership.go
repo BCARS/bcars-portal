@@ -155,9 +155,11 @@ type UpdateHonoraryOutput struct {
 	Body HonoraryGrant
 }
 
+// ExpireHonoraryBody carries only the version: expiry is a state change, and
+// the schema has nowhere to record a separate expiry reason (revoke_reason
+// belongs to revocation). The audit trail records who expired the grant.
 type ExpireHonoraryBody struct {
-	Reason  string `json:"reason,omitempty"`
-	Version int64  `json:"version"`
+	Version int64 `json:"version"`
 }
 type ExpireHonoraryInput struct {
 	ID   int64 `path:"id"`
@@ -479,8 +481,23 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *UpdateHonoraryInput) (*UpdateHonoraryOutput, error) {
-		// Update requires a domain method not yet implemented.
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		g, err := memberSvc.UpdateHonoraryGrant(ctx, principal, members.UpdateHonoraryGrantParams{
+			GrantID: input.ID,
+			Version: input.Body.Version,
+			Reason:  input.Body.Reason,
+			EndsOn:  input.Body.EndsOn,
+		})
+		if err != nil {
+			return nil, mapMembershipError(err)
+		}
+		return &UpdateHonoraryOutput{Body: honoraryFromDB(g)}, nil
 	})
 
 	Register(api, huma.Operation{
@@ -496,8 +513,17 @@ func RegisterMemberships(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ExpireHonoraryInput) (*ExpireHonoraryOutput, error) {
-		// Expire requires a domain method not yet implemented.
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := memberSvc.ExpireHonoraryGrant(ctx, principal, input.ID, input.Body.Version); err != nil {
+			return nil, mapMembershipError(err)
+		}
+		return nil, nil
 	})
 
 	Register(api, huma.Operation{

@@ -2,12 +2,15 @@ package members
 
 import (
 	"context"
+	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/bcars/bcars-portal/internal/db"
+	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 )
 
@@ -282,6 +285,106 @@ func TestHonoraryGrant(t *testing.T) {
 
 	err = svc.RevokeHonoraryGrant(ctx, p, g.ID, g.Version, "Revoked by board")
 	require.NoError(t, err)
+}
+
+// newHonoraryGrant creates a person, membership and lifetime honorary grant,
+// returning the grant.
+func newHonoraryGrant(t *testing.T, svc *Service, p *authz.Principal) sqlcgen.HonoraryGrant {
+	t.Helper()
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "Test", SortName: "Test", BaseType: "associate",
+	})
+	require.NoError(t, err)
+
+	memberships, err := svc.ListMembershipsByPerson(ctx, p, person.ID)
+	require.NoError(t, err)
+
+	g, err := svc.CreateHonoraryGrant(ctx, p, CreateHonoraryGrantParams{
+		MembershipID: memberships[0].ID,
+		StartsOn:     "2026-01-01",
+		IsLifetime:   true,
+		Reason:       "Outstanding service",
+	})
+	require.NoError(t, err)
+	return g
+}
+
+func TestUpdateHonoraryGrant(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+	g := newHonoraryGrant(t, svc, p)
+
+	// Reason only: the lifetime flag survives.
+	updated, err := svc.UpdateHonoraryGrant(ctx, p, UpdateHonoraryGrantParams{
+		GrantID: g.ID, Version: g.Version, Reason: "Corrected citation",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Corrected citation", updated.Reason)
+	assert.Equal(t, int64(1), updated.IsLifetime)
+	assert.Equal(t, g.Version+1, updated.Version)
+
+	// Adding an end date converts the lifetime grant to a term grant.
+	updated, err = svc.UpdateHonoraryGrant(ctx, p, UpdateHonoraryGrantParams{
+		GrantID: g.ID, Version: updated.Version, EndsOn: "2027-06-30",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "2027-06-30", updated.EndsOn.String)
+	assert.Equal(t, int64(0), updated.IsLifetime)
+	assert.Equal(t, "Corrected citation", updated.Reason, "omitted fields keep their value")
+}
+
+func TestUpdateHonoraryGrantVersionConflict(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+	g := newHonoraryGrant(t, svc, p)
+
+	_, err := svc.UpdateHonoraryGrant(ctx, p, UpdateHonoraryGrantParams{
+		GrantID: g.ID, Version: g.Version + 1, Reason: "Stale write",
+	})
+	require.ErrorIs(t, err, db.ErrStale)
+}
+
+func TestUpdateHonoraryGrantNotFound(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	_, err := svc.UpdateHonoraryGrant(ctx, p, UpdateHonoraryGrantParams{
+		GrantID: 999, Version: 1, Reason: "No such grant",
+	})
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+func TestExpireHonoraryGrant(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+	g := newHonoraryGrant(t, svc, p)
+
+	require.NoError(t, svc.ExpireHonoraryGrant(ctx, p, g.ID, g.Version))
+
+	got, err := svc.Q.GetHonoraryGrant(ctx, g.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), got.IsLifetime)
+	assert.Equal(t, time.Now().UTC().Format("2006-01-02"), got.EndsOn.String)
+	assert.Equal(t, g.Version+1, got.Version)
+	assert.False(t, got.RevokedAt.Valid, "expiry is not a revocation")
+}
+
+func TestExpireHonoraryGrantVersionConflict(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+	g := newHonoraryGrant(t, svc, p)
+
+	err := svc.ExpireHonoraryGrant(ctx, p, g.ID, g.Version+1)
+	require.ErrorIs(t, err, db.ErrStale)
+}
+
+func TestExpireHonoraryGrantNotFound(t *testing.T) {
+	svc, p := setupTest(t)
+
+	err := svc.ExpireHonoraryGrant(context.Background(), p, 999, 1)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 
 // --- Contact Methods ---

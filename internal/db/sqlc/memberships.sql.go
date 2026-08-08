@@ -205,6 +205,43 @@ func (q *Queries) CreateMembershipApproval(ctx context.Context, arg CreateMember
 	return i, err
 }
 
+const expireHonoraryGrant = `-- name: ExpireHonoraryGrant :one
+UPDATE honorary_grants
+SET ends_on = date('now'),
+    is_lifetime = 0,
+    version = version + 1,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND version = ?
+RETURNING id, membership_id, starts_on, ends_on, is_lifetime, reason, approved_by, approved_at, revoked_at, revoked_by, revoke_reason, created_at, updated_at, version
+`
+
+type ExpireHonoraryGrantParams struct {
+	ID      int64
+	Version int64
+}
+
+func (q *Queries) ExpireHonoraryGrant(ctx context.Context, arg ExpireHonoraryGrantParams) (HonoraryGrant, error) {
+	row := q.db.QueryRowContext(ctx, expireHonoraryGrant, arg.ID, arg.Version)
+	var i HonoraryGrant
+	err := row.Scan(
+		&i.ID,
+		&i.MembershipID,
+		&i.StartsOn,
+		&i.EndsOn,
+		&i.IsLifetime,
+		&i.Reason,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.RevokedAt,
+		&i.RevokedBy,
+		&i.RevokeReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
 const getFCCVerification = `-- name: GetFCCVerification :one
 SELECT id, membership_id, call_sign, license_class, verification_source, verified_by, verified_at, expires_at, revoked_at, notes, created_at FROM fcc_verifications WHERE id = ?
 `
@@ -516,7 +553,7 @@ func (q *Queries) TransitionLifecycle(ctx context.Context, arg TransitionLifecyc
 
 const updateHonoraryGrant = `-- name: UpdateHonoraryGrant :one
 UPDATE honorary_grants
-SET reason = ?, ends_on = ?,
+SET reason = ?, ends_on = ?, is_lifetime = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
@@ -524,16 +561,21 @@ RETURNING id, membership_id, starts_on, ends_on, is_lifetime, reason, approved_b
 `
 
 type UpdateHonoraryGrantParams struct {
-	Reason  string
-	EndsOn  sql.NullString
-	ID      int64
-	Version int64
+	Reason     string
+	EndsOn     sql.NullString
+	IsLifetime int64
+	ID         int64
+	Version    int64
 }
 
+// is_lifetime is written explicitly because the table CHECK forbids a lifetime
+// grant from carrying an end date; giving a grant an end date converts it to a
+// term grant.
 func (q *Queries) UpdateHonoraryGrant(ctx context.Context, arg UpdateHonoraryGrantParams) (HonoraryGrant, error) {
 	row := q.db.QueryRowContext(ctx, updateHonoraryGrant,
 		arg.Reason,
 		arg.EndsOn,
+		arg.IsLifetime,
 		arg.ID,
 		arg.Version,
 	)
