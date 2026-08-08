@@ -1,177 +1,129 @@
-# Phase 1 Progress
+# Phase 1 Progress and Execution Map
 
-Last updated: 2026-08-08
+Last reconciled: 2026-08-08
 
-This document tracks implementation status against the [phase-1-plan.md](phase-1-plan.md)
-workstreams. It is meant to be read by agents picking up work and by humans
-checking overall progress.
+This is the human-readable map of completed and remaining Phase 1 work. Beads
+is the durable source of truth: run `bd bootstrap --yes` on a fresh clone, then
+`bd ready` and `bd show <id>`. Every implementation bead contains its own scope,
+acceptance criteria, dependencies, and required PR/CI completion gate.
 
-## Status Legend
+## Target outcome
 
-- **Done** — implemented, tested, merged
-- **Domain done / API stubbed** — domain service works, HTTP handler returns 501
-- **Partial** — some pieces landed, gaps noted
-- **Not started** — no implementation exists
+An authorized officer can sign in, manage canonical member records, stage and
+reconcile a Groups.io CSV/JSON export, commit it atomically, inspect audit
+history, and operate a documented single-instance deployment with tested
+backup/restore. Phase 1 is local and API-first. It does not require live
+Groups.io access, automated FCC lookup, production hosting credentials, or a
+finished visual design system.
 
----
+## Completed foundation
 
-## WS1 — Repository & Engineering Foundation
+| Area | Implemented evidence |
+| --- | --- |
+| Repository and safety | Go module, Makefile, secret/PII guard, ignored private-data paths, pre-push protection |
+| Architecture | Product plan, Phase 1 design/plan, ADRs 0000–0009 |
+| API contracts | Huma router, operation metadata guard, errors, pagination, idempotency/If-Match helpers, generated OpenAPI and capability catalog |
+| Database | SQLite WAL/foreign keys, Goose up/down migrations, sqlc queries, capability/role seeds, optimistic concurrency tests |
+| Authentication domain | Argon2id+pepper passwords, SQLite sessions, email-link service, filelog/SMTP adapters, policy layer, bootstrap-admin |
+| Import foundation | Synthetic CSV/JSON parsers, normalization, matching, staging schema, initial upload/commit/discard service |
+| Member domain | Person/member operations, contacts, memberships, notes, manual FCC records, honorary grant basics, auditing |
+| Base admin UI | Login/logout, dashboard, member search/detail/edit, basic membership/contact/note actions, import list/detail GET pages |
+| Test baseline | Package tests cover authentication, database, policy, imports, members, HTTP metadata/contracts, mail, logging, versioning, and web handlers |
 
-| Task | Status | Notes |
-|------|--------|-------|
-| WS1.1 Repo skeleton | Done | Makefile, binaries, layout all in place |
-| WS1.2 PII/secret ignore | Done | .gitignore, check-no-secrets.sh wired to `make lint` |
-| WS1.3 Toolchain pinning | Done | Go 1.26, Huma v2, modernc/sqlite, goose, sqlc |
-| WS1.4 Structured logging | Done | internal/obs with slog, request-id middleware |
-| WS1.5 ADRs | Done | docs/adr/0001-0008 |
-| WS1.6 CI pipeline | **Not started** | `bcars-portal-05w` |
-| WS1.7 Synthetic fixtures | **Not started** | `bcars-portal-h6h` |
+The synthetic fixtures are implemented and tested; `bcars-portal-h6h` remains
+open only to revalidate and close after the CI baseline is green. The CI
+workflow exists, but `bcars-portal-05w` remains open to pin tools, reconcile all
+gates, and prove a green PR baseline before autonomous implementation begins.
 
-**Gate G1 (Foundation ready):** Mostly done. CI and fixtures remain.
+## Remaining local MVP work
 
----
+### Wave 0 — make autonomous work reliable
 
-## WS2 — API & Application Contracts
+| Bead | Scope |
+| --- | --- |
+| `bcars-portal-05w` | Harden and verify the CI pipeline; establish a green required-check baseline |
+| `bcars-portal-sbd` | Validate a fresh standalone clone, Beads hydration, tools, tests, and absence of sibling dependencies |
 
-| Task | Status | Notes |
-|------|--------|-------|
-| WS2.1 Huma app scaffold | Done | NewRouter(), /healthz, /api/v1/openapi.json all working |
-| WS2.2 Cross-cutting conventions | Done | Pagination, cursor codec, ETag/If-Match, idempotency plumbing, error codes |
-| WS2.3 Capability catalog | Done | 22 capabilities, startup guard, docs/capability-catalog.json |
-| WS2.4 OpenAPI baseline | Done | 4700+ line generated doc, --dump-openapi flag |
+All implementation work is blocked by the standalone-clone gate, which itself
+depends on the CI baseline.
 
-**Gate G2 prerequisite satisfied.**
+### Wave 1 — independent domain/API and operations slices
 
----
+| Bead | Scope |
+| --- | --- |
+| `bcars-portal-7qe` | Complete reconciliation, preview, state machine, atomic commit, and idempotency required by ADR-0008 |
+| `bcars-portal-909` | Session sign-in/sign-out/current API |
+| `bcars-portal-sx1` | Person CRUD and member-list API |
+| `bcars-portal-d00` | Contact methods and sharing-preference domain/API |
+| `bcars-portal-e3q` | Membership lifecycle API |
+| `bcars-portal-cme` | Manual/offline FCC verification-record API |
+| `bcars-portal-8kf` | Honorary-grant domain/API completion |
+| `bcars-portal-81o` | Notes API |
+| `bcars-portal-exo` | Member timeline and expanded search |
+| `bcars-portal-g34` | Authorized local member export |
+| `bcars-portal-sv7` | Capability, role, user, and role-grant API |
+| `bcars-portal-02f` | Audit-event query API |
+| `bcars-portal-149` | Functional accessible HTML/HTMX error rendering |
+| `bcars-portal-a9h` | Real database/schema readiness check |
+| `bcars-portal-k4f` | Encrypted backup/restore CLI and runbook |
+| `bcars-portal-xvk` | Log redaction and retention guidance |
 
-## WS3 — Database & Migration Baseline
+The member-operation completion gate is `bcars-portal-5eg`; it becomes ready
+only after all eight scoped member child tasks merge.
 
-| Task | Status | Notes |
-|------|--------|-------|
-| WS3.1 Initial schema migrations | Done | 0001_init.sql, 0002_imports.sql, up/down tested |
-| WS3.2 Capability & role seed | Done | 0003, 0004 seed migrations |
-| WS3.3 sqlc query surface | Done | Queries for WS4/WS6 generated |
-| WS3.4 Optimistic concurrency | Done | version-based updates, ErrStale |
+### Wave 2 — adapters that depend on Wave 1
 
-**Gate G2 (Data ready): Done.**
+| Bead | Dependency | Scope |
+| --- | --- | --- |
+| `bcars-portal-8hm` | `7qe` | Wire all eight import API operations |
+| `bcars-portal-34s` | `909` | Recovery and invitation API |
+| `bcars-portal-bzy` | `a9h` | Reproducible local deployment package and runbook |
 
----
+### Wave 3 — functional MVP UI and handoff
 
-## WS4 — Officer Authentication & Authorization
+| Bead | Dependency | Scope |
+| --- | --- | --- |
+| `bcars-portal-ypg` | `8hm` | Import upload/commit/discard UI routes |
+| `bcars-portal-hvv` | `34s` | Recovery/invitation UI |
+| `bcars-portal-52g` | `5eg` | Remaining member workflows in the base admin UI |
+| `bcars-portal-8kz` | Core UI and operations | Non-developer officer handoff guide |
 
-| Task | Status | Notes |
-|------|--------|-------|
-| WS4.1 Password hashing | Done | Argon2id, pepper, constant-time |
-| WS4.2 Session store + middleware | Done | SQLite-backed, rotate/revoke/expire |
-| WS4.3 Sign-in/sign-out API | Domain done / **API stubbed** | Web UI works; API returns 501. `bcars-portal-909` |
-| WS4.4 Mail sender | Done | filelog + SMTP implementations |
-| WS4.5 Recovery & invitation | Domain done / **API stubbed** | EmailLinkService complete; API returns 501. `bcars-portal-34s` |
-| WS4.6 Policy layer | Done | Default-deny, capability-based |
-| WS4.7 bootstrap-admin | Done | portalctl command, creates invitation |
+`bcars-portal-dz0` is the Phase 1 completion gate. It closes only after every
+non-deferred local MVP dependency has merged and main is green.
 
-**Gate G3 (Auth ready):** Domain layer done. API handlers need wiring for programmatic access.
+## Deferred interactive/external work
 
----
+These beads are deliberately excluded from autonomous MVP execution. Agents
+must not start them until the repository owner participates and supplies any
+required access out of band.
 
-## WS5 — Staged Groups.io Import
+| Bead | Why deferred |
+| --- | --- |
+| `bcars-portal-go6` | Explore Groups.io APIs, permissions, rate limits, and live synchronization after the file-import MVP |
+| `bcars-portal-66i` | Select and explore an authoritative FCC data source; manual officer verification remains the MVP path |
+| `bcars-portal-8ou` | Validate production SMTP with temporary owner-provided credentials |
+| `bcars-portal-eet` | Deploy to an owner-selected production host |
+| `bcars-portal-g21` | Run the real export through a human-supervised reconciliation and import |
+| `bcars-portal-6pz` | Collaborative UI design and visual-polish session after functional workflows exist |
 
-| Task | Status | Notes |
-|------|--------|-------|
-| WS5.1 Parsers | Done | JSON + CSV parsers with fixture tests |
-| WS5.2 Normalization | Done | Call sign, email, phone, dates, sentinels |
-| WS5.3 Match engine | Done | external_id > call_sign > email > manual |
-| WS5.4 Staging write path | Domain done / **API stubbed** | `bcars-portal-8hm` |
-| WS5.5 Reconciliation & preview | Domain done / **API stubbed** | `bcars-portal-8hm` |
-| WS5.6 Commit | Domain done / **API stubbed** | `bcars-portal-8hm` |
-| WS5.7 Discard + list + inspect | Domain done / **API stubbed** | `bcars-portal-8hm` |
+Real exports, databases, credentials, backups, uploaded content, and logs with
+member data remain outside Git. The real import uses an ignored local `data/`
+directory and is never converted into a committed fixture.
 
-**Gate G4 (Import ready):** Domain pipeline complete and tested. Not usable end-to-end — API handlers and UI POST routes still need wiring.
+## Definition of completion for every implementation bead
 
----
+The bead-specific acceptance criteria must be satisfied. Before opening a PR,
+the agent runs:
 
-## WS6 — Administrative Member Operations
+```bash
+make build
+make test
+make lint
+make sqlc-diff
+make openapi-diff
+```
 
-| Task | Status | Notes |
-|------|--------|-------|
-| WS6.1 Person + membership CRUD | Domain done / **API stubbed** | Web UI works. `bcars-portal-sx1` |
-| WS6.2 Contact methods | Domain done (no Update) / **API stubbed** | Web UI: create only. `bcars-portal-sx1`, `bcars-portal-5eg` |
-| WS6.3 Sharing preferences | **Partial** — write-only domain, no reads | `bcars-portal-5eg` |
-| WS6.4 Membership lifecycle | Domain done / **API stubbed** | Web UI: approve only. `bcars-portal-sx1` |
-| WS6.5 FCC verification | Domain done / **API stubbed** | `bcars-portal-5eg` |
-| WS6.6 Honorary grants | **Partial** — create+revoke only | No Update/Expire. `bcars-portal-5eg` |
-| WS6.7 Notes | Domain done / **API stubbed** | Web UI: create only. `bcars-portal-sx1` |
-| WS6.8 Search + timeline | **Partial** — name search only, no timeline | `bcars-portal-sx1`, `bcars-portal-5eg` |
-| WS6.9 Export | **Not started** | No domain service. `bcars-portal-5eg` |
-
-**Gate G5 (Officer ops ready):** Domain services cover ~70% of the surface. API layer is 0% wired.
-
----
-
-## WS7 — Administrative UI
-
-| Task | Status | Notes |
-|------|--------|-------|
-| WS7.1 Layout + sign-in/out | Done | Full CSS system, HTMX, cookie auth |
-| WS7.1 Recovery/invitation pages | **Not started** | `bcars-portal-hvv` |
-| WS7.2 Dashboard | Done | Live stats, recent audit, quick actions |
-| WS7.3 Member search + detail | Done | HTMX search, create/edit/deactivate/approve/notes |
-| WS7.3 Remaining member UI | **Partial** | Missing: sharing prefs, FCC, honorary, timeline, contact edit. `bcars-portal-52g` |
-| WS7.4 Import review UI | **Partial** | GET pages work; POST upload/commit/discard missing. `bcars-portal-ypg` |
-| WS7.5 Error templates | **Not started** | All errors are plain-text http.Error(). `bcars-portal-149` |
-
-**Gate G6 (UI ready):** Core pages functional. Import actions, error pages, and secondary features remain.
-
----
-
-## WS8 — Operations & Recovery
-
-| Task | Status | Notes |
-|------|--------|-------|
-| WS8.1 Health/readiness | **Partial** | /healthz works; /readyz is stub (always 200). `bcars-portal-a9h` |
-| WS8.2 Backup + restore | **Not started** | portalctl prints "not yet implemented". `bcars-portal-k4f` |
-| WS8.3 Log retention & redaction | **Not started** | `bcars-portal-xvk` |
-| WS8.4 Deployment package | **Not started** | `bcars-portal-bzy` |
-| WS8.5 Officer handoff checklist | **Not started** | `bcars-portal-8kz` |
-
-**Gate G7 (Ops ready): Not started.**
-
----
-
-## Recommended Work Order for Agents
-
-The following order respects dependencies and maximizes unblocking:
-
-### Wave 1 — API wiring (no new domain code needed)
-These can run in parallel since they touch different handler files:
-1. `bcars-portal-909` — Wire session API (WS4.3)
-2. `bcars-portal-8hm` — Wire import API (WS5.4-5.7)
-3. `bcars-portal-sx1` — Wire member ops API (WS6.1-6.4, 6.7-6.8)
-
-### Wave 2 — Dependent API + UI wiring
-4. `bcars-portal-34s` — Wire recovery/invitation API (blocked by 909)
-5. `bcars-portal-ypg` — Wire import UI POST routes (blocked by 8hm)
-
-### Wave 3 — Domain gaps + remaining APIs
-6. `bcars-portal-5eg` — Missing domain methods + remaining WS6 APIs
-
-### Wave 4 — UI completion
-7. `bcars-portal-hvv` — Recovery/invitation UI pages
-8. `bcars-portal-52g` — Remaining member UI pages (blocked by 5eg)
-9. `bcars-portal-149` — Error templates
-
-### Wave 5 — Operations
-10. `bcars-portal-a9h` — Health/readiness (WS8.1)
-11. `bcars-portal-k4f` — Backup + restore (WS8.2)
-12. `bcars-portal-xvk` — Log redaction (WS8.3)
-13. `bcars-portal-bzy` — Deployment package (blocked by a9h)
-14. `bcars-portal-8kz` — Handoff checklist (blocked by k4f)
-
-### Wave 6 — Foundation gaps
-15. `bcars-portal-05w` — CI pipeline (WS1.6)
-16. `bcars-portal-h6h` — Synthetic fixtures (WS1.7)
-
----
-
-## Open Issues Summary
-
-Run `bd ready` for current unblocked work, or `bd list --status=open` for everything.
+The agent reviews the diff and secret/PII scan, commits on a scoped branch,
+pushes, opens a PR, waits for every required CI job, fixes any failure, and
+squash-merges only when CI is green. The bead is closed and its Dolt state is
+pushed after the merge, not before.

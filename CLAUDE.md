@@ -57,6 +57,21 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
 
+## Repository Execution Profile
+
+This repository explicitly opts into the **team-maintainer** workflow for a
+claimed Beads task. An agent may create a feature branch, commit scoped changes,
+push the branch, open a pull request, wait for all required CI checks, fix CI
+failures, and squash-merge the PR into `main` once every required check passes.
+Delete the merged branch. A current user instruction not to commit, push, or
+merge still overrides this profile.
+
+The portal must work from a standalone clone. Do not depend on files, data, or
+source code in a parent directory or sibling repository. Checked-in synthetic
+fixtures are the only member-like data allowed in tests. Real exports,
+databases, credentials, uploads, backups, and logs with member data are supplied
+out of band, remain under ignored paths such as `data/`, and are never committed.
+
 
 ## Build & Test
 
@@ -110,11 +125,23 @@ API-first Go application targeting SQLite + Goose migrations + sqlc for type-saf
 ## Agent Workflow
 
 When picking up work:
-1. Run `bd ready` to find available tasks
-2. Read `docs/phase-1-progress.md` for current status context
-3. Claim a task with `bd update <id> --claim`
-4. Implement, test (`make test`), lint (`make lint`)
-5. Close with `bd close <id>`
+1. On a fresh clone run `bd bootstrap --yes`; otherwise run `bd dolt pull`.
+2. Run `bd prime`, `bd ready`, and `bd show <id>`; choose only ready work.
+3. Claim with `bd update <id> --claim`, then publish with `bd dolt push`.
+4. Create `codex/<bead-id>-short-topic`; keep one bead per PR.
+5. Implement only the bead acceptance criteria. Create follow-up beads for
+   discovered work. Do not start deferred external/interactive tasks without
+   the repository owner.
+6. Run `make build`, `make test`, `make lint`, `make sqlc-diff`, and
+   `make openapi-diff` before opening the PR.
+7. Review the diff and secret/PII scan, commit, push, and open a PR.
+8. Wait for every required CI check, fix failures, and never merge red CI.
+9. Squash-merge, delete the branch, update local `main`, close the bead with the
+   PR in the reason, then run `bd dolt pull` and `bd dolt push`.
+
+Functional MVP UI work has latitude to choose reasonable accessible layouts and
+copy. Full visual design and polish are intentionally deferred to the dedicated
+interactive UI-design bead.
 
 ### Key patterns
 
