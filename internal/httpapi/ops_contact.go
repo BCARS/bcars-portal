@@ -285,8 +285,27 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 		ConfirmationLevel:  "none",
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *GetACSARESInput) (*GetACSARESOutput, error) {
-		// Stub — reading sharing history requires a new query not yet in scope.
-		return nil, ErrNotImplemented()
+		if memberSvc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requireAuthnPrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		ev, err := memberSvc.GetAcsAresSharing(ctx, principal, input.MemberID)
+		if err != nil {
+			return nil, mapDomainError(err)
+		}
+
+		return &GetACSARESOutput{Body: ACSARESEvent{
+			ID:           ev.ID,
+			PersonID:     ev.PersonID,
+			Participates: ev.Participates == 1,
+			Source:       ev.Source,
+			EffectiveAt:  ev.EffectiveAt,
+			Reason:       ev.Reason.String,
+		}}, nil
 	})
 
 	Register(api, huma.Operation{

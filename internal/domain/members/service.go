@@ -779,6 +779,33 @@ func (s *Service) SetDirectoryVisibility(ctx context.Context, p *authz.Principal
 	return ev, nil
 }
 
+// GetAcsAresSharing returns a person's current ACS/ARES sharing preference.
+//
+// The preference is stored as immutable events (ADR: preference history), so
+// "current" is the most recent one. A person who has never had a preference
+// recorded returns sql.ErrNoRows — deliberately not a fabricated default,
+// because "no preference on file" and "declined to participate" are different
+// answers and an officer acting on the difference deserves the real one.
+func (s *Service) GetAcsAresSharing(ctx context.Context, p *authz.Principal, personID int64) (sqlcgen.AcsAresSharingEvent, error) {
+	if err := authz.Authorize(ctx, p, "member.read", nil); err != nil {
+		return sqlcgen.AcsAresSharingEvent{}, err
+	}
+
+	// Distinguish "no such person" from "person with no preference recorded".
+	if _, err := s.Q.GetPerson(ctx, personID); err != nil {
+		return sqlcgen.AcsAresSharingEvent{}, err
+	}
+
+	ev, err := s.Q.GetLatestAcsAresSharing(ctx, personID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sqlcgen.AcsAresSharingEvent{}, err
+		}
+		return sqlcgen.AcsAresSharingEvent{}, fmt.Errorf("members: get acs/ares: %w", err)
+	}
+	return ev, nil
+}
+
 // SetAcsAresSharing records an ACS/ARES sharing preference for a person.
 func (s *Service) SetAcsAresSharing(ctx context.Context, p *authz.Principal, personID int64, participates bool, reason string) (sqlcgen.AcsAresSharingEvent, error) {
 	if err := authz.Authorize(ctx, p, "sharing_pref.write.officer", nil); err != nil {
