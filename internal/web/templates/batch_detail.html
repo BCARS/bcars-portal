@@ -32,6 +32,57 @@
     </p>
 </div>
 
+{{if .WorksheetRows}}
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Working down sheet {{.WorksheetRunID}}</h3>
+    <p style="margin: 0 0 8px; color: #555;">
+        {{.WorksheetDone}} of {{len .WorksheetRows}} entered. The order below is the order the
+        sheet was printed in, so you can work straight down the paper.
+    </p>
+    <table>
+        <thead>
+            <tr><th>#</th><th>Member</th><th>Call sign</th><th>Dues paid through</th>
+                <th>Entered</th><th></th></tr>
+        </thead>
+        <tbody>
+            {{range .WorksheetRows}}
+            <tr>
+                <td>{{.Ordinal}}</td>
+                <td>{{.DisplayName}}</td>
+                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
+                <td>{{if .Entered}}Yes{{else}}Not yet{{end}}</td>
+                <td>
+                    {{if and (not .Entered) (eq $.Batch.State "open")}}
+                    <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries" method="post" class="add-row-form">
+                        <input type="hidden" name="membership_id" value="{{.MembershipID}}">
+                        <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
+                        <input type="text" name="amount" value="{{$.Defaults.Amount}}"
+                               inputmode="decimal" placeholder="40.00" aria-label="Amount for {{.DisplayName}}" required>
+                        <select name="method" aria-label="Method for {{.DisplayName}}">
+                            <option value="cash">Cash</option>
+                            <option value="check">Check</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <input type="text" name="reference" placeholder="Check no." aria-label="Reference for {{.DisplayName}}">
+                        <input type="date" name="received_on" value="{{$.Today}}"
+                               aria-label="Date received for {{.DisplayName}}" required>
+                        <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}"
+                               aria-label="Dues paid through for {{.DisplayName}}" required>
+                        <button type="submit" class="btn btn-primary btn-sm">Add row</button>
+                    </form>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    <p style="margin: 8px 0 0; color: #555;">
+        Nothing above is recorded until you enter an amount and add the row.
+    </p>
+</div>
+{{end}}
+
 {{if eq .Batch.State "open"}}
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Rows</h3>

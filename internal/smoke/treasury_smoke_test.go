@@ -227,14 +227,19 @@ func TestTreasurySmoke(t *testing.T) {
 		fmt.Sprintf(`{"batch_id":%d}`, nextBatch))
 	e.decodeJSON(resp, http.StatusOK, nil, "worksheet to batch")
 
-	// The linked batch is still empty: a worksheet never invents payments.
+	// Read the order from the batch consumer, not from the worksheet. Asserting
+	// the worksheet rows are ordered and, separately, that the batch is empty
+	// proves both pieces and not the property a treasurer depends on.
 	resp = e.do(http.MethodGet, fmt.Sprintf("/api/v1/payment-batches/%d", nextBatch), treasurer, "")
 	var linked struct {
-		Totals struct {
+		WorksheetRunID int64 `json:"worksheet_run_id"`
+		Totals         struct {
 			EntryCount int64 `json:"entry_count"`
 		} `json:"totals"`
 	}
 	e.decodeJSON(resp, http.StatusOK, &linked, "linked batch")
+	assert.Equal(t, sheet.Run.ID, linked.WorksheetRunID,
+		"the batch must identify the sheet it was opened from")
 	assert.Zero(t, linked.Totals.EntryCount,
 		"linking a worksheet must not invent rows; the treasurer types what is on the paper")
 
@@ -256,6 +261,17 @@ func TestTreasurySmoke(t *testing.T) {
 		resp := e.do(http.MethodGet, page, uiCookie, "")
 		require.Equal(t, http.StatusOK, resp.StatusCode, "the deployed binary must serve %s", page)
 	}
+
+	// The shipped batch page presents the sheet's members in saved order.
+	resp = e.do(http.MethodGet, fmt.Sprintf("/admin/treasury/batches/%d", nextBatch), uiCookie, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	batchHTML := readBody(resp)
+	assert.Contains(t, batchHTML, fmt.Sprintf("Working down sheet %d", sheet.Run.ID))
+	assert.Contains(t, batchHTML, "0 of 2 entered")
+	alphaAt := strings.Index(batchHTML, "Alpha Smoketest")
+	bravoAt := strings.Index(batchHTML, "Bravo Smoketest")
+	require.Positive(t, alphaAt, "the linked batch must list the sheet's members")
+	assert.Less(t, alphaAt, bravoAt, "in the order the sheet was printed in")
 
 	// The printed sheet carries the club identity and the year-end rule.
 	resp = e.do(http.MethodGet,

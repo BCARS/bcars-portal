@@ -13,6 +13,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/batches"
 	"github.com/bcars/bcars-portal/internal/domain/dues"
 	"github.com/bcars/bcars-portal/internal/domain/treasury"
+	"github.com/bcars/bcars-portal/internal/domain/worksheets"
 )
 
 // The batch grid, posting, review, and correction pages.
@@ -133,6 +134,26 @@ type batchDetailData struct {
 	Payments       []postedPaymentView
 	// Today prefills a new row's received date.
 	Today string
+
+	// Worksheet is the sheet this batch was opened from, if any, and its rows
+	// in saved print order. This is the ordered work queue: the treasurer works
+	// down the paper, and the page shows where they have got to.
+	WorksheetRunID int64
+	WorksheetRows  []worksheetQueueRow
+	WorksheetDone  int
+}
+
+// worksheetQueueRow is one line of the printed sheet as the grid shows it.
+// Entered is progress through the saved order, computed from the batch's own
+// rows; it never changes the worksheet snapshot.
+type worksheetQueueRow struct {
+	Ordinal      int64
+	MembershipID int64
+	DisplayName  string
+	CallSign     string
+	PaidThrough  string
+	DuesStatus   string
+	Entered      bool
 }
 
 // postedPaymentView is a posted row on the review page. A corrected row shows
@@ -225,12 +246,52 @@ func (h *Handler) batchDetailData(r *http.Request, p *authz.Principal, id int64)
 		}
 	}
 
+	if b.WorksheetRunID != 0 {
+		if err := h.loadWorksheetQueue(r, p, b, &data); err != nil {
+			return batchDetailData{}, err
+		}
+	}
+
 	if b.State != batches.StateOpen {
 		if err := h.loadPostedReview(r, p, id, &data); err != nil {
 			return batchDetailData{}, err
 		}
 	}
 	return data, nil
+}
+
+// loadWorksheetQueue presents the linked sheet's members in saved ordinal
+// order, marking the ones already entered in this batch.
+func (h *Handler) loadWorksheetQueue(r *http.Request, p *authz.Principal, b batches.Batch, data *batchDetailData) error {
+	rows, err := h.worksheets.Rows(r.Context(), p, b.WorksheetRunID, worksheets.MaxRows, 0)
+	if err != nil {
+		// A treasurer without worksheet access can still work the batch; the
+		// ordered queue is a convenience, not the batch itself.
+		if errors.Is(err, authz.ErrDenied) {
+			return nil
+		}
+		return err
+	}
+
+	entered := map[int64]bool{}
+	for _, e := range b.Entries {
+		entered[e.MembershipID] = true
+	}
+
+	data.WorksheetRunID = b.WorksheetRunID
+	for _, row := range rows {
+		view := worksheetQueueRow{
+			Ordinal: row.Ordinal, MembershipID: row.MembershipID,
+			DisplayName: row.DisplayName, CallSign: row.CallSign,
+			PaidThrough: row.PaidThrough, DuesStatus: row.DuesStatus,
+			Entered: entered[row.MembershipID],
+		}
+		if view.Entered {
+			data.WorksheetDone++
+		}
+		data.WorksheetRows = append(data.WorksheetRows, view)
+	}
+	return nil
 }
 
 // loadPostedReview fills the review half of the page: what was posted, what has
