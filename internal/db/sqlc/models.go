@@ -73,15 +73,16 @@ type ContactMethodVisibilityEvent struct {
 }
 
 type EmailLink struct {
-	ID              int64
-	Purpose         string
-	UserID          sql.NullInt64
-	Email           string
-	TokenHash       string
-	CreatedAt       string
-	ExpiresAt       string
-	ConsumedAt      sql.NullString
-	RequestedIpHash sql.NullString
+	ID               int64
+	Purpose          string
+	UserID           sql.NullInt64
+	Email            string
+	TokenHash        string
+	CreatedAt        string
+	ExpiresAt        string
+	ConsumedAt       sql.NullString
+	RequestedIpHash  sql.NullString
+	IntendedRoleCode sql.NullString
 }
 
 type ExternalID struct {

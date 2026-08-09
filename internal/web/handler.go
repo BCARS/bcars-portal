@@ -1146,7 +1146,7 @@ func (h *Handler) invitationSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.auth.CreateUser(r.Context(), link.Email, password)
+	userID, err := h.auth.CreateUserFromInvitation(r.Context(), link, password)
 	if err != nil {
 		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusConflict, data{Error: "An account already exists for this email. Please sign in instead."})
 		return

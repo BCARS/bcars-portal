@@ -82,10 +82,16 @@ func (s *EmailLinkService) RequestRecovery(ctx context.Context, email, ipHash st
 	})
 }
 
-// CreateInvitation creates an invitation link for a new user and returns
-// the raw token (for portalctl to print). The mailer is used only if sendEmail
-// is true.
-func (s *EmailLinkService) CreateInvitation(ctx context.Context, email string, sendEmail bool) (string, error) {
+// CreateInvitation creates an invitation link for a new user and returns the
+// raw token (for portalctl to print). The mailer is used only if sendEmail is
+// true.
+//
+// roleCode is the role consuming the invitation will grant. Pass "" for an
+// ordinary invitation that confers no elevated role. The role is recorded on
+// the link rather than applied at consumption time by the caller, so that the
+// authority an invitation carries is fixed when it is issued and is visible
+// for audit before anyone accepts it.
+func (s *EmailLinkService) CreateInvitation(ctx context.Context, email, roleCode string, sendEmail bool) (string, error) {
 	token, tokenHash, err := generateToken()
 	if err != nil {
 		return "", err
@@ -94,10 +100,16 @@ func (s *EmailLinkService) CreateInvitation(ctx context.Context, email string, s
 	now := time.Now().UTC()
 	expires := now.Add(s.cfg.TTL)
 
+	var role sql.NullString
+	if roleCode != "" {
+		role = sql.NullString{String: roleCode, Valid: true}
+	}
+
 	_, err = s.db.Exec(
-		`INSERT INTO email_links (purpose, email, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO email_links (purpose, email, token_hash, created_at, expires_at, intended_role_code)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
 		PurposeInvitation, email, tokenHash,
-		now.Format(time.RFC3339Nano), expires.Format(time.RFC3339Nano),
+		now.Format(time.RFC3339Nano), expires.Format(time.RFC3339Nano), role,
 	)
 	if err != nil {
 		return "", fmt.Errorf("authn: create invitation: %w", err)
@@ -125,6 +137,8 @@ type ConsumedLink struct {
 	Purpose string
 	UserID  *int64
 	Email   string
+	// IntendedRoleCode is the role this invitation confers, or "" for none.
+	IntendedRoleCode string
 }
 
 func (s *EmailLinkService) ConsumeLink(token string) (*ConsumedLink, error) {
@@ -133,11 +147,13 @@ func (s *EmailLinkService) ConsumeLink(token string) (*ConsumedLink, error) {
 	var link ConsumedLink
 	var userID sql.NullInt64
 	var consumedAt sql.NullString
+	var roleCode sql.NullString
 
 	err := s.db.QueryRow(
-		`SELECT id, purpose, user_id, email, consumed_at FROM email_links WHERE token_hash = ?`,
+		`SELECT id, purpose, user_id, email, consumed_at, intended_role_code
+		 FROM email_links WHERE token_hash = ?`,
 		tokenHash,
-	).Scan(&link.ID, &link.Purpose, &userID, &link.Email, &consumedAt)
+	).Scan(&link.ID, &link.Purpose, &userID, &link.Email, &consumedAt, &roleCode)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrLinkNotFound
@@ -168,6 +184,7 @@ func (s *EmailLinkService) ConsumeLink(token string) (*ConsumedLink, error) {
 	if userID.Valid {
 		link.UserID = &userID.Int64
 	}
+	link.IntendedRoleCode = roleCode.String
 	return &link, nil
 }
 

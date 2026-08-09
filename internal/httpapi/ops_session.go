@@ -12,6 +12,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/bcars/bcars-portal/internal/audit"
 	"github.com/bcars/bcars-portal/internal/authn"
 )
 
@@ -308,10 +309,15 @@ func RegisterSessions(api huma.API, deps Deps) {
 			return nil, huma.NewError(http.StatusBadRequest, "invalid invitation link")
 		}
 
-		// Create user account from invitation email.
-		userID, err := deps.AuthService.CreateUser(ctx, link.Email, input.Body.NewPassword)
+		// Create the account and grant the role the invitation carried, in
+		// one transaction. An invitation that confers no role produces an
+		// ordinary account.
+		userID, err := deps.AuthService.CreateUserFromInvitation(ctx, link, input.Body.NewPassword)
 		if err != nil {
 			return nil, huma.NewError(http.StatusConflict, "account already exists for this email")
+		}
+		if link.IntendedRoleCode != "" {
+			audit.StampResource(ctx, "user", userID)
 		}
 
 		sessionID, err := deps.AuthService.LoginByUserID(ctx, userID, deps.SessionStore)

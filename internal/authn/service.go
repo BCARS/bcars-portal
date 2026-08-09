@@ -153,6 +153,67 @@ func (s *AuthService) CreateUser(ctx context.Context, email, password string) (i
 	return res.LastInsertId()
 }
 
+// CreateUserFromInvitation creates the account for a consumed invitation and
+// grants the role the invitation carried, in a single transaction.
+//
+// It exists so the API and the web UI cannot disagree about what accepting an
+// invitation does. Both previously called CreateUser and stopped there, which
+// is why portalctl bootstrap-admin produced an account with no capabilities
+// and a fresh installation had no route to a working administrator.
+//
+// The grant is attributed to the new user when no granting user is available,
+// which is the bootstrap case: user_role_grants.granted_by is NOT NULL and
+// there is no prior account to point at. The reason column records the real
+// provenance, and the caller audits the grant.
+func (s *AuthService) CreateUserFromInvitation(ctx context.Context, link *ConsumedLink, password string) (int64, error) {
+	if link == nil {
+		return 0, fmt.Errorf("authn: nil invitation link")
+	}
+
+	hash, err := HashPassword(password, s.pepper, DefaultParams())
+	if err != nil {
+		return 0, fmt.Errorf("authn: hash password: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("authn: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO users (email, password_hash, is_active, created_at, updated_at, version) VALUES (?, ?, 1, ?, ?, 1)`,
+		link.Email, hash, now, now,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("authn: create user: %w", err)
+	}
+	userID, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("authn: user id: %w", err)
+	}
+
+	if link.IntendedRoleCode != "" {
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at, reason)
+			 VALUES (?, ?, ?, ?, ?)`,
+			userID, link.IntendedRoleCode, userID, now,
+			fmt.Sprintf("invitation %d accepted", link.ID),
+		)
+		if err != nil {
+			// An unknown role code fails the FK here rather than silently
+			// producing a capability-less account.
+			return 0, fmt.Errorf("authn: grant invited role %q: %w", link.IntendedRoleCode, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("authn: commit: %w", err)
+	}
+	return userID, nil
+}
+
 func (s *AuthService) recordFailedLogin(userID int64, currentCount int) {
 	newCount := currentCount + 1
 	now := time.Now().UTC().Format(time.RFC3339Nano)
