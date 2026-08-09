@@ -13,6 +13,9 @@ type Querier interface {
 	ActiveRolesForUser(ctx context.Context, userID int64) ([]ActiveRolesForUserRow, error)
 	ApproveMembership(ctx context.Context, arg ApproveMembershipParams) (Membership, error)
 	ArchiveContactMethod(ctx context.Context, arg ArchiveContactMethodParams) error
+	// CapabilitiesForRole backs the invitation escalation guard: an inviter may
+	// only confer a role whose capabilities they already hold themselves.
+	CapabilitiesForRole(ctx context.Context, roleCode string) ([]string, error)
 	ClearPrimaryForPerson(ctx context.Context, personID int64) error
 	CommitImportRun(ctx context.Context, arg CommitImportRunParams) (ImportRun, error)
 	ConsumeEmailLink(ctx context.Context, id int64) error
@@ -91,6 +94,7 @@ type Querier interface {
 	RevokeHonoraryGrant(ctx context.Context, arg RevokeHonoraryGrantParams) error
 	RevokeRoleGrant(ctx context.Context, arg RevokeRoleGrantParams) error
 	RevokeSession(ctx context.Context, id string) error
+	RoleExists(ctx context.Context, code string) (bool, error)
 	// SearchAuditEvents is the general filtered listing behind GET /audit-events.
 	// Every filter is optional (pass NULL to skip it) and all filters compose.
 	// action is matched as a prefix (instr(...) = 1 rather than LIKE, so the

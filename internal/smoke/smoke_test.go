@@ -16,14 +16,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/mail"
 )
 
@@ -70,7 +68,7 @@ func TestProductionAssemblySmoke(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode, "administrator must reach a guarded read")
 
 	// 4. The same read is denied for an under-privileged principal.
-	officerCookie := e.consumeInvitation(e.inviteWithoutRole(officerEmail), officerEmail, officerPass)
+	officerCookie := e.consumeInvitation(e.inviteWithoutRole(adminCookie, officerEmail), officerEmail, officerPass)
 	resp = e.do(http.MethodGet, "/api/v1/audit-events", officerCookie, "")
 	require.Equal(t, http.StatusForbidden, resp.StatusCode,
 		"a principal without audit.read must be denied, not merely unauthenticated")
@@ -98,32 +96,20 @@ func (e *env) bootstrapAdmin() string {
 	return tokenFromURL(e.t, out)
 }
 
-// inviteWithoutRole creates an ordinary invitation.
-//
-// This is the one step that writes to the database directly, because no API
-// operation creates an invitation — only consumption is exposed. See the
-// follow-up bead noted in the PR: a fresh installation can bootstrap exactly
-// one administrator and has no supported way to onboard a second officer.
-func (e *env) inviteWithoutRole(email string) string {
+// inviteWithoutRole invites an ordinary user through the API, using the
+// administrator's own session. Every step of onboarding a second officer now
+// runs through supported routes — the smoke test previously had to write an
+// email_links row directly because no endpoint existed (bcars-portal-fmc.17).
+func (e *env) inviteWithoutRole(adminCookie *http.Cookie, email string) string {
 	e.t.Helper()
 
-	// Same opener the server uses, so pragmas (WAL, foreign keys) match and a
-	// second connection while the server is running behaves as it would in
-	// production.
-	d, err := db.Open(e.dbPath)
-	require.NoError(e.t, err)
-	defer d.Close()
+	before := e.mailCount()
+	resp := e.do(http.MethodPost, "/api/v1/invitations", adminCookie,
+		fmt.Sprintf(`{"email":%q}`, email))
+	require.Equal(e.t, http.StatusCreated, resp.StatusCode,
+		"inviting a second user must be possible through the API: %s", readBody(resp))
 
-	token := "smoketest-" + strings.ReplaceAll(email, "@", "-")
-	now := time.Now().UTC()
-	_, err = d.Exec(
-		`INSERT INTO email_links (purpose, email, token_hash, created_at, expires_at)
-		 VALUES ('invitation', ?, ?, ?, ?)`,
-		email, sha256Hex(token),
-		now.Format(time.RFC3339Nano), now.Add(time.Hour).Format(time.RFC3339Nano),
-	)
-	require.NoError(e.t, err)
-	return token
+	return e.waitForMailToken(before, "invitation")
 }
 
 // consumeInvitation accepts an invitation and returns the session cookie it
@@ -150,7 +136,7 @@ func (e *env) recoveryRoundTrip(email string) {
 		fmt.Sprintf(`{"email":%q}`, email))
 	require.Equal(e.t, http.StatusNoContent, resp.StatusCode, "recovery request: %s", readBody(resp))
 
-	token := e.waitForRecoveryToken(before)
+	token := e.waitForMailToken(before, "password_recovery")
 	resp = e.do(http.MethodPost, "/api/v1/auth/recovery/consume", nil,
 		fmt.Sprintf(`{"token":%q,"new_password":%q}`, token, newPass))
 	require.Equal(e.t, http.StatusOK, resp.StatusCode, "recovery consume: %s", readBody(resp))
@@ -166,25 +152,27 @@ func (e *env) recoveryRoundTrip(email string) {
 	assert.Equal(e.t, http.StatusUnauthorized, resp.StatusCode, "the old password must stop working")
 }
 
-// waitForRecoveryToken polls the filelog mail directory. Mail is written by the
-// server process, so it is not visible the instant the response returns.
-func (e *env) waitForRecoveryToken(before int) string {
+// waitForMailToken polls the filelog mail directory for the newest message of
+// a given template. Mail is written by the server process, so it is not
+// visible the instant the response returns.
+func (e *env) waitForMailToken(before int, templateID string) string {
 	e.t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		sent, err := e.mailer.ReadAll()
 		if err == nil && len(sent) > before {
-			for _, entry := range sent {
-				if entry.Message.TemplateID == "password_recovery" {
-					if tok := entry.Message.Payload["token"]; tok != "" {
-						return tok
-					}
+			for i := len(sent) - 1; i >= 0; i-- {
+				if sent[i].Message.TemplateID != templateID {
+					continue
+				}
+				if tok := sent[i].Message.Payload["token"]; tok != "" {
+					return tok
 				}
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	e.t.Fatal("no recovery mail was delivered; the mail sender is not wired")
+	e.t.Fatalf("no %s mail was delivered; the mail sender is not wired", templateID)
 	return ""
 }
 

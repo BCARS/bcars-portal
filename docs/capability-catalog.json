@@ -27,7 +27,9 @@
     "description": "Invite a new officer or user.",
     "category": "system",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "invitation-create"
+    ]
   },
   {
     "code": "integration.config.write",

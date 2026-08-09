@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -17,6 +18,18 @@ type Deps struct {
 	SessionStore     *authn.SessionStore
 	EmailLinkService *authn.EmailLinkService
 	CookieName       string
+
+	// EmailLinkTTL mirrors the lifetime configured on EmailLinkService so
+	// responses can report when an invitation expires.
+	EmailLinkTTL time.Duration
+}
+
+// InvitationTTL returns the configured link lifetime, defaulting to 24h.
+func (d Deps) InvitationTTL() time.Duration {
+	if d.EmailLinkTTL == 0 {
+		return 24 * time.Hour
+	}
+	return d.EmailLinkTTL
 }
 
 // RegisterAll registers every API operation on api and panics if any
@@ -34,4 +47,5 @@ func RegisterAll(api huma.API, deps Deps) {
 	RegisterExports(api, deps)
 	RegisterAudit(api, deps)
 	RegisterAdmin(api, deps)
+	RegisterInvitations(api, deps)
 }
