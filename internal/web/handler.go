@@ -13,6 +13,7 @@ import (
 
 	"github.com/bcars/bcars-portal/internal/audit"
 	"github.com/bcars/bcars-portal/internal/authn"
+	"github.com/bcars/bcars-portal/internal/clientip"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/batches"
@@ -44,6 +45,12 @@ type Handler struct {
 	// cookies is the shared source of session-cookie attributes, so login,
 	// logout and the recovery/invitation flows cannot disagree about them.
 	cookies authn.SessionCookieConfig
+
+	// clientIP is the same hasher the API middleware uses, so a recovery or
+	// sign-in initiated from the admin UI records the identical value the API
+	// would record for that caller. Before this existed the UI passed an empty
+	// hash and every UI-initiated recovery stored NULL (bcars-portal-fmc.21).
+	clientIP clientip.Hasher
 
 	// testMailer is set by tests that need to read what was sent. Nil in
 	// production; the handler never reads it.
@@ -88,6 +95,12 @@ type HandlerConfig struct {
 	// the shipped binary until the Phase 2 smoke test signed in through the
 	// login form and got a 401 (bcars-portal-pma.12).
 	Pepper []byte
+
+	// ClientIP MUST match the API's configuration. The admin UI and the API
+	// record client addresses into the same columns, and a limiter reading
+	// them cannot group two different constructions. Leaving it zero disables
+	// hashing, which stores NULL rather than a value that only looks usable.
+	ClientIP clientip.Config
 }
 
 func (c HandlerConfig) withDefaults() HandlerConfig {
@@ -148,6 +161,7 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 			Name:          sessionCookieName,
 			AllowInsecure: cfg.AllowInsecureCookies,
 		},
+		clientIP: clientip.NewHasher(cfg.ClientIP),
 	}, nil
 }
 
@@ -435,7 +449,7 @@ func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
-	sessionID, err := h.auth.SignIn(email, password, "", r.UserAgent())
+	sessionID, err := h.auth.SignIn(email, password, h.clientIP.HashRequest(r), r.UserAgent())
 	if err != nil {
 		h.log.Info("login failed", slog.String("email", email), slog.String("error", err.Error()))
 		h.render.RenderHTTP(w, "login.html", http.StatusUnauthorized, loginData{
@@ -1167,7 +1181,7 @@ func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 
 	email := r.FormValue("email")
 	if email != "" && h.emailLinks != nil {
-		_ = h.emailLinks.RequestRecovery(r.Context(), email, "")
+		_ = h.emailLinks.RequestRecovery(r.Context(), email, h.clientIP.HashRequest(r))
 	}
 
 	// Always show success to prevent email enumeration.

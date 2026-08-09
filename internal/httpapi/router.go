@@ -93,6 +93,9 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 			BaseURL:              cfg.BaseURL,
 			AllowInsecureCookies: cfg.AllowInsecureCookies,
 			Pepper:               cfg.Pepper,
+			// Same construction as the API middleware above, so a limiter
+			// reading requested_ip_hash groups both surfaces together.
+			ClientIP: cfg.ClientIP,
 		})
 		if err != nil {
 			cfg.Logger.Error("failed to initialize admin UI", slog.String("error", err.Error()))

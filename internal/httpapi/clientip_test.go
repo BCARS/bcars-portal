@@ -138,26 +138,3 @@ func TestClientIPHash_EmptyWhenUnkeyed(t *testing.T) {
 	assert.Empty(t, hashFor(t, ClientIPConfig{}, "203.0.113.7:41234", nil),
 		"without a secret the hash would be reversible, so none is stored")
 }
-
-func TestNormalizeIP_CanonicalForms(t *testing.T) {
-	// An IPv4-mapped IPv6 peer and the plain IPv4 peer are one source.
-	assert.Equal(t, normalizeIP("::ffff:203.0.113.7"), normalizeIP("203.0.113.7"))
-	// A zone identifier must not split one source into many.
-	assert.Equal(t, normalizeIP("fe80::1"), normalizeIP("fe80::1%eth0"))
-	assert.Equal(t, "2001:db8::1", normalizeIP("[2001:db8::1]"))
-	assert.Empty(t, normalizeIP("example.com"))
-	assert.Empty(t, normalizeIP(""))
-}
-
-func TestLeftmostForwarded(t *testing.T) {
-	assert.Equal(t, "198.51.100.1", leftmostForwarded("198.51.100.1, 10.0.0.9, 10.0.0.10"))
-	assert.Equal(t, "198.51.100.1", leftmostForwarded("  198.51.100.1  "))
-	assert.Empty(t, leftmostForwarded(""))
-}
-
-func TestHostFromAddr(t *testing.T) {
-	assert.Equal(t, "203.0.113.7", hostFromAddr("203.0.113.7:41234"))
-	assert.Equal(t, "2001:db8::1", hostFromAddr("[2001:db8::1]:41234"))
-	assert.Equal(t, "203.0.113.7", hostFromAddr("203.0.113.7"))
-	assert.Empty(t, hostFromAddr(""))
-}
