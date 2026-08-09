@@ -19,6 +19,8 @@ human-readable completion record. See:
 - `docs/phase-1-plan.md` — task-level implementation plan.
 - `docs/phase-2-design.md` — API-first treasurer workflow design.
 - `docs/phase-2-plan.md` — focused Phase 2 dependency and execution map.
+- `docs/phase-3-design.md` — reviewed member requests, optional access, and directory design.
+- `docs/phase-3-plan.md` — focused Phase 3 dependency and execution map.
 - `docs/adr/` — architecture decision records.
 
 ## Prerequisites
