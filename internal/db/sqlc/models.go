@@ -19,6 +19,12 @@ type AcsAresSharingEvent struct {
 	CreatedAt    string
 }
 
+type AppSetting struct {
+	Key       string
+	Value     string
+	UpdatedAt string
+}
+
 type AuditEvent struct {
 	ID             int64
 	OccurredAt     string

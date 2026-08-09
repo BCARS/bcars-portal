@@ -190,6 +190,13 @@ type demoUser struct {
 }
 
 func seedDemo(d *sql.DB) error {
+	// The server hashes with the configured pepper; seeding without it would
+	// produce accounts whose passwords can never verify.
+	pepper := []byte(os.Getenv(authn.PepperEnvVar))
+	if err := authn.BindPepper(d, pepper); err != nil {
+		return fmt.Errorf("seed-demo: %w", err)
+	}
+
 	users := []demoUser{
 		{Email: "admin@demo.local", Password: "admin", Role: "administrator"},
 		{Email: "treasurer@demo.local", Password: "treasurer", Role: "treasurer"},
@@ -197,7 +204,7 @@ func seedDemo(d *sql.DB) error {
 	}
 
 	for _, u := range users {
-		hash, err := authn.HashPassword(u.Password, nil, authn.DefaultParams())
+		hash, err := authn.HashPassword(u.Password, pepper, authn.DefaultParams())
 		if err != nil {
 			return fmt.Errorf("hash password for %s: %w", u.Email, err)
 		}

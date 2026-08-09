@@ -131,6 +131,8 @@ See the backup manifest JSON for schema version, file size, and SHA-256 checksum
 | Flag | Env var | Default | Description |
 |------|---------|---------|-------------|
 | `--db` | `PORTAL_DB` | `portal.db` | Path to SQLite database |
+| — | `PORTAL_PASSWORD_PEPPER` | *(none)* | **Required.** Secret mixed into every password hash. Minimum 16 bytes. |
+| `--allow-empty-pepper` | — | `false` | Development only. Start without a pepper. |
 | `--addr` | `PORTAL_ADDR` | `:8080` | Listen address |
 | `--log-level` | `PORTAL_LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `--base-url` | — | `http://localhost:8080` | Public base URL used to build recovery/invitation links |
@@ -171,3 +173,59 @@ to disk instead of delivering them.
 - Use a reverse proxy (nginx/caddy) for TLS termination
 - Session cookies are HttpOnly + SameSite=Lax
 - PII is redacted in structured logs (see `docs/log-retention.md`)
+
+
+## Password pepper
+
+The pepper is a server-side secret mixed into every password hash before
+Argon2id. It is what makes a stolen `bcars.db` insufficient to mount an offline
+password-cracking attack: the attacker needs the database *and* the pepper,
+which lives only in the process environment.
+
+### Custody
+
+- Supply it as `PORTAL_PASSWORD_PEPPER`, never as a flag — flags are visible in
+  the process table and shell history.
+- Generate at least 32 bytes from a CSPRNG:
+  `openssl rand -base64 32`
+- Store it wherever your deployment keeps secrets (systemd `EnvironmentFile`
+  with mode `0600`, or the container platform's secret store). It must **not**
+  live in the repository, in the image, or in the same backup as the database —
+  a backup containing both defeats the purpose.
+- Back it up separately and durably. Losing it is equivalent to losing every
+  password (see below).
+
+The server refuses to start without one unless `--allow-empty-pepper` is passed,
+which exists for local development and is never appropriate in production.
+
+### Rotation, and why it is expensive
+
+An Argon2id hash records no indication of which pepper produced it. There is
+therefore no way to distinguish "wrong password" from "right password, wrong
+pepper" at verification time. Changing the pepper does not fail loudly on its
+own — it makes *every* sign-in return "invalid credentials", for every account,
+with a message that reads like ordinary user error.
+
+To make that failure legible, the fingerprint of the pepper in use is recorded
+in `app_settings` on first start. If a later start presents a different pepper,
+the server **refuses to start** with an explicit message rather than silently
+locking everyone out. The fingerprint is an HMAC, so it does not disclose the
+pepper to anyone who can read the database.
+
+Consequently:
+
+- **Set the pepper before the first account exists.** While the installation has
+  no users, changing it costs nothing.
+- **After accounts exist, rotation requires a password reset for every user.**
+  There is no re-hash-in-place: the plaintext is not recoverable, so each user
+  must set a new password through the recovery flow. Plan it as a coordinated
+  event, not a config change.
+- **If the pepper is lost, every account must go through recovery.** Recovery
+  itself still works: it is email-token based and does not depend on the old
+  hash. Restoring service means setting a new pepper, clearing the recorded
+  fingerprint, and sending everyone a reset link.
+
+A future phase could carry a pepper version alongside each hash and re-hash on
+next successful login, which would make rotation transparent. Phase 1 does not,
+because Phase 1 begins with zero accounts and the simpler scheme is easier to
+reason about.

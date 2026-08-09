@@ -18,6 +18,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/httpapi"
@@ -38,7 +39,13 @@ Flags:
 		fs.PrintDefaults()
 		fmt.Fprintf(fs.Output(), `
 Environment:
-  PORTAL_SMTP_PASSWORD  password for -smtp-user (never passed as a flag)
+  PORTAL_SMTP_PASSWORD      password for -smtp-user (never passed as a flag)
+  PORTAL_PASSWORD_PEPPER    secret mixed into every password hash; required
+                            unless -allow-empty-pepper is set. Minimum 16
+                            bytes. Changing it after accounts exist makes
+                            every existing password unverifiable — the server
+                            refuses to start rather than rejecting everyone's
+                            sign-in as a bad password.
 `)
 	}
 
@@ -58,6 +65,8 @@ Environment:
 	smtpPort := fs.Int("smtp-port", 587, "SMTP relay port")
 	smtpUser := fs.String("smtp-user", "", "SMTP username; empty means no authentication")
 	smtpFrom := fs.String("smtp-from", "", "From address for outbound mail (required when -mail-transport=smtp)")
+	allowEmptyPepper := fs.Bool("allow-empty-pepper", false,
+		"start without "+authn.PepperEnvVar+" (DEVELOPMENT ONLY; passwords are hashed without a pepper)")
 	// The SMTP password is read from the environment so it never appears in
 	// process listings or shell history.
 	smtpPassword := os.Getenv("PORTAL_SMTP_PASSWORD")
@@ -138,13 +147,15 @@ Environment:
 	// Assemble the production handler (router + capability enforcement +
 	// session-cookie authentication).
 	handler, err := buildHandler(database, assemblyConfig{
-		Logger:       logger,
-		Version:      version.Get().Short(),
-		CookieName:   "bcars_session",
-		SessionTTL:   24 * time.Hour,
-		BaseURL:      *baseURL,
-		EmailLinkTTL: 24 * time.Hour,
-		Mailer:       mailer,
+		Pepper:           []byte(os.Getenv(authn.PepperEnvVar)),
+		AllowEmptyPepper: *allowEmptyPepper,
+		Logger:           logger,
+		Version:          version.Get().Short(),
+		CookieName:       "bcars_session",
+		SessionTTL:       24 * time.Hour,
+		BaseURL:          *baseURL,
+		EmailLinkTTL:     24 * time.Hour,
+		Mailer:           mailer,
 	})
 	if err != nil {
 		logger.Error("failed to assemble server", slog.String("error", err.Error()))
