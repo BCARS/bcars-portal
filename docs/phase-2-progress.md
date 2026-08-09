@@ -9,6 +9,42 @@ production API could not resolve a signed-in principal. Everything below was
 re-checked against merged `main`, and the treasury flow was driven through the
 shipped binaries rather than a reconstructed router.
 
+## Reconciliation findings at a glance
+
+Phase 2 is complete, but its first completion audit was not sufficient on its
+own. The reconciliation epic, `bcars-portal-9zm`, separated four independently
+testable defects from the final documentation audit and merged each fix through
+its own pull request:
+
+- a worksheet-linked batch stored `worksheet_run_id` but the batch surface did
+  not consume it, so the saved worksheet order never guided data entry;
+- worksheet snapshots selected a lexically maximal active contact instead of
+  the contact explicitly marked primary;
+- the admin worksheet form silently replaced an invalid `as_of` value with
+  today even though the API rejected the same input; and
+- single-payment idempotency hashed the ledger entry but omitted the effective
+  batch label, allowing a materially changed request to replay as identical.
+
+The review also found that none of the completed treasury pages was reachable
+from the normal application navigation (`bcars-portal-6q6.4`). The preceding
+completion audit caught a separate production-assembly defect: the admin UI did
+not receive the configured password pepper, making every Phase 2 page unusable
+in a real peppered deployment. All six problems are fixed on `main`.
+
+Three production-hardening concerns remain deliberately non-blocking and are
+tracked under `bcars-portal-6q6`: unenforced generic confirmation metadata
+(`6q6.1`), silent loss of an unparseable imported Current Until value (`6q6.2`),
+and separate API/admin session cookies (`6q6.3`). External integrations,
+deployment packaging, real-data import, and interactive visual polish remain
+deferred rather than hidden inside the completed Phase 2 claim.
+
+The central audit lesson is to test the named user-visible property through the
+surface that consumes it. Testing ordered worksheet rows and an empty linked
+batch separately did not prove that the batch presented those rows in order.
+The corrected smoke test reads the members and their order from the shipped
+batch page, and its focused regression test was verified to fail when that
+consumer behavior was removed.
+
 ## Delivered
 
 | Bead | Delivered | PR |
