@@ -124,6 +124,22 @@
         ],
         "type": "object"
       },
+      "AppliedFilter": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object"
+      },
       "ApplyMembershipInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -246,6 +262,74 @@
           "action",
           "outcome",
           "occurred_at"
+        ],
+        "type": "object"
+      },
+      "BatchActivityEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "opened",
+              "posted",
+              "abandoned",
+              "corrected"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "The officer's own words, when they gave any.",
+            "type": "string"
+          },
+          "summary": {
+            "description": "Plain language, for an officer asking what happened to this batch.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "BatchActivityOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchActivityOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "activity": {
+            "items": {
+              "$ref": "#/components/schemas/BatchActivityEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "batch_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "batch_id",
+          "activity"
         ],
         "type": "object"
       },
@@ -1322,6 +1406,51 @@
         ],
         "type": "object"
       },
+      "ExportLedgerBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ExportLedgerBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "effective_only": {
+            "type": "boolean"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "check",
+              "other"
+            ],
+            "type": "string"
+          },
+          "receipt_code": {
+            "type": "string"
+          },
+          "received_from": {
+            "format": "date",
+            "type": "string"
+          },
+          "received_to": {
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ExportMembersBody": {
         "additionalProperties": false,
         "properties": {
@@ -1786,6 +1915,95 @@
         "required": [
           "email",
           "expires_at"
+        ],
+        "type": "object"
+      },
+      "LedgerEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "batch_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "call_sign": {
+            "type": "string"
+          },
+          "corrects_payment_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "entered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entered_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "entry_kind": {
+            "enum": [
+              "original",
+              "reversal",
+              "replacement"
+            ],
+            "type": "string"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "check",
+              "other"
+            ],
+            "type": "string"
+          },
+          "payment_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "receipt_code": {
+            "type": "string"
+          },
+          "received_by_officer": {
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "superseded": {
+            "description": "True when a correction has already replaced this row.",
+            "type": "boolean"
+          },
+          "treasurer_note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id",
+          "membership_id",
+          "display_name",
+          "amount_cents",
+          "method",
+          "received_on",
+          "entered_by_user_id",
+          "entered_at",
+          "receipt_code",
+          "entry_kind",
+          "superseded"
         ],
         "type": "object"
       },
@@ -2391,6 +2609,38 @@
             "description": "Slice of results for this page.",
             "items": {
               "$ref": "#/components/schemas/ImportRunResponse"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Pass as cursor= to fetch the next page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "PageLedgerEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PageLedgerEntry.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "data": {
+            "description": "Slice of results for this page.",
+            "items": {
+              "$ref": "#/components/schemas/LedgerEntry"
             },
             "type": [
               "array",
@@ -3049,6 +3299,91 @@
         ],
         "type": "object"
       },
+      "Receipt": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/Receipt.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "amount_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "base_type": {
+            "type": "string"
+          },
+          "batch_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "call_sign": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "entered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entry_kind": {
+            "type": "string"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "method": {
+            "type": "string"
+          },
+          "paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "payment_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "receipt_code": {
+            "description": "Stable and non-secret: it identifies the payment but grants no access to it.",
+            "type": "string"
+          },
+          "received_by_officer": {
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "superseded": {
+            "description": "True when a correction replaced this payment; a reprint must not look current.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "receipt_code",
+          "payment_id",
+          "membership_id",
+          "display_name",
+          "base_type",
+          "amount_cents",
+          "method",
+          "received_on",
+          "entered_at",
+          "entry_kind",
+          "superseded"
+        ],
+        "type": "object"
+      },
       "RecoveryConsumeBody": {
         "additionalProperties": false,
         "properties": {
@@ -3361,6 +3696,60 @@
         "required": [
           "kind",
           "occurred_at"
+        ],
+        "type": "object"
+      },
+      "TreasuryExport": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TreasuryExport.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "applied_filters": {
+            "description": "What produced these rows. An export that does not say what it excluded is a liability at audit time.",
+            "items": {
+              "$ref": "#/components/schemas/AppliedFilter"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "data": {
+            "description": "Base64-encoded CSV.",
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "csv"
+            ],
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "row_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "filename",
+          "generated_at",
+          "applied_filters",
+          "row_count",
+          "format",
+          "data"
         ],
         "type": "object"
       },
@@ -4239,6 +4628,49 @@
         ]
       }
     },
+    "/exports/treasury": {
+      "post": {
+        "description": "Deterministic given the same filters and data. Cells that a spreadsheet would evaluate as a formula are neutralized, and amounts are rendered from integer cents without float arithmetic.",
+        "operationId": "export-treasury",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportLedgerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreasuryExport"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Export filtered ledger entries to CSV for the books",
+        "tags": [
+          "treasury",
+          "exports"
+        ]
+      }
+    },
     "/fcc-verifications/{id}/revoke": {
       "post": {
         "operationId": "fcc-verification-revoke",
@@ -4886,6 +5318,137 @@
         "summary": "Invite a new officer or user",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/ledger-entries": {
+      "get": {
+        "description": "Ordered newest received first, with a stable tie break on id so paging cannot repeat or skip a row.",
+        "operationId": "ledger-list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of items to return.",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque pagination cursor returned by a previous list call.",
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque pagination cursor returned by a previous list call.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter to one member.",
+            "explode": false,
+            "in": "query",
+            "name": "membership_id",
+            "schema": {
+              "description": "Filter to one member.",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter to one batch.",
+            "explode": false,
+            "in": "query",
+            "name": "batch_id",
+            "schema": {
+              "description": "Filter to one batch.",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "method",
+            "schema": {
+              "enum": [
+                "cash",
+                "check",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "receipt_code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ISO date, inclusive.",
+            "explode": false,
+            "in": "query",
+            "name": "received_from",
+            "schema": {
+              "description": "ISO date, inclusive.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ISO date, inclusive.",
+            "explode": false,
+            "in": "query",
+            "name": "received_to",
+            "schema": {
+              "description": "ISO date, inclusive.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Hide reversals and superseded originals, leaving what the club currently holds.",
+            "explode": false,
+            "in": "query",
+            "name": "effective_only",
+            "schema": {
+              "description": "Hide reversals and superseded originals, leaving what the club currently holds.",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageLedgerEntry"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Page and filter posted ledger entries",
+        "tags": [
+          "treasury"
         ]
       }
     },
@@ -6443,6 +7006,48 @@
         ]
       }
     },
+    "/payment-batches/{id}/activity": {
+      "get": {
+        "operationId": "payment-batch-activity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchActivityOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "What happened to this batch, in plain language",
+        "tags": [
+          "treasury"
+        ]
+      }
+    },
     "/payment-batches/{id}/entries": {
       "post": {
         "description": "Returns the row and the batch, whose version and totals both move on every entry mutation.",
@@ -6653,6 +7258,49 @@
         "summary": "Edit a draft row",
         "tags": [
           "payments"
+        ]
+      }
+    },
+    "/payment-batches/{id}/export": {
+      "post": {
+        "operationId": "export-payment-batch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreasuryExport"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Export one batch's posted rows to CSV",
+        "tags": [
+          "treasury",
+          "exports"
         ]
       }
     },
@@ -6919,6 +7567,48 @@
         "summary": "Correct a posted payment",
         "tags": [
           "payments"
+        ]
+      }
+    },
+    "/payments/{id}/receipt": {
+      "get": {
+        "operationId": "payment-receipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read the printable receipt for a payment",
+        "tags": [
+          "treasury"
         ]
       }
     },

@@ -109,6 +109,7 @@ type Querier interface {
 	// Totals are always calculated by the server. A client never submits one.
 	GetPaymentBatchTotals(ctx context.Context, batchID int64) (GetPaymentBatchTotalsRow, error)
 	GetPaymentCorrectionByOriginal(ctx context.Context, originalPaymentID int64) (PaymentCorrection, error)
+	GetPaymentWithMember(ctx context.Context, id int64) (GetPaymentWithMemberRow, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByCallSign(ctx context.Context, callSign sql.NullString) (Person, error)
 	GetSession(ctx context.Context, id string) (Session, error)
@@ -122,6 +123,8 @@ type Querier interface {
 	ListAuditEventsByResource(ctx context.Context, arg ListAuditEventsByResourceParams) ([]AuditEvent, error)
 	ListCapabilities(ctx context.Context) ([]Capability, error)
 	ListContactMethods(ctx context.Context, personID int64) ([]ContactMethod, error)
+	// The corrections that touched a batch, for its plain-language activity log.
+	ListCorrectionsByBatch(ctx context.Context, batchID sql.NullInt64) ([]ListCorrectionsByBatchRow, error)
 	ListCoverageEventsByMembership(ctx context.Context, membershipID int64) ([]CoverageEvent, error)
 	ListCoverageEventsPage(ctx context.Context, arg ListCoverageEventsPageParams) ([]CoverageEvent, error)
 	ListDecisionsForRow(ctx context.Context, stagedImportRowID int64) ([]ReconciliationDecision, error)
@@ -147,6 +150,28 @@ type Querier interface {
 	ListFCCVerificationsByMembership(ctx context.Context, membershipID int64) ([]FccVerification, error)
 	ListHonoraryGrantsByMembership(ctx context.Context, membershipID int64) ([]HonoraryGrant, error)
 	ListImportRuns(ctx context.Context, arg ListImportRunsParams) ([]ImportRun, error)
+	// Treasury history and reporting reads.
+	//
+	// Every query here is treasury-only. Nothing in this file is reachable without
+	// payment.read or payment.export, and no result feeds a safe dues-standing
+	// response.
+	//
+	// The books view. effective_only = 1 hides the rows a correction has already
+	// settled (reversals, and originals that were replaced), leaving what the club
+	// currently holds. effective_only = 0 shows the whole audit trail.
+	//
+	// Filters are all optional: 0 or '' means "no filter". They bind once in the
+	// params CTE and join in as columns, which keeps each sqlc.arg out of the CASE
+	// and WHERE expressions sqlc's SQLite analyzer struggles with.
+	//
+	// Keep every comment in this file ASCII. sqlc substitutes sqlc.arg() by byte
+	// offset, so a multi-byte character anywhere above a query shifts the offsets
+	// and silently corrupts the SQL it hands the parser, which then fails on a
+	// mangled LIMIT or OFFSET far from the real cause.
+	//
+	// The correction join cannot fan out: the schema allows at most one correction
+	// record per payment.
+	ListLedgerPayments(ctx context.Context, arg ListLedgerPaymentsParams) ([]ListLedgerPaymentsRow, error)
 	ListMembershipsByPerson(ctx context.Context, personID int64) ([]Membership, error)
 	ListNotes(ctx context.Context, arg ListNotesParams) ([]Note, error)
 	ListPaymentBatchEntries(ctx context.Context, batchID int64) ([]PaymentBatchEntry, error)
