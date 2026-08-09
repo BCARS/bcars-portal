@@ -860,6 +860,73 @@
         ],
         "type": "object"
       },
+      "CreatePaymentBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreatePaymentBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "amount_cents": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "confirm": {
+            "description": "Must be true.",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "Names the one-row batch created for this payment. Defaults to a dated label.",
+            "type": "string"
+          },
+          "membership_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "check",
+              "other"
+            ],
+            "type": "string"
+          },
+          "paid_through": {
+            "description": "Stated explicitly. The server never derives coverage from the amount.",
+            "format": "date",
+            "type": "string"
+          },
+          "received_by_officer": {
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "treasurer_note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "membership_id",
+          "amount_cents",
+          "method",
+          "received_on",
+          "paid_through",
+          "confirm"
+        ],
+        "type": "object"
+      },
       "CreateRoleGrantBody": {
         "additionalProperties": false,
         "properties": {
@@ -2403,6 +2470,86 @@
         ],
         "type": "object"
       },
+      "Payment": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "batch_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entered_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "entry_kind": {
+            "enum": [
+              "original",
+              "reversal",
+              "replacement"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "check",
+              "other"
+            ],
+            "type": "string"
+          },
+          "receipt_code": {
+            "description": "Stable printable identifier; a reprint is not a new number.",
+            "type": "string"
+          },
+          "received_by_officer": {
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "treasurer_note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "membership_id",
+          "batch_id",
+          "amount_cents",
+          "method",
+          "received_on",
+          "entered_by_user_id",
+          "entered_at",
+          "receipt_code",
+          "entry_kind",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "PaymentBatch": {
         "additionalProperties": false,
         "properties": {
@@ -2531,6 +2678,69 @@
         ],
         "type": "object"
       },
+      "PostBatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PostBatchBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Must be true. Posting is irreversible except by correction, so it is never the accidental result of a stray request.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "PostResult": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PostResult.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch": {
+            "$ref": "#/components/schemas/PaymentBatch"
+          },
+          "coverage_events": {
+            "items": {
+              "$ref": "#/components/schemas/PostedCoverage"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/Payment"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "batch",
+          "payments",
+          "coverage_events"
+        ],
+        "type": "object"
+      },
       "PostVisibilityBody": {
         "additionalProperties": false,
         "properties": {
@@ -2554,6 +2764,52 @@
         },
         "required": [
           "audience"
+        ],
+        "type": "object"
+      },
+      "PostedCoverage": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decided_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "payment_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason_kind": {
+            "type": "string"
+          },
+          "supersedes_event_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "membership_id",
+          "paid_through",
+          "reason_kind",
+          "payment_id",
+          "decided_by_user_id",
+          "decided_at"
         ],
         "type": "object"
       },
@@ -6185,6 +6441,144 @@
           }
         },
         "summary": "Edit a draft row",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payment-batches/{id}/post": {
+      "post": {
+        "description": "Either every entry becomes an immutable payment plus its explicit coverage event and the batch becomes posted, or nothing is written at all. Retrying with the same Idempotency-Key returns the original result and cannot post the money twice.",
+        "operationId": "payment-batch-post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Batch version you last read. Required: a missing header is a 428. Because every entry mutation moves it, a stale value means a row changed since you looked.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Batch version you last read. Required: a missing header is a 428. Because every entry mutation moves it, a stale value means a row changed since you looked.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required. A retry with the same key returns the original result and cannot post the money twice.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Required. A retry with the same key returns the original result and cannot post the money twice.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostBatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostResult"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Post a batch atomically",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payments": {
+      "post": {
+        "description": "A convenience contract over the same posting primitive: the server creates a one-row batch and posts it, so a single payment and a batched one are indistinguishable in the ledger afterwards.",
+        "operationId": "payment-create",
+        "parameters": [
+          {
+            "description": "Required.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Required.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePaymentBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostResult"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record and post a single payment",
         "tags": [
           "payments"
         ]
