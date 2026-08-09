@@ -253,7 +253,8 @@
     "ai_tool_eligibility": "never",
     "operation_ids": [
       "payment-batch-get",
-      "payment-batches-list"
+      "payment-batches-list",
+      "payment-get"
     ]
   },
   {
@@ -285,7 +286,9 @@
     "description": "Correct a posted payment by reversal and replacement.",
     "category": "treasury",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "payment-correct"
+    ]
   },
   {
     "code": "payment.export",
