@@ -27,6 +27,9 @@ type Querier interface {
 	// :one with RETURNING so a conflict is detectable; see scripts/check-version-conflicts.sh.
 	ClearPrimaryForPerson(ctx context.Context, personID int64) error
 	CommitImportRun(ctx context.Context, arg CommitImportRunParams) (ImportRun, error)
+	// Records which resource a claimed key produced, so a retry can return the
+	// original result instead of doing the work twice.
+	CompleteIdempotencyRecord(ctx context.Context, arg CompleteIdempotencyRecordParams) error
 	ConsumeEmailLink(ctx context.Context, id int64) error
 	CountStagedRowsByAction(ctx context.Context, importRunID int64) ([]CountStagedRowsByActionRow, error)
 	CountUnresolvedManualRows(ctx context.Context, importRunID int64) (int64, error)
@@ -85,6 +88,9 @@ type Querier interface {
 	GetNote(ctx context.Context, id int64) (Note, error)
 	GetPayment(ctx context.Context, id int64) (Payment, error)
 	GetPaymentBatch(ctx context.Context, id int64) (PaymentBatch, error)
+	GetPaymentBatchEntry(ctx context.Context, id int64) (PaymentBatchEntry, error)
+	// Totals are always calculated by the server. A client never submits one.
+	GetPaymentBatchTotals(ctx context.Context, batchID int64) (GetPaymentBatchTotalsRow, error)
 	GetPaymentCorrectionByOriginal(ctx context.Context, originalPaymentID int64) (PaymentCorrection, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByCallSign(ctx context.Context, callSign sql.NullString) (Person, error)
@@ -127,7 +133,11 @@ type Querier interface {
 	ListMembershipsByPerson(ctx context.Context, personID int64) ([]Membership, error)
 	ListNotes(ctx context.Context, arg ListNotesParams) ([]Note, error)
 	ListPaymentBatchEntries(ctx context.Context, batchID int64) ([]PaymentBatchEntry, error)
-	ListPaymentBatchesByState(ctx context.Context, state string) ([]PaymentBatch, error)
+	// Draft payment batches and their mutable entries.
+	//
+	// Nothing in this file writes a payment or a coverage event. A draft batch is
+	// deliberately inert until it is posted.
+	ListPaymentBatches(ctx context.Context, arg ListPaymentBatchesParams) ([]PaymentBatch, error)
 	ListPaymentsByBatch(ctx context.Context, batchID sql.NullInt64) ([]Payment, error)
 	ListPaymentsByMembership(ctx context.Context, membershipID int64) ([]Payment, error)
 	ListPersons(ctx context.Context, arg ListPersonsParams) ([]ListPersonsRow, error)
@@ -141,7 +151,11 @@ type Querier interface {
 	LockUser(ctx context.Context, arg LockUserParams) error
 	MarkDeceased(ctx context.Context, arg MarkDeceasedParams) (Person, error)
 	MarkPaymentBatchAbandoned(ctx context.Context, arg MarkPaymentBatchAbandonedParams) (PaymentBatch, error)
+	// Batch listing lives in batches.sql, where the state filter is optional.
 	MarkPaymentBatchPosted(ctx context.Context, arg MarkPaymentBatchPostedParams) (PaymentBatch, error)
+	// Sequence is stable and server-assigned: removing row 2 never renumbers row 3,
+	// so a printed worksheet and the grid keep agreeing.
+	NextPaymentBatchEntrySequence(ctx context.Context, batchID int64) (int64, error)
 	ReactivatePerson(ctx context.Context, arg ReactivatePersonParams) (Person, error)
 	RejectMembership(ctx context.Context, arg RejectMembershipParams) (Membership, error)
 	RevokeAllSessionsForUser(ctx context.Context, userID int64) error
@@ -159,6 +173,9 @@ type Querier interface {
 	SearchAuditEvents(ctx context.Context, arg SearchAuditEventsParams) ([]AuditEvent, error)
 	SetPrimary(ctx context.Context, id int64) error
 	SumPaymentBatchEntries(ctx context.Context, batchID int64) (SumPaymentBatchEntriesRow, error)
+	// Bumps the batch version after an entry mutation, so a browser holding a
+	// stale batch ETag cannot post a batch whose rows have since changed.
+	TouchPaymentBatch(ctx context.Context, id int64) (PaymentBatch, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	TransitionLifecycle(ctx context.Context, arg TransitionLifecycleParams) (Membership, error)
 	UpdateContactMethod(ctx context.Context, arg UpdateContactMethodParams) (ContactMethod, error)
@@ -170,6 +187,10 @@ type Querier interface {
 	UpdateHonoraryGrant(ctx context.Context, arg UpdateHonoraryGrantParams) (HonoraryGrant, error)
 	UpdateImportRunStatus(ctx context.Context, arg UpdateImportRunStatusParams) (ImportRun, error)
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error)
+	// Version-guarded, and refuses a terminal batch: a posted or abandoned batch
+	// accepts no further changes.
+	UpdatePaymentBatchDefaults(ctx context.Context, arg UpdatePaymentBatchDefaultsParams) (PaymentBatch, error)
+	UpdatePaymentBatchEntry(ctx context.Context, arg UpdatePaymentBatchEntryParams) (PaymentBatchEntry, error)
 	UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error)
 	UpdateStagedRowAction(ctx context.Context, arg UpdateStagedRowActionParams) (StagedImportRow, error)
 	UpdateUserLastLogin(ctx context.Context, id int64) error

@@ -19,8 +19,7 @@ RETURNING *;
 -- name: GetPaymentBatch :one
 SELECT * FROM payment_batches WHERE id = ?;
 
--- name: ListPaymentBatchesByState :many
-SELECT * FROM payment_batches WHERE state = ? ORDER BY opened_at DESC, id DESC;
+-- Batch listing lives in batches.sql, where the state filter is optional.
 
 -- name: MarkPaymentBatchPosted :one
 UPDATE payment_batches

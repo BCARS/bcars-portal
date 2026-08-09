@@ -251,14 +251,24 @@
     "description": "Read payment detail, references, receipts, and corrections.",
     "category": "treasury",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "payment-batch-get",
+      "payment-batches-list"
+    ]
   },
   {
     "code": "payment.batch.manage",
     "description": "Open, edit, and abandon draft payment batches.",
     "category": "treasury",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "payment-batch-abandon",
+      "payment-batch-entry-create",
+      "payment-batch-entry-delete",
+      "payment-batch-entry-update",
+      "payment-batch-open",
+      "payment-batch-update"
+    ]
   },
   {
     "code": "payment.post",
