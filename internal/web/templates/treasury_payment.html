@@ -1,0 +1,122 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Record a payment - BCARS Portal{{end}}
+
+{{define "content"}}
+<h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Record a payment</h2>
+<p style="margin: 0 0 16px; color: #555;">
+    {{.Standing.DisplayName}}{{if .Standing.CallSign}} ({{.Standing.CallSign}}){{end}}
+</p>
+
+{{if .Saved}}
+<div class="card" role="status" style="border-left: 4px solid #2e7d32;">
+    <p style="margin: 0;"><strong>Saved.</strong> {{.Consequence}}</p>
+    {{if .ReceiptCode}}<p style="margin: 4px 0 0;">Receipt {{.ReceiptCode}}</p>{{end}}
+</div>
+{{end}}
+
+{{if .Error}}
+<div class="card" role="alert" style="border-left: 4px solid #c62828;">
+    <p style="margin: 0;">{{.Error}}</p>
+</div>
+{{end}}
+
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Current standing</h3>
+    <p style="margin: 0;">
+        {{.Standing.Status}} &mdash;
+        Dues paid through: {{if .Standing.PaidThrough}}{{.Standing.PaidThrough}}{{else}}not recorded{{end}}
+    </p>
+    <p style="margin: 4px 0 0; color: #555;">Membership: {{.Standing.BaseType}}. Judged as of {{.Standing.AsOf}}.</p>
+</div>
+
+<div class="card">
+    <form action="/admin/treasury/memberships/{{.Standing.MembershipID}}/payment" method="post">
+        <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
+
+        <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 0 0 16px;">
+            <legend style="font-weight: 600;">Money received</legend>
+
+            <label for="amount">Amount</label>
+            <input type="text" id="amount" name="amount" value="{{.Amount}}"
+                   inputmode="decimal" placeholder="40.00" required>
+
+            <label for="method">Method</label>
+            <select id="method" name="method">
+                <option value="cash" {{if eq .Method "cash"}}selected{{end}}>Cash</option>
+                <option value="check" {{if eq .Method "check"}}selected{{end}}>Check</option>
+                <option value="other" {{if eq .Method "other"}}selected{{end}}>Other</option>
+            </select>
+
+            <label for="reference">Check number or reference</label>
+            <input type="text" id="reference" name="reference" value="{{.Reference}}">
+
+            <label for="received_on">Date received</label>
+            <input type="date" id="received_on" name="received_on" value="{{.ReceivedOn}}" required>
+
+            <label for="received_by_officer">Received by</label>
+            <input type="text" id="received_by_officer" name="received_by_officer" value="{{.Officer}}">
+        </fieldset>
+
+        <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 0 0 16px;">
+            <legend style="font-weight: 600;">Dues paid through</legend>
+            <p style="margin: 0 0 8px; color: #555;">
+                The amount received and the date dues are paid through are recorded separately.
+                Changing one does not change the other.
+            </p>
+
+            <label for="paid_through">Dues paid through</label>
+            <input type="date" id="paid_through" name="paid_through" value="{{.PaidThrough}}" required>
+
+            {{if .Suggestions}}
+            <p style="margin: 8px 0 4px;">Suggestions (optional &mdash; type any date instead):</p>
+            <ul style="margin: 0;">
+                {{range .Suggestions}}
+                <li>
+                    {{.Label}} &mdash; {{.PaidThrough}}
+                    {{if .RateKnown}}(the rate suggests ${{.Amount}}){{else}}(no rate on file){{end}}
+                    <br><span style="color: #555;">{{.Explanation}}</span>
+                </li>
+                {{end}}
+            </ul>
+            {{end}}
+        </fieldset>
+
+        <label for="note">Treasurer note (visible to the treasurer only)</label>
+        <textarea id="note" name="note" rows="2">{{.Note}}</textarea>
+
+        <p style="margin: 12px 0;">
+            Saving records the money received and sets Dues paid through to the date above.
+        </p>
+
+        <button type="submit" class="btn btn-primary">Save payment</button>
+        <a href="/admin/treasury/standing" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+
+{{if .CanSeeMoney}}
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Previous payments</h3>
+    {{if .History}}
+    <table>
+        <thead>
+            <tr><th>Received</th><th>Amount</th><th>Method</th><th>Reference</th><th>Receipt</th></tr>
+        </thead>
+        <tbody>
+            {{range .History}}
+            <tr>
+                <td>{{.ReceivedOn}}</td>
+                <td>${{.Amount}}</td>
+                <td>{{.Method}}</td>
+                <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
+                <td>{{.ReceiptCode}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>No payments recorded yet.</p>
+    {{end}}
+</div>
+{{end}}
+{{end}}

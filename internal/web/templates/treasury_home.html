@@ -1,0 +1,36 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Treasury - BCARS Portal{{end}}
+
+{{define "content"}}
+<h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Treasury</h2>
+<p style="margin: 0 0 16px; color: #555;">Dues standing as of {{.AsOf}}.</p>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr><th>Dues standing</th><th>Members</th><th></th></tr>
+        </thead>
+        <tbody>
+            {{range .Counts}}
+            <tr>
+                <th scope="row" style="font-weight: 500;">{{.Label}}</th>
+                <td>{{.Count}}</td>
+                <td><a href="/admin/treasury/standing?status={{.Status}}">View list</a></td>
+            </tr>
+            {{end}}
+            <tr>
+                <th scope="row" style="font-weight: 600;">All members</th>
+                <td>{{.Total}}</td>
+                <td><a href="/admin/treasury/standing">View list</a></td>
+            </tr>
+        </tbody>
+    </table>
+
+    {{if .Overflow}}
+    <p role="status" style="margin-top: 12px; color: #8a4b00;">
+        These counts stop at the first {{.Total}} memberships. Use the lists below for the full picture.
+    </p>
+    {{end}}
+</div>
+{{end}}

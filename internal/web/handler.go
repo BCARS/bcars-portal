@@ -15,8 +15,11 @@ import (
 	"github.com/bcars/bcars-portal/internal/authn"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
+	"github.com/bcars/bcars-portal/internal/domain/batches"
+	"github.com/bcars/bcars-portal/internal/domain/dues"
 	"github.com/bcars/bcars-portal/internal/domain/importd"
 	"github.com/bcars/bcars-portal/internal/domain/members"
+	"github.com/bcars/bcars-portal/internal/domain/treasury"
 	"github.com/bcars/bcars-portal/internal/mail"
 )
 
@@ -25,6 +28,9 @@ type Handler struct {
 	render     *Renderer
 	members    *members.Service
 	imports    *importd.Service
+	dues       *dues.Service
+	batches    *batches.Service
+	treasury   *treasury.Service
 	queries    *sqlcgen.Queries
 	db         *sql.DB
 	log        *slog.Logger
@@ -116,6 +122,9 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 	return &Handler{
 		render:     r,
 		members:    members.NewService(database),
+		dues:       dues.NewService(database),
+		batches:    batches.NewService(database),
+		treasury:   treasury.NewService(database),
 		imports:    importd.NewService(database),
 		queries:    sqlcgen.New(database),
 		db:         database,
@@ -175,6 +184,11 @@ type AdminRoute struct {
 func (h *Handler) AdminRoutes() []AdminRoute {
 	return []AdminRoute{
 		{Pattern: "GET /admin/", Capability: "session.self.read", ResourceKind: "dashboard", handler: h.dashboard},
+
+		{Pattern: "GET /admin/treasury", Capability: "dues.read", ResourceKind: "dues", handler: h.treasuryHome},
+		{Pattern: "GET /admin/treasury/standing", Capability: "dues.read", ResourceKind: "dues", handler: h.treasuryStanding},
+		{Pattern: "GET /admin/treasury/memberships/{id}/payment", Capability: "payment.post", ResourceKind: "payment", handler: h.treasuryPaymentForm},
+		{Pattern: "POST /admin/treasury/memberships/{id}/payment", Capability: "payment.post", AuditAction: "payment.create", ResourceKind: "payment", handler: h.treasuryPaymentSubmit},
 
 		{Pattern: "GET /admin/members", Capability: "member.read", ResourceKind: "person", handler: h.memberList},
 		{Pattern: "GET /admin/members/new", Capability: "member.create", ResourceKind: "person", handler: h.memberNew},

@@ -1,0 +1,64 @@
+{{template "layout.html" .}}
+
+{{define "title"}}{{.Label}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">{{.Label}}</h2>
+<p style="margin: 0 0 16px; color: #555;">Dues standing as of {{.AsOf}}.</p>
+
+<nav aria-label="Dues standing" style="margin-bottom: 16px;">
+    <a href="/admin/treasury">Summary</a>
+    {{range .StatusNav}} &middot; <a href="/admin/treasury/standing?status={{.Status}}">{{.Label}}</a>{{end}}
+    &middot; <a href="/admin/treasury/standing">All members</a>
+</nav>
+
+<div class="card">
+    <form action="/admin/treasury/standing" method="get">
+        <input type="hidden" name="status" value="{{.Status}}">
+        <div class="search-bar">
+            <input type="text" name="q" value="{{.Query}}" placeholder="Search by name or call sign..."
+                   aria-label="Search members">
+            <button type="submit" class="btn btn-secondary">Search</button>
+        </div>
+    </form>
+
+    {{if .Rows}}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Call sign</th>
+                <th>Membership</th>
+                <th>Dues standing</th>
+                <th>Dues paid through</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Rows}}
+            <tr>
+                <td>{{.DisplayName}}</td>
+                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                <td>{{.BaseType}}</td>
+                <td>{{.Status}}{{if .Honorary}} ({{.Honorary.Kind}}){{end}}</td>
+                <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
+                <td>
+                    {{if $.CanPost}}
+                    <a href="/admin/treasury/memberships/{{.MembershipID}}/payment">Record payment</a>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>No members match.</p>
+    {{end}}
+
+    <nav aria-label="Pagination" style="margin-top: 12px;">
+        {{if .HasPrev}}<a href="/admin/treasury/standing?status={{.Status}}&q={{.Query}}&page={{.PrevPage}}">Previous</a>{{end}}
+        <span style="margin: 0 8px;">Page {{.Page}}</span>
+        {{if .HasNext}}<a href="/admin/treasury/standing?status={{.Status}}&q={{.Query}}&page={{.NextPage}}">Next</a>{{end}}
+    </nav>
+</div>
+{{end}}
