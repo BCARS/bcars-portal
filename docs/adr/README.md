@@ -18,3 +18,4 @@ Rationale for a decision belongs here; day-to-day design detail belongs in
 | 0007 | Accepted | Coverage/payment split (Phase 2 shape) |
 | 0008 | Accepted | Import staging model |
 | 0009 | Accepted | Version stamping via ldflags + runtime/debug |
+| 0010 | Accepted | Member record access is an explicit grant |

@@ -136,8 +136,16 @@ func TestRoleCapabilityEdges(t *testing.T) {
 	assert.Contains(t, edges["treasurer"], "notes.write.treasurer")
 	assert.Contains(t, edges["treasurer"], "notes.read.treasurer")
 
-	// member: only session.self.read
-	assert.Equal(t, []string{"session.self.read"}, edges["member"])
+	// member: own-profile, own-request, and directory entry only. The broad
+	// administrative reads must never appear here.
+	assert.ElementsMatch(t, []string{
+		"session.self.read", "profile.self.read",
+		"change_request.submit.self", "directory.read",
+	}, edges["member"])
+	for _, forbidden := range []string{"member.read", "dues.read", "payment.read", "audit.read"} {
+		assert.NotContains(t, edges["member"], forbidden,
+			"the member role must not hold the administrative capability %s", forbidden)
+	}
 
 	// acs_coordinator
 	assert.ElementsMatch(t, []string{"session.self.read", "member.read"}, edges["acs_coordinator"])

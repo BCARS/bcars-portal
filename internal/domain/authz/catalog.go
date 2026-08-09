@@ -12,6 +12,10 @@ const (
 	CategoryTreasury   = "treasury"
 	CategoryAudit      = "audit"
 	CategorySystem     = "system"
+	// CategoryMember holds the member-facing self-service capabilities. They
+	// are deliberately separate from CategoryMembership, which is the
+	// administrative officer view of the same records.
+	CategoryMember = "member"
 )
 
 // AI tool eligibility values for capability catalog entries.
@@ -91,6 +95,30 @@ var All = [...]Capability{
 		AIToolEligibility: AIEligibilityNever},
 	{Code: "import.commit", Category: CategoryMembership,
 		Description:       "Commit a reconciled import run to canonical data.",
+		AIToolEligibility: AIEligibilityNever},
+	{Code: "change_request.manage", Category: CategoryMembership,
+		Description:       "Capture, list, and triage member change requests from any channel.",
+		AIToolEligibility: AIEligibilityNever},
+	{Code: "change_request.review", Category: CategoryMembership,
+		Description:       "Decide and apply individual change-request items.",
+		AIToolEligibility: AIEligibilityNever},
+	{Code: "member_access.manage", Category: CategoryMembership,
+		Description:       "Grant or revoke a member user access to person records.",
+		AIToolEligibility: AIEligibilityNever},
+	{Code: "relationship.manage", Category: CategoryMembership,
+		Description:       "Maintain informational person relationships.",
+		AIToolEligibility: AIEligibilityNever},
+
+	// Member self-service. These never substitute for member.read or
+	// dues.read; they read only records the caller was explicitly granted.
+	{Code: "profile.self.read", Category: CategoryMember,
+		Description:       "Read own explicitly granted safe profile and dues standing.",
+		AIToolEligibility: AIEligibilityNever},
+	{Code: "change_request.submit.self", Category: CategoryMember,
+		Description:       "Submit, track, and withdraw own change requests.",
+		AIToolEligibility: AIEligibilityNever},
+	{Code: "directory.read", Category: CategoryMember,
+		Description:       "Attempt the member directory; eligibility is checked separately.",
 		AIToolEligibility: AIEligibilityNever},
 
 	// Treasury

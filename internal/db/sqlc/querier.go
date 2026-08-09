@@ -13,6 +13,7 @@ type Querier interface {
 	ActiveRolesForUser(ctx context.Context, userID int64) ([]ActiveRolesForUserRow, error)
 	ApproveMembership(ctx context.Context, arg ApproveMembershipParams) (Membership, error)
 	ArchiveContactMethod(ctx context.Context, arg ArchiveContactMethodParams) (ContactMethod, error)
+	ArchivePersonRelationship(ctx context.Context, arg ArchivePersonRelationshipParams) (PersonRelationship, error)
 	// ClearPrimaryForPerson and SetPrimary are DELIBERATELY unconditional: they
 	// are the two halves of "make this contact method the primary one", a
 	// set-valued operation with no single row whose version the caller could hold.
@@ -31,11 +32,29 @@ type Querier interface {
 	// original result instead of doing the work twice.
 	CompleteIdempotencyRecord(ctx context.Context, arg CompleteIdempotencyRecordParams) error
 	ConsumeEmailLink(ctx context.Context, id int64) error
+	//
+	// The single-record authorization probe: does this user hold access to this
+	// person right now. Returns 0 or 1 because of ux_member_access_active.
+	CountActiveAccessGrant(ctx context.Context, arg CountActiveAccessGrantParams) (int64, error)
+	//
+	// A request resolves only when this reaches zero.
+	CountPendingChangeRequestItems(ctx context.Context, requestID int64) (int64, error)
 	CountStagedRowsByAction(ctx context.Context, importRunID int64) ([]CountStagedRowsByActionRow, error)
 	CountUnresolvedManualRows(ctx context.Context, importRunID int64) (int64, error)
 	CreateAcsAresSharingEvent(ctx context.Context, arg CreateAcsAresSharingEventParams) (AcsAresSharingEvent, error)
 	CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) (AuditEvent, error)
 	CreateCapabilityGrant(ctx context.Context, arg CreateCapabilityGrantParams) (UserCapabilityGrant, error)
+	// Member change requests and their typed items.
+	//
+	// No query in this file writes persons, contact_methods, memberships, or
+	// preference events. A request records what someone PROPOSED; only the review
+	// and apply path (bcars-portal-4ux.3) calls the domain services that change
+	// canonical data, and only for an approved item.
+	//
+	// Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
+	// offset, so a multi-byte character above a query corrupts the SQL it parses.
+	CreateChangeRequest(ctx context.Context, arg CreateChangeRequestParams) (MemberChangeRequest, error)
+	CreateChangeRequestItem(ctx context.Context, arg CreateChangeRequestItemParams) (MemberChangeRequestItem, error)
 	CreateContactMethod(ctx context.Context, arg CreateContactMethodParams) (ContactMethod, error)
 	CreateCoverageEvent(ctx context.Context, arg CreateCoverageEventParams) (CoverageEvent, error)
 	CreateEmailLink(ctx context.Context, arg CreateEmailLinkParams) (EmailLink, error)
@@ -56,6 +75,16 @@ type Querier interface {
 	CreatePaymentBatchEntry(ctx context.Context, arg CreatePaymentBatchEntryParams) (PaymentBatchEntry, error)
 	CreatePaymentCorrection(ctx context.Context, arg CreatePaymentCorrectionParams) (PaymentCorrection, error)
 	CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error)
+	// Informational person relationships.
+	//
+	// These queries are read and write only against person_relationships. None of
+	// them touches member_access_grants, sessions, users, or role_capabilities,
+	// because a relationship confers no authority. Adding a spouse does not let
+	// either person see the other's record; an officer grants that separately.
+	//
+	// Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
+	// offset, so a multi-byte character above a query corrupts the SQL it parses.
+	CreatePersonRelationship(ctx context.Context, arg CreatePersonRelationshipParams) (PersonRelationship, error)
 	CreateReconciliationDecision(ctx context.Context, arg CreateReconciliationDecisionParams) (ReconciliationDecision, error)
 	CreateRoleGrant(ctx context.Context, arg CreateRoleGrantParams) (UserRoleGrant, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
@@ -69,6 +98,11 @@ type Querier interface {
 	// offset, so a multi-byte character above a query corrupts the SQL it parses.
 	CreateWorksheetRun(ctx context.Context, arg CreateWorksheetRunParams) (DuesWorksheetRun, error)
 	DeactivatePerson(ctx context.Context, arg DeactivatePersonParams) (Person, error)
+	//
+	// Records a decision without applying anything. Guarded on the item version
+	// AND on still being pending, so a second reviewer deciding the same item gets
+	// no rows rather than overwriting the first decision.
+	DecideChangeRequestItem(ctx context.Context, arg DecideChangeRequestItemParams) (MemberChangeRequestItem, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeletePaymentBatchEntry(ctx context.Context, arg DeletePaymentBatchEntryParams) (sql.Result, error)
 	EffectiveCapabilities(ctx context.Context, arg EffectiveCapabilitiesParams) ([]string, error)
@@ -90,6 +124,8 @@ type Querier interface {
 	// a correction the two legitimately differ: the entries record what was typed,
 	// the ledger records what the club actually holds.
 	GetBatchLedgerTotals(ctx context.Context, batchID sql.NullInt64) (GetBatchLedgerTotalsRow, error)
+	GetChangeRequest(ctx context.Context, id int64) (MemberChangeRequest, error)
+	GetChangeRequestItem(ctx context.Context, id int64) (MemberChangeRequestItem, error)
 	GetContactMethod(ctx context.Context, id int64) (ContactMethod, error)
 	GetCoverageEvent(ctx context.Context, id int64) (CoverageEvent, error)
 	// The coverage decision a given payment granted, if it granted one.
@@ -107,6 +143,7 @@ type Querier interface {
 	GetImportRunByIdempotencyKey(ctx context.Context, idempotencyKey string) (ImportRun, error)
 	GetLatestAcsAresSharing(ctx context.Context, personID int64) (AcsAresSharingEvent, error)
 	GetLatestVisibility(ctx context.Context, contactMethodID int64) (ContactMethodVisibilityEvent, error)
+	GetMemberAccessGrant(ctx context.Context, id int64) (MemberAccessGrant, error)
 	GetMembership(ctx context.Context, id int64) (Membership, error)
 	GetNote(ctx context.Context, id int64) (Note, error)
 	GetPayment(ctx context.Context, id int64) (Payment, error)
@@ -118,6 +155,7 @@ type Querier interface {
 	GetPaymentWithMember(ctx context.Context, id int64) (GetPaymentWithMemberRow, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByCallSign(ctx context.Context, callSign sql.NullString) (Person, error)
+	GetPersonRelationship(ctx context.Context, id int64) (PersonRelationship, error)
 	//
 	// One active contact per kind for the worksheet snapshot: the one marked
 	// primary, or failing that the lowest active id.
@@ -133,12 +171,38 @@ type Querier interface {
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetWorksheetRun(ctx context.Context, id int64) (DuesWorksheetRun, error)
+	// Member record access grants.
+	//
+	// This file is the ONLY way authorization learns which person records a user
+	// may see. Nothing here joins users.person_id, contact_methods.value_norm,
+	// person_relationships, or role_capabilities: an access decision comes from an
+	// explicit unrevoked grant or it does not exist.
+	//
+	// Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
+	// offset, so a multi-byte character above a query corrupts the SQL it parses.
+	GrantMemberAccess(ctx context.Context, arg GrantMemberAccessParams) (MemberAccessGrant, error)
 	IncrementFailedLogin(ctx context.Context, id int64) error
 	InsertDuesRate(ctx context.Context, arg InsertDuesRateParams) (DuesRate, error)
+	//
+	// Officer view. Includes revoked rows so the history of who could see a record
+	// is readable, not just the current state.
+	ListAccessGrantsForPerson(ctx context.Context, personID int64) ([]ListAccessGrantsForPersonRow, error)
 	ListAcsAresSharingHistory(ctx context.Context, personID int64) ([]AcsAresSharingEvent, error)
+	//
+	// The authorization read. Loaded per request, so revoking a grant takes effect
+	// inside a session that is already open.
+	ListActiveAccessGrantsForUser(ctx context.Context, userID int64) ([]ListActiveAccessGrantsForUserRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListAuditEventsByResource(ctx context.Context, arg ListAuditEventsByResourceParams) ([]AuditEvent, error)
 	ListCapabilities(ctx context.Context) ([]Capability, error)
+	ListChangeRequestItems(ctx context.Context, requestID int64) ([]MemberChangeRequestItem, error)
+	//
+	// The officer queue. Pass a NULL status or source to ignore that filter.
+	ListChangeRequests(ctx context.Context, arg ListChangeRequestsParams) ([]MemberChangeRequest, error)
+	//
+	// A member's own request history. Scoped by requester, never by target, so it
+	// cannot become a read of someone else's record.
+	ListChangeRequestsForRequester(ctx context.Context, arg ListChangeRequestsForRequesterParams) ([]MemberChangeRequest, error)
 	ListContactMethods(ctx context.Context, personID int64) ([]ContactMethod, error)
 	// The corrections that touched a batch, for its plain-language activity log.
 	ListCorrectionsByBatch(ctx context.Context, batchID sql.NullInt64) ([]ListCorrectionsByBatchRow, error)
@@ -201,10 +265,17 @@ type Querier interface {
 	ListPaymentsByMembership(ctx context.Context, membershipID int64) ([]Payment, error)
 	ListPersons(ctx context.Context, arg ListPersonsParams) ([]ListPersonsRow, error)
 	ListPersonsByName(ctx context.Context, arg ListPersonsByNameParams) ([]ListPersonsByNameRow, error)
+	//
+	// Both directions, active only. The related person's name comes along so a
+	// caller does not need a second query; nothing else about them is exposed.
+	ListRelationshipsForPerson(ctx context.Context, personID int64) ([]ListRelationshipsForPersonRow, error)
 	ListRoleCapabilities(ctx context.Context) ([]RoleCapability, error)
 	ListRoles(ctx context.Context) ([]Role, error)
 	ListStagedRows(ctx context.Context, arg ListStagedRowsParams) ([]StagedImportRow, error)
 	ListStagedRowsRequiringManual(ctx context.Context, arg ListStagedRowsRequiringManualParams) ([]StagedImportRow, error)
+	//
+	// Blind public intake awaiting an officer link.
+	ListUntargetedChangeRequests(ctx context.Context, arg ListUntargetedChangeRequestsParams) ([]MemberChangeRequest, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
 	ListVisibilityHistory(ctx context.Context, contactMethodID int64) ([]ContactMethodVisibilityEvent, error)
 	// The memberships on an earlier sheet with no payment posted since it ran.
@@ -217,6 +288,11 @@ type Querier interface {
 	ListWorksheetRows(ctx context.Context, arg ListWorksheetRowsParams) ([]ListWorksheetRowsRow, error)
 	ListWorksheetRuns(ctx context.Context, arg ListWorksheetRunsParams) ([]DuesWorksheetRun, error)
 	LockUser(ctx context.Context, arg LockUserParams) error
+	//
+	// Stamps the resource an approved item produced. `applied_at IS NULL` in the
+	// WHERE clause is what makes apply exactly-once: a replay updates no row, and
+	// the caller returns the already-recorded outcome instead of applying twice.
+	MarkChangeRequestItemApplied(ctx context.Context, arg MarkChangeRequestItemAppliedParams) (MemberChangeRequestItem, error)
 	MarkDeceased(ctx context.Context, arg MarkDeceasedParams) (Person, error)
 	MarkPaymentBatchAbandoned(ctx context.Context, arg MarkPaymentBatchAbandonedParams) (PaymentBatch, error)
 	// Batch listing lives in batches.sql, where the state filter is optional.
@@ -230,6 +306,10 @@ type Querier interface {
 	RevokeCapabilityGrant(ctx context.Context, arg RevokeCapabilityGrantParams) error
 	RevokeFCCVerification(ctx context.Context, arg RevokeFCCVerificationParams) error
 	RevokeHonoraryGrant(ctx context.Context, arg RevokeHonoraryGrantParams) (HonoraryGrant, error)
+	//
+	// Version-guarded, so a concurrent revoke cannot silently no-op. A caller that
+	// gets sql.ErrNoRows maps it to db.ErrStale after confirming the row exists.
+	RevokeMemberAccess(ctx context.Context, arg RevokeMemberAccessParams) (MemberAccessGrant, error)
 	RevokeRoleGrant(ctx context.Context, arg RevokeRoleGrantParams) error
 	RevokeSession(ctx context.Context, id string) error
 	RoleExists(ctx context.Context, code string) (bool, error)
@@ -239,6 +319,11 @@ type Querier interface {
 	// caller's value needs no wildcard escaping); the rest are exact matches.
 	// The tiebreak on id keeps the order total, which offset paging requires.
 	SearchAuditEvents(ctx context.Context, arg SearchAuditEventsParams) ([]AuditEvent, error)
+	SetChangeRequestStatus(ctx context.Context, arg SetChangeRequestStatusParams) (MemberChangeRequest, error)
+	//
+	// Officer triage links a supplied hint to a canonical person. The supplied_*
+	// snapshot is untouched: what the submitter said stays on the record.
+	SetChangeRequestTarget(ctx context.Context, arg SetChangeRequestTargetParams) (MemberChangeRequest, error)
 	SetPaymentBatchWorksheetRun(ctx context.Context, arg SetPaymentBatchWorksheetRunParams) error
 	SetPrimary(ctx context.Context, id int64) error
 	SetWorksheetRunRowCount(ctx context.Context, arg SetWorksheetRunRowCountParams) error
@@ -262,6 +347,7 @@ type Querier interface {
 	UpdatePaymentBatchDefaults(ctx context.Context, arg UpdatePaymentBatchDefaultsParams) (PaymentBatch, error)
 	UpdatePaymentBatchEntry(ctx context.Context, arg UpdatePaymentBatchEntryParams) (PaymentBatchEntry, error)
 	UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error)
+	UpdatePersonRelationship(ctx context.Context, arg UpdatePersonRelationshipParams) (PersonRelationship, error)
 	UpdateStagedRowAction(ctx context.Context, arg UpdateStagedRowActionParams) (StagedImportRow, error)
 	UpdateUserLastLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
