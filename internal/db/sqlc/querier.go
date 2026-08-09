@@ -88,7 +88,7 @@ type Querier interface {
 	RevokeAllSessionsForUser(ctx context.Context, userID int64) error
 	RevokeCapabilityGrant(ctx context.Context, arg RevokeCapabilityGrantParams) error
 	RevokeFCCVerification(ctx context.Context, arg RevokeFCCVerificationParams) error
-	RevokeHonoraryGrant(ctx context.Context, arg RevokeHonoraryGrantParams) error
+	RevokeHonoraryGrant(ctx context.Context, arg RevokeHonoraryGrantParams) (HonoraryGrant, error)
 	RevokeRoleGrant(ctx context.Context, arg RevokeRoleGrantParams) error
 	RevokeSession(ctx context.Context, id string) error
 	RoleExists(ctx context.Context, code string) (bool, error)

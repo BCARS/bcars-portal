@@ -488,19 +488,31 @@ func (s *Service) ExpireHonoraryGrant(ctx context.Context, p *authz.Principal, g
 	return nil
 }
 
-// RevokeHonoraryGrant revokes an active honorary grant.
+// RevokeHonoraryGrant revokes an active honorary grant under optimistic
+// concurrency: a stale version leaves the grant untouched and reports a
+// conflict rather than silently doing nothing.
 func (s *Service) RevokeHonoraryGrant(ctx context.Context, p *authz.Principal, grantID, version int64, reason string) error {
 	if err := authz.Authorize(ctx, p, "honorary.grant", nil); err != nil {
 		return err
 	}
 
-	err := s.Q.RevokeHonoraryGrant(ctx, sqlcgen.RevokeHonoraryGrantParams{
+	// Read first so a missing grant is not misreported as a version conflict.
+	if _, err := s.Q.GetHonoraryGrant(ctx, grantID); err != nil {
+		if err == sql.ErrNoRows {
+			return err
+		}
+		return fmt.Errorf("members: revoke honorary: %w", err)
+	}
+
+	if _, err := s.Q.RevokeHonoraryGrant(ctx, sqlcgen.RevokeHonoraryGrantParams{
 		RevokedBy:    sql.NullInt64{Int64: p.UserID, Valid: true},
 		RevokeReason: sqlNullString(reason),
 		ID:           grantID,
 		Version:      version,
-	})
-	if err != nil {
+	}); err != nil {
+		if err == sql.ErrNoRows {
+			return db.ErrStale
+		}
 		return fmt.Errorf("members: revoke honorary: %w", err)
 	}
 

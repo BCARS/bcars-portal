@@ -387,6 +387,46 @@ func TestExpireHonoraryGrantNotFound(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 
+func TestRevokeHonoraryGrant(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+	g := newHonoraryGrant(t, svc, p)
+
+	require.NoError(t, svc.RevokeHonoraryGrant(ctx, p, g.ID, g.Version, "Revoked by board"))
+
+	got, err := svc.Q.GetHonoraryGrant(ctx, g.ID)
+	require.NoError(t, err)
+	assert.True(t, got.RevokedAt.Valid)
+	assert.Equal(t, "Revoked by board", got.RevokeReason.String)
+	assert.Equal(t, p.UserID, got.RevokedBy.Int64)
+	assert.Equal(t, g.Version+1, got.Version)
+}
+
+func TestRevokeHonoraryGrantVersionConflict(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+	g := newHonoraryGrant(t, svc, p)
+
+	err := svc.RevokeHonoraryGrant(ctx, p, g.ID, g.Version+1, "Stale revoke")
+	require.ErrorIs(t, err, db.ErrStale)
+
+	// A rejected revoke must leave the grant exactly as it was.
+	got, err := svc.Q.GetHonoraryGrant(ctx, g.ID)
+	require.NoError(t, err)
+	assert.False(t, got.RevokedAt.Valid, "stale revoke must not mark the grant revoked")
+	assert.False(t, got.RevokeReason.Valid)
+	assert.False(t, got.RevokedBy.Valid)
+	assert.Equal(t, g.Version, got.Version)
+	assert.Equal(t, g.UpdatedAt, got.UpdatedAt)
+}
+
+func TestRevokeHonoraryGrantNotFound(t *testing.T) {
+	svc, p := setupTest(t)
+
+	err := svc.RevokeHonoraryGrant(context.Background(), p, 999, 1, "No such grant")
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
 // --- Contact Methods ---
 
 func TestContactMethods(t *testing.T) {
