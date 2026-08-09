@@ -69,8 +69,22 @@ type Querier interface {
 	ExpireHonoraryGrant(ctx context.Context, arg ExpireHonoraryGrantParams) (HonoraryGrant, error)
 	FindContactMethodByNorm(ctx context.Context, arg FindContactMethodByNormParams) ([]ContactMethod, error)
 	FindExternalID(ctx context.Context, arg FindExternalIDParams) (ExternalID, error)
+	// Posted-payment corrections.
+	//
+	// Nothing here updates or deletes a payment. A correction appends a signed
+	// reversal and a positive replacement and links the three together, so the
+	// original stays exactly as it was recorded.
+	// Walking a chain forward uses GetPaymentCorrectionByOriginal from
+	// treasury.sql: the correction that superseded a payment is the one whose
+	// original_payment_id is that payment.
+	// Net totals over the posted ledger rather than the frozen draft entries. After
+	// a correction the two legitimately differ: the entries record what was typed,
+	// the ledger records what the club actually holds.
+	GetBatchLedgerTotals(ctx context.Context, batchID sql.NullInt64) (GetBatchLedgerTotalsRow, error)
 	GetContactMethod(ctx context.Context, id int64) (ContactMethod, error)
 	GetCoverageEvent(ctx context.Context, id int64) (CoverageEvent, error)
+	// The coverage decision a given payment granted, if it granted one.
+	GetCoverageEventByPayment(ctx context.Context, paymentID sql.NullInt64) (CoverageEvent, error)
 	// Phase 2 ledger primitives. Domain services compose these; no query here
 	// derives a paid-through date from an amount.
 	GetDuesRate(ctx context.Context, year int64) (DuesRate, error)
