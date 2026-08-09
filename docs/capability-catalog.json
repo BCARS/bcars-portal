@@ -208,6 +208,76 @@
     "operation_ids": null
   },
   {
+    "code": "dues.read",
+    "description": "Read safe dues standing, rates, and suggestions.",
+    "category": "treasury",
+    "ai_tool_eligibility": "read-only",
+    "operation_ids": null
+  },
+  {
+    "code": "dues.rate.manage",
+    "description": "Create or revise the dues rate for a year.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "coverage.read",
+    "description": "Read the append-only paid-through coverage history.",
+    "category": "treasury",
+    "ai_tool_eligibility": "read-only",
+    "operation_ids": null
+  },
+  {
+    "code": "coverage.adjust",
+    "description": "Record an independent paid-through adjustment.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "payment.read",
+    "description": "Read payment detail, references, receipts, and corrections.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "payment.batch.manage",
+    "description": "Open, edit, and abandon draft payment batches.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "payment.post",
+    "description": "Post a batch or a single payment to the ledger.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "payment.correct",
+    "description": "Correct a posted payment by reversal and replacement.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "payment.export",
+    "description": "Export treasury records to CSV.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "dues.worksheet.manage",
+    "description": "Generate and read renewal worksheet runs.",
+    "category": "treasury",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
     "code": "audit.read",
     "description": "Search and read audit events.",
     "category": "audit",

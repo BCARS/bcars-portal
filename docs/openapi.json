@@ -1355,10 +1355,6 @@
             "format": "date",
             "type": "string"
           },
-          "legacy_current_until": {
-            "format": "date",
-            "type": "string"
-          },
           "lifecycle": {
             "enum": [
               "pending",
