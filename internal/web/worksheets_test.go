@@ -139,6 +139,16 @@ func TestFollowUpSheetMarksRowsPaidSince(t *testing.T) {
 		"filter_kind": {"owes"}, "sort_order": {"last_name"},
 	})
 
+	// Backdate the run so the payment is unambiguously later. "Paid since this
+	// sheet" compares entered_at > generated_at at millisecond resolution, and a
+	// test that generates a sheet and pays in the same millisecond ties. In
+	// practice a sheet is printed and payments arrive later, and a tie would
+	// only leave one extra row on a follow-up sheet.
+	_, err := e.h.db.Exec(`
+		UPDATE dues_worksheet_runs SET generated_at = '2026-01-01T00:00:00.000Z' WHERE id = ?`,
+		first)
+	require.NoError(t, err)
+
 	// One member pays after the sheet was printed.
 	require.Equal(t, http.StatusOK, e.postForm(t,
 		"/admin/treasury/memberships/"+itoa(paid)+"/payment", url.Values{
