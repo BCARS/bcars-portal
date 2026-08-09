@@ -21,7 +21,7 @@ GOLANGCI     := $(BIN_DIR)/golangci-lint
 STATICCHECK  := $(BIN_DIR)/staticcheck
 SQLC         := $(BIN_DIR)/sqlc
 
-.PHONY: all build test smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks migration-updown
+.PHONY: all build test test-demoseed smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks migration-updown
 
 all: build
 
@@ -30,8 +30,13 @@ build:
 	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/portal ./cmd/portal
 	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/portalctl ./cmd/portalctl
 
-test:
+test: test-demoseed
 	$(GO) test -race -count=1 $(PKGS)
+
+# seed-demo lives behind the `demoseed` build tag so it is absent from shipped
+# binaries; its tests only compile with the tag, so they need their own run.
+test-demoseed:
+	$(GO) test -race -count=1 -tags demoseed ./cmd/portalctl/
 
 # Production-assembly smoke test: builds both binaries, migrates a temporary
 # database, runs portalctl bootstrap-admin, starts the server, and drives the

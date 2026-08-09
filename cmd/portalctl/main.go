@@ -35,11 +35,6 @@ func main() {
 			fmt.Fprintf(os.Stderr, "portalctl bootstrap-admin: %v\n", err)
 			os.Exit(1)
 		}
-	case "seed-demo":
-		if err := runSeedDemo(os.Args[2:]); err != nil {
-			fmt.Fprintf(os.Stderr, "portalctl seed-demo: %v\n", err)
-			os.Exit(1)
-		}
 	case "backup":
 		if err := runBackup(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "portalctl backup: %v\n", err)
@@ -51,11 +46,35 @@ func main() {
 			os.Exit(1)
 		}
 	default:
+		// Development-only subcommands register themselves in demoCommands
+		// from a file guarded by a build tag. In a default (production) build
+		// the map is empty and the command simply does not exist.
+		if run, ok := demoCommands[os.Args[1]]; ok {
+			if err := run(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "portalctl %s: %v\n", os.Args[1], err)
+				os.Exit(1)
+			}
+			break
+		}
 		fmt.Fprintf(os.Stderr, "portalctl: unknown command %q\n", os.Args[1])
 		usage(os.Stderr)
 		os.Exit(2)
 	}
 }
+
+// demoCommands holds subcommands that exist only in development builds. It is
+// populated by init() in files carrying the `demoseed` build tag; a default
+// build does not compile those files at all, so neither the dispatch entry nor
+// the code behind it is present in the shipped binary.
+var demoCommands = map[string]func([]string) error{}
+
+// demoCommandUsage and demoEnvUsage are the corresponding help-text lines,
+// registered by the same tagged files so `help` never advertises a command the
+// binary cannot run.
+var (
+	demoCommandUsage []string
+	demoEnvUsage     []string
+)
 
 func runBootstrapAdmin(args []string) error {
 	fs := flag.NewFlagSet("bootstrap-admin", flag.ExitOnError)
@@ -158,113 +177,36 @@ func bootstrapAdmin(d *sql.DB, email string, force bool, baseURL string) error {
 	return nil
 }
 
-func runSeedDemo(args []string) error {
-	fs := flag.NewFlagSet("seed-demo", flag.ExitOnError)
-	dbPath := fs.String("db", "", "Path to SQLite database (required)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	if *dbPath == "" {
-		fs.Usage()
-		return fmt.Errorf("--db is required")
-	}
-
-	d, err := db.Open(*dbPath)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	defer d.Close()
-
-	if err := db.Migrate(d); err != nil {
-		return fmt.Errorf("migrate: %w", err)
-	}
-
-	return seedDemo(d)
-}
-
-type demoUser struct {
-	Email    string
-	Password string
-	Role     string
-}
-
-func seedDemo(d *sql.DB) error {
-	// The server hashes with the configured pepper; seeding without it would
-	// produce accounts whose passwords can never verify.
-	pepper := []byte(os.Getenv(authn.PepperEnvVar))
-	if err := authn.BindPepper(d, pepper); err != nil {
-		return fmt.Errorf("seed-demo: %w", err)
-	}
-
-	users := []demoUser{
-		{Email: "admin@demo.local", Password: "admin", Role: "administrator"},
-		{Email: "treasurer@demo.local", Password: "treasurer", Role: "treasurer"},
-		{Email: "joe@demo.local", Password: "joe", Role: "member"},
-	}
-
-	for _, u := range users {
-		hash, err := authn.HashPassword(u.Password, pepper, authn.DefaultParams())
-		if err != nil {
-			return fmt.Errorf("hash password for %s: %w", u.Email, err)
-		}
-
-		// Upsert user.
-		res, err := d.Exec(
-			`INSERT INTO users (email, password_hash, password_algo_params, is_active)
-			 VALUES (?, ?, 'argon2id', 1)
-			 ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')`,
-			u.Email, hash,
-		)
-		if err != nil {
-			return fmt.Errorf("upsert user %s: %w", u.Email, err)
-		}
-
-		userID, _ := res.LastInsertId()
-		if userID == 0 {
-			// ON CONFLICT updated — look up the ID.
-			if err := d.QueryRow(`SELECT id FROM users WHERE email = ?`, u.Email).Scan(&userID); err != nil {
-				return fmt.Errorf("lookup user %s: %w", u.Email, err)
-			}
-		}
-
-		// Grant role (skip if already granted).
-		now := time.Now().UTC().Format(time.RFC3339Nano)
-		_, err = d.Exec(
-			`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at, reason)
-			 SELECT ?, ?, ?, ?, 'seed-demo'
-			 WHERE NOT EXISTS (
-			   SELECT 1 FROM user_role_grants WHERE user_id = ? AND role_code = ? AND revoked_at IS NULL
-			 )`,
-			userID, u.Role, userID, now, userID, u.Role,
-		)
-		if err != nil {
-			return fmt.Errorf("grant role %s to %s: %w", u.Role, u.Email, err)
-		}
-
-		fmt.Printf("  %-28s  role=%-15s  password=%s\n", u.Email, u.Role, u.Password)
-	}
-
-	fmt.Println("\nDemo users seeded. Sign in at /login")
-	return nil
-}
-
 func usage(w *os.File) {
 	fmt.Fprintln(w, `portalctl — BCARS members portal admin CLI.
 
 Commands:
   bootstrap-admin --email <addr> --db <path>   Create the first administrator.
-  seed-demo --db <path>                        Create demo users (admin, treasurer, member).
   backup --db <path> --to <dir>                Encrypted database backup.
   restore --from <path> --into <dir>           Restore an encrypted backup.
   version                                      Print detailed build info.
   --version                                    Print short version identifier.
-  help                                         Show this help.
+  help                                         Show this help.`)
+	for _, line := range demoCommandUsage {
+		fmt.Fprintln(w, line)
+	}
 
+	fmt.Fprintln(w, `
 Environment:
   PORTAL_BACKUP_PASSPHRASE   required by backup and restore; encrypts the
                              backup with age. Minimum 12 characters.
-  PORTAL_PASSWORD_PEPPER     required by seed-demo. NOT stored in backups —
-                             restoring a working instance needs the backup
-                             passphrase AND the original pepper.`)
+  PORTAL_PASSWORD_PEPPER     the server's password pepper. NOT stored in
+                             backups — restoring a working instance needs the
+                             backup passphrase AND the original pepper.`)
+	for _, line := range demoEnvUsage {
+		fmt.Fprintln(w, line)
+	}
+
+	if len(demoCommandUsage) == 0 {
+		fmt.Fprintln(w, `
+Development builds only:
+  seed-demo (throwaway demo accounts with published passwords) is compiled out
+  of this binary. Developers who need it build with:
+      go build -tags demoseed ./cmd/portalctl`)
+	}
 }

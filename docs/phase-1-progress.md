@@ -51,7 +51,7 @@ P0/P1 child of `bcars-portal-fmc` is closed.
 | `fmc.12` | Production-assembly smoke test | ✅ this change |
 | `fmc.6` | Backup encryption, manifest validation, runbook | ⬜ open (P1) |
 | `fmc.9` | `hashIP` hashes a timestamp, not the client address | ⬜ open (P1) |
-| `fmc.11` | Guard `seed-demo` in production builds | ⬜ open (P1) |
+| `fmc.11` | Guard `seed-demo` in production builds | ✅ `demoseed` build tag + non-demo-user guard |
 | `fmc.13` | Web session cookies lack a `Secure` flag | ⬜ open (P1) |
 | `fmc.14` | Password pepper is nil in the production assembly | ⬜ open (P1) |
 | `fmc.15` | `RevokeHonoraryGrant` ignores version conflicts | ⬜ open (P1) |
