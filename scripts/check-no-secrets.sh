@@ -51,7 +51,9 @@ if git ls-files -z >/tmp/.bcars_tracked 2>/dev/null; then
   while IFS= read -r -d '' f; do
     [ -f "$f" ] || continue
     case "$f" in
-      fixtures/synthetic/*|docs/*|README.md|.env.sample|scripts/check-no-secrets.sh|PLANNING.md|*_test.go|internal/web/handler.go|cmd/portalctl/main.go) continue ;;
+      # cmd/portalctl/seeddemo.go holds the @demo.local development accounts;
+      # it is excluded from production builds by the `demoseed` build tag.
+      fixtures/synthetic/*|docs/*|README.md|.env.sample|scripts/check-no-secrets.sh|PLANNING.md|*_test.go|internal/web/handler.go|cmd/portalctl/seeddemo.go) continue ;;
     esac
     EMAIL_MATCHES=$(LC_ALL=C grep -E -I -o "$EMAIL_RE" "$f" 2>/dev/null \
       | grep -Ev "$SAFE_SCM_IDENTITY_RE" || true)
