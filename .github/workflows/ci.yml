@@ -69,6 +69,9 @@ jobs:
       - name: Migration up/down/up round-trip
         run: make migration-updown
 
+      - name: Production-assembly smoke test
+        run: make smoke
+
   sqlc-diff:
     runs-on: ubuntu-latest
     steps:
