@@ -255,9 +255,16 @@ func usage(w *os.File) {
 Commands:
   bootstrap-admin --email <addr> --db <path>   Create the first administrator.
   seed-demo --db <path>                        Create demo users (admin, treasurer, member).
-  backup --to <dir>                            Encrypted database backup (WS8.2).
-  restore --from <path> --into <dir>           Restore an encrypted backup (WS8.2).
+  backup --db <path> --to <dir>                Encrypted database backup.
+  restore --from <path> --into <dir>           Restore an encrypted backup.
   version                                      Print detailed build info.
   --version                                    Print short version identifier.
-  help                                         Show this help.`)
+  help                                         Show this help.
+
+Environment:
+  PORTAL_BACKUP_PASSPHRASE   required by backup and restore; encrypts the
+                             backup with age. Minimum 12 characters.
+  PORTAL_PASSWORD_PEPPER     required by seed-demo. NOT stored in backups —
+                             restoring a working instance needs the backup
+                             passphrase AND the original pepper.`)
 }

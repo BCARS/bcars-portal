@@ -1,11 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/bcars/bcars-portal/internal/db"
 )
 
 // captureStdout runs fn with os.Stdout redirected and returns what it printed.
@@ -31,4 +34,22 @@ func captureStdout(t *testing.T, fn func()) string {
 	fn()
 	require.NoError(t, w.Close())
 	return <-done
+}
+
+// newMigratedDBAt opens and migrates a database at an explicit path.
+func newMigratedDBAt(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	d, err := db.Open(path)
+	require.NoError(t, err)
+	require.NoError(t, db.Migrate(d))
+	return d
+}
+
+// openExisting opens a database without migrating it.
+func openExisting(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	d, err := db.Open(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+	return d
 }

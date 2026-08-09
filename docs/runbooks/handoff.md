@@ -90,6 +90,20 @@ The portal logs all administrative actions as audit events.
 
 Review audit events periodically and after any security concern.
 
+## 4b. Secrets the outgoing officer must hand over
+
+These are not in the repository, not in the backups, and not recoverable if
+lost. At least two current officers should hold each one.
+
+| Secret | Used by | If lost |
+| --- | --- | --- |
+| `PORTAL_PASSWORD_PEPPER` | The server, for every password hash | Every account must go through password recovery |
+| `PORTAL_BACKUP_PASSPHRASE` | `portalctl backup` / `restore` | Every existing backup becomes unreadable |
+| `PORTAL_SMTP_PASSWORD` | Outbound mail | Recovery and invitation mail stops; reissue from the mail provider |
+
+Confirm the incoming officer can actually use them — have them run a restore
+drill before the handover is considered complete.
+
 ## 5. Backup Schedule
 
 ### Recommended schedule
@@ -99,27 +113,22 @@ Review audit events periodically and after any security concern.
 ### Creating a backup
 
 ```bash
+export PORTAL_BACKUP_PASSPHRASE='<from the password manager>'
 ./bin/portalctl backup --db data/portal.db --to /backups/bcars-portal/
 ```
 
-This creates a WAL-safe backup with a SHA-256 manifest. Keep at least 7 daily
-backups and one monthly backup for 6 months.
+This creates an age-encrypted, WAL-safe backup with a SHA-256 manifest. Keep at
+least 7 daily backups and one monthly backup for 6 months.
+
+Full procedure, failure modes, and the restore drill:
+[backup-restore.md](backup-restore.md).
 
 ### Restore drill
-Practice restoring quarterly to verify backups work:
-
-```bash
-# Restore to a test directory (never overwrites live DB)
-./bin/portalctl restore \
-  --from /backups/bcars-portal/portal-backup-YYYYMMDD-HHMMSS.db \
-  --into /tmp/restore-test/
-
-# Verify the restored database works
-./bin/portal --db /tmp/restore-test/portal.db --addr :8081
-# Browse http://localhost:8081 and verify data looks correct
-# Clean up
-rm -rf /tmp/restore-test/
-```
+Practice restoring quarterly. See
+[backup-restore.md](backup-restore.md#restore-drill) for the full drill; the
+short version is that a restore needs the backup passphrase **and** the
+original password pepper, and a backup alone will not produce a system anyone
+can sign into.
 
 ## 6. Deployment Upgrade
 
