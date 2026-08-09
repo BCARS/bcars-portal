@@ -429,7 +429,7 @@
             "type": "string"
           },
           "role_code": {
-            "description": "Role granted when the invitation is accepted. Requires role.grant, and the inviter must already hold every capability the role confers.",
+            "description": "Role granted when the invitation is accepted. Requires the role.grant capability.",
             "type": "string"
           }
         },

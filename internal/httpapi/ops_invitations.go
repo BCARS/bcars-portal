@@ -18,7 +18,7 @@ type CreateInvitationBody struct {
 	Email string `json:"email" format:"email" doc:"Address the invitation is sent to."`
 	// RoleCode is optional. An invitation with no role produces an ordinary
 	// account holding no capabilities.
-	RoleCode string `json:"role_code,omitempty" doc:"Role granted when the invitation is accepted. Requires role.grant, and the inviter must already hold every capability the role confers."`
+	RoleCode string `json:"role_code,omitempty" doc:"Role granted when the invitation is accepted. Requires the role.grant capability."`
 }
 
 type CreateInvitationInput struct {
@@ -101,14 +101,16 @@ func RegisterInvitations(api huma.API, deps Deps) {
 	})
 }
 
-// checkMayConferRole enforces that an invitation cannot grant authority the
-// inviter does not already hold.
+// checkMayConferRole verifies the role exists and the inviter may grant roles
+// at all.
 //
-// Without this, user.invite alone would be a privilege-escalation path around
-// the entire capability model: anyone who could invite could invite an
-// administrator, then use that account. Requiring role.grant is necessary but
-// not sufficient — a treasurer holding role.grant must still not be able to
-// mint a webmaster.
+// An earlier version also required the inviter to hold every capability the
+// role confers, so an invitation could not grant authority the inviter lacked.
+// That was dropped at the repository owner's direction: BCARS is a club of
+// 20-30 members with 7-8 officers who know each other, and the rule blocked
+// ordinary cases — a secretary inviting a trustee — while constraining exactly
+// the people who could change it. role.grant remains the gate for conferring
+// any role, and every invitation is audited.
 func checkMayConferRole(ctx context.Context, q *sqlcgen.Queries, principal *authn.Principal, roleCode string) error {
 	exists, err := q.RoleExists(ctx, roleCode)
 	if err != nil {
@@ -121,26 +123,6 @@ func checkMayConferRole(ctx context.Context, q *sqlcgen.Queries, principal *auth
 	if !principal.HasCapability("role.grant") {
 		return huma.NewError(http.StatusForbidden,
 			"granting a role by invitation requires the role.grant capability")
-	}
-
-	conferred, err := q.CapabilitiesForRole(ctx, roleCode)
-	if err != nil {
-		return huma.NewError(http.StatusInternalServerError, "failed to load role capabilities")
-	}
-
-	var missing []string
-	for _, code := range conferred {
-		if !principal.HasCapability(code) {
-			missing = append(missing, code)
-		}
-	}
-	if len(missing) > 0 {
-		// Names the capabilities so the caller can tell this apart from a
-		// missing role.grant, without revealing anything they cannot already
-		// read from the capability catalog.
-		return huma.NewError(http.StatusForbidden, fmt.Sprintf(
-			"cannot invite to role %q: it confers capabilities you do not hold (%s)",
-			roleCode, strings.Join(missing, ", ")))
 	}
 	return nil
 }
