@@ -37,6 +37,7 @@ const (
 
 type env struct {
 	t       *testing.T
+	runDir  string
 	baseURL string
 	dbPath  string
 	mailDir string
