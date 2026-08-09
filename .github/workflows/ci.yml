@@ -10,6 +10,43 @@ env:
   GO_VERSION: '1.26.x'
 
 jobs:
+  # Job-level path filtering keeps required checks visible. Skipping the whole
+  # workflow with paths-ignore would leave required checks pending forever.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+          PUSH_HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          else
+            base="$PUSH_BASE_SHA"
+            head="$PUSH_HEAD_SHA"
+          fi
+
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            code=true
+          else
+            code=$(git diff --name-only --diff-filter=ACDMRTUXB "$base" "$head" -- \
+              | ./scripts/ci-code-changed.sh)
+          fi
+
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   # Fast checks that don't need build output — run in parallel.
   lint:
     runs-on: ubuntu-latest
@@ -57,7 +94,12 @@ jobs:
       - name: Version-conflict detectability check
         run: ./scripts/check-version-conflicts.sh
 
+      - name: CI path classifier self-test
+        run: ./scripts/ci-code-changed.sh --self-test
+
   build-test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -85,6 +127,8 @@ jobs:
         run: make smoke
 
   sqlc-diff:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

@@ -23,7 +23,7 @@ SQLC         := $(BIN_DIR)/sqlc
 RUN_DB       ?= bcars.db
 RUN_MAIL_DIR ?= mail-outbox
 
-.PHONY: all build test test-demoseed smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks migration-updown
+.PHONY: all build test test-demoseed smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets check-ci-paths install-hooks migration-updown
 
 all: build
 
@@ -71,7 +71,10 @@ check-secrets:
 	./scripts/check-no-secrets.sh
 	./scripts/check-version-conflicts.sh
 
-lint: fmt vet staticcheck golangci check-secrets
+check-ci-paths:
+	./scripts/ci-code-changed.sh --self-test
+
+lint: fmt vet staticcheck golangci check-secrets check-ci-paths
 
 sqlc:
 	@if [ ! -x "$(SQLC)" ]; then \
