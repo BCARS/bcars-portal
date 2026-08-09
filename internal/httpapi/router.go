@@ -46,6 +46,11 @@ type Config struct {
 	// resolved and hashed for session and email-link records. A zero value
 	// means no trusted forwarding header and no hashing — see clientip.go.
 	ClientIP ClientIPConfig
+
+	// Pepper is handed to the admin UI so it verifies passwords against the
+	// same hashes the API does. Omitting it leaves the UI unable to sign
+	// anyone in whenever the deployment configures a pepper.
+	Pepper []byte
 }
 
 // NewRouter assembles the HTTP handler and Huma API.
@@ -87,6 +92,7 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 			Mailer:               cfg.Mailer,
 			BaseURL:              cfg.BaseURL,
 			AllowInsecureCookies: cfg.AllowInsecureCookies,
+			Pepper:               cfg.Pepper,
 		})
 		if err != nil {
 			cfg.Logger.Error("failed to initialize admin UI", slog.String("error", err.Error()))

@@ -80,6 +80,14 @@ type HandlerConfig struct {
 	// cookie so the admin UI works over plaintext http://localhost.
 	// Development only; the zero value keeps Secure on.
 	AllowInsecureCookies bool
+
+	// Pepper is the secret mixed into every password hash. It MUST match the
+	// value the rest of the assembly uses: the admin UI verifies the same
+	// stored hashes the API does, so a UI built without the pepper cannot
+	// authenticate anyone in a deployment that has one. That was the state of
+	// the shipped binary until the Phase 2 smoke test signed in through the
+	// login form and got a 401 (bcars-portal-pma.12).
+	Pepper []byte
 }
 
 func (c HandlerConfig) withDefaults() HandlerConfig {
@@ -112,7 +120,7 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 		CookieName: sessionCookieName,
 		TTL:        cfg.SessionTTL,
 	})
-	authSvc := authn.NewAuthService(database, sessStore, nil)
+	authSvc := authn.NewAuthService(database, sessStore, cfg.Pepper)
 
 	emailLinks := authn.NewEmailLinkService(database, cfg.Mailer, authn.EmailLinkConfig{
 		BaseURL:        cfg.BaseURL,
