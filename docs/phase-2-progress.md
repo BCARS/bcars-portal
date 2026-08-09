@@ -1,6 +1,6 @@
 # Phase 2 Progress and Completion Audit
 
-Status: complete, audited against merged `main`.
+Status: complete, audited against merged `main`, and reconciled after review.
 
 This document records what Phase 2 delivered and, more importantly, how each
 claim was verified. Bead closure is not evidence of working software: Phase 1
@@ -25,7 +25,34 @@ shipped binaries rather than a reconstructed router.
 | `pma.10` | Printable renewal worksheet | #64 |
 | `pma.11` | BCARS county identity reconciliation | #53 |
 | `pma.13` | Import dues and lifetime honorary cutover | #59 |
-| `pma.12` | This audit and the treasury smoke test | — |
+| `pma.12` | This audit and the treasury smoke test | #65 |
+
+## Post-phase reconciliation (`bcars-portal-9zm`)
+
+A review after the epic closed found four defects the original audit missed.
+They are recorded here rather than quietly fixed, because the first audit
+claimed more than it had proved.
+
+| Bead | Defect | PR |
+| --- | --- | --- |
+| `9zm.1` | The batch surface ignored `worksheet_run_id`, so a treasurer could not work down the linked sheet; the handoff had no idempotency key | #66 |
+| `9zm.2` | `GetPrimaryContact` never read `is_primary`, so a worksheet could print a secondary address | #67 |
+| `9zm.3` | The admin form silently replaced an invalid `as_of` with today, while the API rejected it | #68 |
+| `9zm.4` | The single-payment fingerprint omitted the label, so a changed label replayed instead of conflicting | #70 |
+| `6q6.4` | None of the Phase 2 pages was linked from the header or dashboard | #69 |
+
+### What the first audit got wrong
+
+The worksheet criterion is the instructive one. `TestTreasurySmoke` asserted
+the worksheet rows were ordered and, separately, that the linked batch was
+empty. Both passed. Neither proved the property the criterion actually claims —
+that worksheet order seeds the grid — because nothing read the order *from the
+batch*. Testing the pieces and reporting the property is how an audit reaches a
+confident wrong answer.
+
+The smoke test now reads member names and their order from the batch page of
+the shipped binary, and `TestLinkedBatchPresentsSheetInOrder` was verified to
+fail when the consumer ignores the link.
 
 ## How each completion criterion was verified
 
@@ -42,7 +69,7 @@ HTTP. Section numbers below refer to that test.
 | ...without changing paid-through unless requested | §4: coverage event count unchanged at 1 |
 | A treasurer can retrieve details and export them | §5: CSV decodes and contains both amounts |
 | A non-treasurer reads safe standing but is denied detail | §6: standing 200, four detail paths 403, no leakage |
-| Worksheet order can seed the batch grid | §7: ordinals, linked batch, zero invented entries |
+| Worksheet order can seed the batch grid | §7: the batch reports its run id, and §8 reads the members and their order from the shipped batch page |
 | A legible print view | §8: the shipped binary serves the sheet with club identity and print rules |
 | No dependency on `scratch/`, a sibling checkout, or real data | Audit below |
 
@@ -63,6 +90,18 @@ login form of the shipped binary surfaced it. `Pepper` is now part of
 `web.HandlerConfig` and `httpapi.Config`, supplied by the production assembly,
 and the smoke test signs in through the real login form so a regression fails
 the gate.
+
+### Also fixed during reconciliation
+
+A scripted edit on the `9zm.3` branch corrupted a route pattern, turning
+`GET /admin/treasury/worksheets` into a pattern containing a raw tab. It still
+registered, but the real path then fell through to the `GET /admin/` dashboard
+pattern and its far weaker `session.self.read`, so a page guarded by
+`dues.worksheet.manage` became readable by any signed-in member. Nothing failed
+to compile; the existing denial test caught it before merge, and merged `main`
+was never affected. `TestAdminRoutePatternsAreWellFormed` now rejects control
+characters, empty segments, duplicates, and missing capabilities across the
+whole route table.
 
 ### Tracked, not blocking
 

@@ -1,6 +1,10 @@
 # Phase 2 Design: Treasurer Workflow
 
-Status: proposed for implementation
+Status: implemented and reconciled.
+
+Delivered under epic `bcars-portal-pma` and reconciled under
+`bcars-portal-9zm` after a post-phase review. `docs/phase-2-progress.md`
+records how each completion criterion was verified against merged `main`.
 
 This document is the standalone design authority for Phase 2. It incorporates
 the API-relevant decisions from the local treasurer mockups, but no implementation
@@ -54,6 +58,13 @@ server-rendered adapter over the same operations and authorization rules.
 10. The printed renewal worksheet is a supported workflow, not decoration. Its
     generation time, row order, and filters are durable so a later batch can use
     the same order and show which rows have since been entered.
+
+    Owner decision on print semantics: what is **durable** is the selected
+    member snapshot, the saved ordinal order, the as-of date, and the authorized
+    contact snapshot. What may be **evaluated at print time** is the current
+    dues rate, the printed date, entered-since markers, and the blank guest-row
+    count. Reprinting an old sheet reproduces who was on it, in what order, and
+    what their standing was — not a byte-for-byte facsimile of the paper.
 
 ## Domain model
 
