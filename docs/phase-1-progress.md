@@ -1,6 +1,6 @@
 # Phase 1 Progress and Execution Map
 
-Last reconciled: 2026-08-08
+Last reconciled: 2026-08-08 (against observed behavior, not bead-closure state)
 
 This is the human-readable map of Phase 1 work. Beads is the durable source of
 truth: run `bd bootstrap --yes` on a fresh clone, then `bd ready` and
@@ -13,18 +13,57 @@ reconcile a Groups.io CSV/JSON export, commit it atomically, inspect audit
 history, and operate a documented single-instance deployment with tested
 backup/restore. Phase 1 is local and API-first.
 
-## Status: ✅ COMPLETE
+## Status: 🔄 RECONCILIATION IN PROGRESS
 
-All Phase 1 implementation beads are closed. Both completion gates have been
-satisfied. The remaining items are deferred interactive/external tasks that
-require owner participation.
+This document previously read "✅ COMPLETE" on the strength of every bead being
+closed. A review of `main` at `f743d08` found that closure did not mean the
+acceptance criteria were met: all seven mechanical gates passed against a tree
+where the production API could not resolve a signed-in principal at all, and a
+fresh installation had no route to a working administrator.
+
+**Bead closure is not evidence of working software.** The gates that were green
+throughout could not see assembly defects, because every test built its own
+router rather than starting the one that ships. `bcars-portal-fmc` tracks the
+reconciliation; `make smoke` is the gate added to close that blind spot.
 
 ### Completion gates
 
 | Gate | Bead | Status |
 | --- | --- | --- |
-| Phase 1 member operations | `bcars-portal-5eg` | ✅ Closed — all 8 dependencies merged |
-| Phase 1 administrative MVP | `bcars-portal-dz0` | ✅ Closed — all 15 dependencies merged |
+| Phase 1 member operations | `bcars-portal-5eg` | Closed, pending re-evaluation |
+| Phase 1 administrative MVP | `bcars-portal-dz0` | Closed, pending re-evaluation |
+| Production-assembly smoke test | `bcars-portal-fmc.12` | ✅ `make smoke`, running in CI |
+
+Re-evaluation of the first two gates is deliberately withheld until every
+P0/P1 child of `bcars-portal-fmc` is closed.
+
+### Reconciliation status (`bcars-portal-fmc`)
+
+| Bead | Scope | Status |
+| --- | --- | --- |
+| `fmc.1` | Capability enforcement + generic audit (P0) | ✅ PR #32 |
+| `fmc.2` | Production wiring: middleware + email links | ✅ PR #33 |
+| `fmc.3` | bootstrap-admin produces a working administrator | ✅ PR #36 |
+| `fmc.4` | Recovery/invitation flows (5 defects) | ✅ PR #37 |
+| `fmc.5` | Honorary grant update/expire | ✅ PR #35 |
+| `fmc.7` | Audit filters and cursor pagination | ✅ PR #34 |
+| `fmc.10` | Renderer error naming | ✅ PR #37 |
+| `fmc.12` | Production-assembly smoke test | ✅ this change |
+| `fmc.6` | Backup encryption, manifest validation, runbook | ⬜ open (P1) |
+| `fmc.9` | `hashIP` hashes a timestamp, not the client address | ⬜ open (P1) |
+| `fmc.11` | Guard `seed-demo` in production builds | ⬜ open (P1) |
+| `fmc.13` | Web session cookies lack a `Secure` flag | ⬜ open (P1) |
+| `fmc.14` | Password pepper is nil in the production assembly | ⬜ open (P1) |
+| `fmc.15` | `RevokeHonoraryGrant` ignores version conflicts | ⬜ open (P1) |
+| `fmc.8` | Deployment packaging and environment variables | ⬜ open (P2) |
+| `fmc.16` | Audit API omits `reason_code` / outcome filter | ⬜ open (P2) |
+
+### Known gaps not yet bead-covered
+
+- No API operation creates an invitation; only consumption is exposed. A fresh
+  installation can bootstrap exactly one administrator and has no supported
+  route to onboard a second officer. The `user.invite` capability exists in the
+  catalog with no endpoint behind it.
 
 ## Completed work
 
@@ -125,9 +164,14 @@ the agent runs:
 make build
 make test
 make lint
+make migration-updown
 make sqlc-diff
 make openapi-diff
+make smoke
 ```
+
+`make smoke` is the gate that starts the real binaries. The others verify
+libraries and generated artifacts; only this one exercises what deploys.
 
 The agent reviews the diff and secret/PII scan, commits on a scoped branch,
 pushes, opens a PR, waits for every required CI job, fixes any failure, and

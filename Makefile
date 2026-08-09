@@ -21,7 +21,7 @@ GOLANGCI     := $(BIN_DIR)/golangci-lint
 STATICCHECK  := $(BIN_DIR)/staticcheck
 SQLC         := $(BIN_DIR)/sqlc
 
-.PHONY: all build test lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks migration-updown
+.PHONY: all build test smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks migration-updown
 
 all: build
 
@@ -32,6 +32,13 @@ build:
 
 test:
 	$(GO) test -race -count=1 $(PKGS)
+
+# Production-assembly smoke test: builds both binaries, migrates a temporary
+# database, runs portalctl bootstrap-admin, starts the server, and drives the
+# real HTTP surface. This is the gate that catches assembly defects the
+# package tests structurally cannot — every other test builds its own router.
+smoke:
+	$(GO) test -count=1 -v ./internal/smoke/
 
 fmt:
 	$(GO) fmt $(PKGS)
