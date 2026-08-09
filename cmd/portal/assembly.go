@@ -81,6 +81,7 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 		Mailer:               cfg.Mailer,
 		BaseURL:              cfg.BaseURL,
 		AllowInsecureCookies: cfg.AllowInsecureCookies,
+		Pepper:               cfg.Pepper,
 		// The client-address hash key is derived from the password pepper
 		// rather than from a secret of its own; the reasoning is recorded in
 		// internal/httpapi/clientip.go.
