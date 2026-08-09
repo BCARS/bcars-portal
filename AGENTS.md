@@ -143,8 +143,10 @@ databases, credentials, uploads, backups, and logs with member data are supplied
 out of band, remain under ignored paths such as `data/`, and are never committed.
 
 For Phase 2 treasury work, read `docs/phase-2-design.md` and
-`docs/phase-2-plan.md` before claiming a story. The ignored `scratch/` mockups
-are not a dependency or acceptance authority.
+`docs/phase-2-plan.md` before claiming a story. For Phase 3 member-request,
+optional-access, or directory work, read `docs/phase-3-design.md` and
+`docs/phase-3-plan.md`. The ignored `scratch/` mockups are never a dependency or
+acceptance authority.
 
 ### Task Workflow
 
