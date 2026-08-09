@@ -260,10 +260,11 @@ required access out of band.
 | `bcars-portal-g21` | Run the real export through a human-supervised reconciliation and import |
 | `bcars-portal-6pz` | Collaborative UI design and visual-polish session |
 
-### Not yet planned (Phase 2)
+### Planned next (Phase 2)
 
-The following are described in ADR-0007 and the Phase 1 design doc (Section 10)
-but have no beads yet:
+The focused treasurer workflow is specified in
+[phase-2-design.md](phase-2-design.md) and sequenced in
+[phase-2-plan.md](phase-2-plan.md). Beads is the live task graph.
 
 - **Treasurer/payment workflow**: `dues_rates`, `coverage_events`, `payments`,
   `payment_batches` tables; payment recording; coverage period calculation;

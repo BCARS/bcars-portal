@@ -142,6 +142,10 @@ fixtures are the only member-like data allowed in tests. Real exports,
 databases, credentials, uploads, backups, and logs with member data are supplied
 out of band, remain under ignored paths such as `data/`, and are never committed.
 
+For Phase 2 treasury work, read `docs/phase-2-design.md` and
+`docs/phase-2-plan.md` before claiming a story. The ignored `scratch/` mockups
+are not a dependency or acceptance authority.
+
 ### Task Workflow
 
 1. On a fresh clone, run `bd bootstrap --yes`; otherwise run `bd dolt pull`.

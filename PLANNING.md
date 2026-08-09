@@ -716,6 +716,10 @@ Phase 1 is complete when:
 
 ### Phase 2 - Treasurer Workflow
 
+The implementation contract and focused dependency plan are now recorded in
+`docs/phase-2-design.md` and `docs/phase-2-plan.md`. Beads is the live source of
+truth for story status and dependencies.
+
 - Add the payment ledger for cash and checks, including batches, receipts, reversals,
   and officer attribution.
 - Record received date, payment method, and contextual treasurer notes on each payment.
