@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"net/http"
 	"time"
 
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
@@ -27,7 +28,31 @@ const (
 	ReasonUnauthenticated   = "unauthenticated"
 	ReasonMissingCapability = "missing_capability"
 	ReasonNoMetadata        = "no_operation_metadata"
+	ReasonRateLimited       = "rate_limited"
 )
+
+// OutcomeForStatus maps a response status to an audit outcome.
+//
+// It lives here because both transports record the same events into the same
+// table, and they previously carried byte-identical private copies of this
+// mapping — two places obliged to agree with nothing forcing them to. A rule
+// added to one copy would silently not apply to the other surface.
+//
+// 401, 403, and 429 are recorded as denials rather than failures: each is the
+// server refusing a request it understood, and grouping them lets an operator
+// read refusals without sifting them out of genuine errors.
+func OutcomeForStatus(status int) string {
+	switch {
+	case status == http.StatusUnauthorized,
+		status == http.StatusForbidden,
+		status == http.StatusTooManyRequests:
+		return OutcomeDenied
+	case status >= 400:
+		return OutcomeFailure
+	default:
+		return OutcomeSuccess
+	}
+}
 
 // Event is a single audit record. Zero-valued optional fields are stored NULL.
 type Event struct {

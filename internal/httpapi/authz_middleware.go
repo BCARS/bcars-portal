@@ -79,7 +79,7 @@ func AuthzMiddleware(api huma.API, rec audit.Recorder) func(huma.Context, func(h
 		if principal != nil {
 			actorID = principal.UserID
 		}
-		recordEvent(ctx, rec, meta, meta.AuditAction, outcomeForStatus(ctx.Status()), "", actorID, ctx.Status())
+		recordEvent(ctx, rec, meta, meta.AuditAction, audit.OutcomeForStatus(ctx.Status()), "", actorID, ctx.Status())
 	}
 }
 
@@ -94,19 +94,6 @@ func denialAction(meta OperationMeta, opID string) string {
 		return "authz.denied." + opID
 	}
 	return "authz.denied"
-}
-
-// outcomeForStatus maps a response status to an audit outcome. 401/403 written
-// by a handler are recorded as denials so they are not lost among failures.
-func outcomeForStatus(status int) string {
-	switch {
-	case status == http.StatusUnauthorized, status == http.StatusForbidden:
-		return audit.OutcomeDenied
-	case status >= 400:
-		return audit.OutcomeFailure
-	default:
-		return audit.OutcomeSuccess
-	}
 }
 
 // recordEvent writes an audit event describing the current request. Resource

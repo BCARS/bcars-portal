@@ -427,6 +427,16 @@ type ReconciliationDecision struct {
 	CreatedAt         string
 }
 
+type RequestAttempt struct {
+	ID          int64
+	Operation   string
+	SourceHash  sql.NullString
+	TargetHash  sql.NullString
+	Outcome     string
+	AttemptedAt string
+	CreatedAt   string
+}
+
 type Role struct {
 	Code        string
 	Description string

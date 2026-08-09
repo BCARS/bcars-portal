@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/treasury"
 	"github.com/bcars/bcars-portal/internal/domain/worksheets"
 	"github.com/bcars/bcars-portal/internal/mail"
+	"github.com/bcars/bcars-portal/internal/ratelimit"
 )
 
 // Handler serves the admin UI pages.
@@ -140,6 +142,11 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 		TTL:            cfg.EmailLinkTTL,
 		RecoveryPath:   RouteResetPassword,
 		InvitationPath: RouteInvitationConsume,
+		// Built here from the same database and the same secret the API uses,
+		// so the two surfaces share one set of counts. Deriving it rather than
+		// accepting it as config means the admin UI cannot be assembled without
+		// a limiter while the API has one.
+		Limiter: ratelimit.New(database, ratelimit.Config{HashKey: cfg.ClientIP.HashKey}),
 	})
 
 	return &Handler{
@@ -317,7 +324,7 @@ func (h *Handler) requireCap(rt AdminRoute) http.Handler {
 				ActorUserID:  p.UserID,
 				ResourceKind: kind,
 				ResourceID:   id,
-				Outcome:      outcomeForStatus(sw.status),
+				Outcome:      audit.OutcomeForStatus(sw.status),
 				DetailJSON:   detailJSON(r, rt),
 			})
 		}
@@ -343,18 +350,6 @@ func (w *statusWriter) WriteHeader(code int) {
 func (w *statusWriter) Write(b []byte) (int, error) {
 	w.wroteHeader = true
 	return w.ResponseWriter.Write(b)
-}
-
-// outcomeForStatus maps a response status to an audit outcome.
-func outcomeForStatus(status int) string {
-	switch {
-	case status == http.StatusUnauthorized, status == http.StatusForbidden:
-		return audit.OutcomeDenied
-	case status >= 400:
-		return audit.OutcomeFailure
-	default:
-		return audit.OutcomeSuccess
-	}
 }
 
 // recordDenial audits a rejected admin request.
@@ -1181,7 +1176,22 @@ func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 
 	email := r.FormValue("email")
 	if email != "" && h.emailLinks != nil {
-		_ = h.emailLinks.RequestRecovery(r.Context(), email, h.clientIP.HashRequest(r))
+		err := h.emailLinks.RequestRecovery(r.Context(), email, h.clientIP.HashRequest(r))
+		if errors.Is(err, authn.ErrRateLimited) {
+			// The same refusal for every address. The limiter decided without
+			// looking the address up, and this page must not undo that by
+			// rendering one thing for a member and another for a stranger.
+			h.audit.Record(r.Context(), audit.Event{
+				Action:     "auth.recovery.request",
+				Outcome:    audit.OutcomeDenied,
+				ReasonCode: audit.ReasonRateLimited,
+				DetailJSON: detailJSON(r, AdminRoute{}),
+			})
+			h.render.RenderHTTP(w, "forgot_password.html", http.StatusTooManyRequests, data{
+				Error: "Too many recovery requests. Please wait a few minutes and try again.",
+			})
+			return
+		}
 	}
 
 	// Always show success to prevent email enumeration.
