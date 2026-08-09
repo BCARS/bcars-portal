@@ -118,7 +118,15 @@ type Querier interface {
 	GetPaymentWithMember(ctx context.Context, id int64) (GetPaymentWithMemberRow, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByCallSign(ctx context.Context, callSign sql.NullString) (Person, error)
-	// The member's current primary email and phone, for the worksheet snapshot.
+	//
+	// One active contact per kind for the worksheet snapshot: the one marked
+	// primary, or failing that the lowest active id.
+	//
+	// The previous version took MAX over every active value and never read
+	// is_primary, so a member with two active addresses had whichever sorted later
+	// printed on the sheet. Lexical order is not a proxy for what the member asked
+	// to be contacted on. The id fallback is arbitrary but stable and explainable:
+	// the earliest recorded contact wins when nobody has chosen.
 	GetPrimaryContact(ctx context.Context, personID int64) (GetPrimaryContactRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	GetStagedRow(ctx context.Context, id int64) (StagedImportRow, error)

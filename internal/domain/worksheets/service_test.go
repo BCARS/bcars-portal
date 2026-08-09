@@ -439,3 +439,106 @@ func TestOpenBatchForRunIsAtomicAndIdempotent(t *testing.T) {
 		assert.ErrorIs(t, err, authz.ErrDenied)
 	})
 }
+
+// contact adds a contact method, returning its id.
+func (f *fixture) contact(t *testing.T, membershipID int64, kind, value string, primary bool, archived bool) int64 {
+	t.Helper()
+	isPrimary := 0
+	if primary {
+		isPrimary = 1
+	}
+	var archivedAt any
+	if archived {
+		archivedAt = "2025-01-01T00:00:00.000Z"
+	}
+	res, err := f.db.Exec(`
+		INSERT INTO contact_methods (person_id, kind, value_raw, value_norm, is_primary, archived_at)
+		SELECT person_id, ?, ?, ?, ?, ? FROM memberships WHERE id = ?`,
+		kind, value, value, isPrimary, archivedAt, membershipID)
+	require.NoError(t, err)
+	id, err := res.LastInsertId()
+	require.NoError(t, err)
+	return id
+}
+
+// snapshotContact generates a sheet with contact columns and returns the row.
+func (f *fixture) snapshotContact(t *testing.T, membershipID int64) worksheets.Row {
+	t.Helper()
+	p := params(worksheets.FilterOwes, worksheets.SortLastName)
+	p.IncludeEmail = true
+	p.IncludePhone = true
+
+	_, rows, err := f.svc.Create(context.Background(), treasurer(), p, asOf)
+	require.NoError(t, err)
+	for _, r := range rows {
+		if r.MembershipID == membershipID {
+			return r
+		}
+	}
+	t.Fatalf("membership %d not on the sheet", membershipID)
+	return worksheets.Row{}
+}
+
+// TestWorksheetSnapshotsThePrimaryContact proves the sheet prints what the
+// member asked to be contacted on, not whichever value happens to sort last.
+func TestWorksheetSnapshotsThePrimaryContact(t *testing.T) {
+	t.Run("the primary wins even when it sorts first", func(t *testing.T) {
+		f := newFixture(t)
+		m := f.member(t, "Primary Member", "W3PRI", "2025-12-31", "")
+		// The primary is lexicographically smaller, so a MAX would miss it.
+		f.contact(t, m, "email", "aaa-primary@example.test", true, false)
+		f.contact(t, m, "email", "zzz-secondary@example.test", false, false)
+		f.contact(t, m, "phone", "111-1111", true, false)
+		f.contact(t, m, "phone", "999-9999", false, false)
+
+		row := f.snapshotContact(t, m)
+		assert.Equal(t, "aaa-primary@example.test", row.Email)
+		assert.Equal(t, "111-1111", row.Phone)
+	})
+
+	t.Run("an archived former primary is ignored", func(t *testing.T) {
+		f := newFixture(t)
+		m := f.member(t, "Moved Member", "W3MOV", "2025-12-31", "")
+		f.contact(t, m, "email", "old@example.test", true, true)
+		f.contact(t, m, "email", "new@example.test", false, false)
+
+		row := f.snapshotContact(t, m)
+		assert.Equal(t, "new@example.test", row.Email,
+			"an archived contact is not reachable, primary or not")
+	})
+
+	t.Run("with no primary the earliest active contact wins", func(t *testing.T) {
+		f := newFixture(t)
+		m := f.member(t, "Unset Member", "W3UNS", "2025-12-31", "")
+		first := f.contact(t, m, "email", "zzz-first-recorded@example.test", false, false)
+		f.contact(t, m, "email", "aaa-second-recorded@example.test", false, false)
+		require.NotZero(t, first)
+
+		row := f.snapshotContact(t, m)
+		assert.Equal(t, "zzz-first-recorded@example.test", row.Email,
+			"the fallback is the lowest active id, not lexical order")
+	})
+
+	t.Run("a member with no contact prints nothing", func(t *testing.T) {
+		f := newFixture(t)
+		m := f.member(t, "Quiet Member", "W3QUI", "2025-12-31", "")
+
+		row := f.snapshotContact(t, m)
+		assert.Empty(t, row.Email)
+		assert.Empty(t, row.Phone)
+	})
+
+	t.Run("contact stays absent without member.read", func(t *testing.T) {
+		f := newFixture(t)
+		m := f.member(t, "Guarded Member", "W3GRD", "2025-12-31", "")
+		f.contact(t, m, "email", "guarded@example.test", true, false)
+
+		p := params(worksheets.FilterOwes, worksheets.SortLastName)
+		p.IncludeEmail = true
+		run, rows, err := f.svc.Create(context.Background(), noContact(), p, asOf)
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.False(t, run.IncludeEmail)
+		assert.Empty(t, rows[0].Email)
+	})
+}

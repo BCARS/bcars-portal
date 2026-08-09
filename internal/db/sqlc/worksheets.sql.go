@@ -122,10 +122,22 @@ func (q *Queries) CreateWorksheetRun(ctx context.Context, arg CreateWorksheetRun
 
 const getPrimaryContact = `-- name: GetPrimaryContact :one
 SELECT
-    CAST(COALESCE(MAX(CASE WHEN kind = 'email' THEN value_norm END), '') AS TEXT) AS email,
-    CAST(COALESCE(MAX(CASE WHEN kind = 'phone' THEN value_raw END), '') AS TEXT)  AS phone
-FROM contact_methods
-WHERE person_id = ? AND archived_at IS NULL
+    CAST(COALESCE((
+        SELECT c.value_norm FROM contact_methods c
+         WHERE c.person_id = ?1
+           AND c.kind = 'email'
+           AND c.archived_at IS NULL
+         ORDER BY c.is_primary DESC, c.id
+         LIMIT 1
+    ), '') AS TEXT) AS email,
+    CAST(COALESCE((
+        SELECT c.value_raw FROM contact_methods c
+         WHERE c.person_id = ?1
+           AND c.kind = 'phone'
+           AND c.archived_at IS NULL
+         ORDER BY c.is_primary DESC, c.id
+         LIMIT 1
+    ), '') AS TEXT) AS phone
 `
 
 type GetPrimaryContactRow struct {
@@ -133,7 +145,14 @@ type GetPrimaryContactRow struct {
 	Phone string
 }
 
-// The member's current primary email and phone, for the worksheet snapshot.
+// One active contact per kind for the worksheet snapshot: the one marked
+// primary, or failing that the lowest active id.
+//
+// The previous version took MAX over every active value and never read
+// is_primary, so a member with two active addresses had whichever sorted later
+// printed on the sheet. Lexical order is not a proxy for what the member asked
+// to be contacted on. The id fallback is arbitrary but stable and explainable:
+// the earliest recorded contact wins when nobody has chosen.
 func (q *Queries) GetPrimaryContact(ctx context.Context, personID int64) (GetPrimaryContactRow, error) {
 	row := q.db.QueryRowContext(ctx, getPrimaryContact, personID)
 	var i GetPrimaryContactRow
