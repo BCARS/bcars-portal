@@ -12,7 +12,19 @@ import (
 type Querier interface {
 	ActiveRolesForUser(ctx context.Context, userID int64) ([]ActiveRolesForUserRow, error)
 	ApproveMembership(ctx context.Context, arg ApproveMembershipParams) (Membership, error)
-	ArchiveContactMethod(ctx context.Context, arg ArchiveContactMethodParams) error
+	ArchiveContactMethod(ctx context.Context, arg ArchiveContactMethodParams) (ContactMethod, error)
+	// ClearPrimaryForPerson and SetPrimary are DELIBERATELY unconditional: they
+	// are the two halves of "make this contact method the primary one", a
+	// set-valued operation with no single row whose version the caller could hold.
+	// Adding a version parameter would check one row while the sweep across the
+	// others stayed unchecked, which is worse than checking nothing.
+	//
+	// They still bump version, and that is correct: a caller holding a stale token
+	// for an affected row must fail on their NEXT targeted update rather than
+	// overwrite a change they never saw.
+	//
+	// Every OTHER mutation in this file that takes a version parameter must be
+	// :one with RETURNING so a conflict is detectable; see scripts/check-version-conflicts.sh.
 	ClearPrimaryForPerson(ctx context.Context, personID int64) error
 	CommitImportRun(ctx context.Context, arg CommitImportRunParams) (ImportRun, error)
 	ConsumeEmailLink(ctx context.Context, id int64) error
@@ -38,7 +50,7 @@ type Querier interface {
 	CreateStagedRow(ctx context.Context, arg CreateStagedRowParams) (StagedImportRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVisibilityEvent(ctx context.Context, arg CreateVisibilityEventParams) (ContactMethodVisibilityEvent, error)
-	DeactivatePerson(ctx context.Context, arg DeactivatePersonParams) error
+	DeactivatePerson(ctx context.Context, arg DeactivatePersonParams) (Person, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	EffectiveCapabilities(ctx context.Context, arg EffectiveCapabilitiesParams) ([]string, error)
 	ExpireHonoraryGrant(ctx context.Context, arg ExpireHonoraryGrantParams) (HonoraryGrant, error)
@@ -82,8 +94,8 @@ type Querier interface {
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
 	ListVisibilityHistory(ctx context.Context, contactMethodID int64) ([]ContactMethodVisibilityEvent, error)
 	LockUser(ctx context.Context, arg LockUserParams) error
-	MarkDeceased(ctx context.Context, arg MarkDeceasedParams) error
-	ReactivatePerson(ctx context.Context, arg ReactivatePersonParams) error
+	MarkDeceased(ctx context.Context, arg MarkDeceasedParams) (Person, error)
+	ReactivatePerson(ctx context.Context, arg ReactivatePersonParams) (Person, error)
 	RejectMembership(ctx context.Context, arg RejectMembershipParams) (Membership, error)
 	RevokeAllSessionsForUser(ctx context.Context, userID int64) error
 	RevokeCapabilityGrant(ctx context.Context, arg RevokeCapabilityGrantParams) error
@@ -111,7 +123,7 @@ type Querier interface {
 	UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error)
 	UpdateStagedRowAction(ctx context.Context, arg UpdateStagedRowActionParams) (StagedImportRow, error)
 	UpdateUserLastLogin(ctx context.Context, id int64) error
-	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

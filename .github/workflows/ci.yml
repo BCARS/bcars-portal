@@ -54,6 +54,9 @@ jobs:
       - name: Secrets / PII check
         run: ./scripts/check-no-secrets.sh
 
+      - name: Version-conflict detectability check
+        run: ./scripts/check-version-conflicts.sh
+
   build-test:
     runs-on: ubuntu-latest
     steps:

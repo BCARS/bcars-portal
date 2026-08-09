@@ -32,23 +32,26 @@ SET display_name = ?, sort_name = ?, call_sign = ?,
 WHERE id = ? AND version = ?
 RETURNING *;
 
--- name: DeactivatePerson :exec
+-- name: DeactivatePerson :one
 UPDATE persons
 SET deactivated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE id = ? AND version = ?;
+WHERE id = ? AND version = ?
+RETURNING *;
 
--- name: ReactivatePerson :exec
+-- name: ReactivatePerson :one
 UPDATE persons
 SET deactivated_at = NULL,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE id = ? AND version = ?;
+WHERE id = ? AND version = ?
+RETURNING *;
 
--- name: MarkDeceased :exec
+-- name: MarkDeceased :one
 UPDATE persons
 SET deceased_at = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE id = ? AND version = ?;
+WHERE id = ? AND version = ?
+RETURNING *;

@@ -7,6 +7,7 @@ package members
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -185,8 +186,18 @@ func (s *Service) DeactivatePerson(ctx context.Context, p *authz.Principal, id, 
 		return err
 	}
 
-	err := s.Q.DeactivatePerson(ctx, sqlcgen.DeactivatePersonParams{ID: id, Version: version})
-	if err != nil {
+	// Read first so a missing person is not misreported as a version conflict.
+	if _, err := s.Q.GetPerson(ctx, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		return fmt.Errorf("members: deactivate: %w", err)
+	}
+
+	if _, err := s.Q.DeactivatePerson(ctx, sqlcgen.DeactivatePersonParams{ID: id, Version: version}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return db.ErrStale
+		}
 		return fmt.Errorf("members: deactivate: %w", err)
 	}
 
@@ -200,8 +211,18 @@ func (s *Service) ReactivatePerson(ctx context.Context, p *authz.Principal, id, 
 		return err
 	}
 
-	err := s.Q.ReactivatePerson(ctx, sqlcgen.ReactivatePersonParams{ID: id, Version: version})
-	if err != nil {
+	// Read first so a missing person is not misreported as a version conflict.
+	if _, err := s.Q.GetPerson(ctx, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		return fmt.Errorf("members: reactivate: %w", err)
+	}
+
+	if _, err := s.Q.ReactivatePerson(ctx, sqlcgen.ReactivatePersonParams{ID: id, Version: version}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return db.ErrStale
+		}
 		return fmt.Errorf("members: reactivate: %w", err)
 	}
 
@@ -589,10 +610,21 @@ func (s *Service) ArchiveContactMethod(ctx context.Context, p *authz.Principal, 
 		return err
 	}
 
-	err := s.Q.ArchiveContactMethod(ctx, sqlcgen.ArchiveContactMethodParams{
+	// Read first so a missing contact method is not misreported as a conflict.
+	if _, err := s.Q.GetContactMethod(ctx, contactMethodID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		return fmt.Errorf("members: archive contact method: %w", err)
+	}
+
+	_, err := s.Q.ArchiveContactMethod(ctx, sqlcgen.ArchiveContactMethodParams{
 		ID:      contactMethodID,
 		Version: version,
 	})
+	if errors.Is(err, sql.ErrNoRows) {
+		err = db.ErrStale
+	}
 	if err != nil {
 		return fmt.Errorf("members: archive contact: %w", err)
 	}

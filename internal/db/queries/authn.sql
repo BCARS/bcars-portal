@@ -9,12 +9,13 @@ INSERT INTO users (email, password_hash, password_algo_params, person_id)
 VALUES (?, ?, ?, ?)
 RETURNING *;
 
--- name: UpdateUserPassword :exec
+-- name: UpdateUserPassword :one
 UPDATE users
 SET password_hash = ?, password_algo_params = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE id = ? AND version = ?;
+WHERE id = ? AND version = ?
+RETURNING *;
 
 -- name: UpdateUserLastLogin :exec
 UPDATE users

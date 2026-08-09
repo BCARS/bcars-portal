@@ -10,12 +10,13 @@ import (
 	"database/sql"
 )
 
-const archiveContactMethod = `-- name: ArchiveContactMethod :exec
+const archiveContactMethod = `-- name: ArchiveContactMethod :one
 UPDATE contact_methods
 SET archived_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
+RETURNING id, person_id, kind, label, value_raw, value_norm, is_primary, archived_at, postal_line1, postal_line2, postal_city, postal_state, postal_postal_code, postal_country, created_at, updated_at, version
 `
 
 type ArchiveContactMethodParams struct {
@@ -23,9 +24,29 @@ type ArchiveContactMethodParams struct {
 	Version int64
 }
 
-func (q *Queries) ArchiveContactMethod(ctx context.Context, arg ArchiveContactMethodParams) error {
-	_, err := q.db.ExecContext(ctx, archiveContactMethod, arg.ID, arg.Version)
-	return err
+func (q *Queries) ArchiveContactMethod(ctx context.Context, arg ArchiveContactMethodParams) (ContactMethod, error) {
+	row := q.db.QueryRowContext(ctx, archiveContactMethod, arg.ID, arg.Version)
+	var i ContactMethod
+	err := row.Scan(
+		&i.ID,
+		&i.PersonID,
+		&i.Kind,
+		&i.Label,
+		&i.ValueRaw,
+		&i.ValueNorm,
+		&i.IsPrimary,
+		&i.ArchivedAt,
+		&i.PostalLine1,
+		&i.PostalLine2,
+		&i.PostalCity,
+		&i.PostalState,
+		&i.PostalPostalCode,
+		&i.PostalCountry,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
 }
 
 const clearPrimaryForPerson = `-- name: ClearPrimaryForPerson :exec
@@ -36,6 +57,18 @@ SET is_primary = 0,
 WHERE person_id = ? AND is_primary = 1 AND archived_at IS NULL
 `
 
+// ClearPrimaryForPerson and SetPrimary are DELIBERATELY unconditional: they
+// are the two halves of "make this contact method the primary one", a
+// set-valued operation with no single row whose version the caller could hold.
+// Adding a version parameter would check one row while the sweep across the
+// others stayed unchecked, which is worse than checking nothing.
+//
+// They still bump version, and that is correct: a caller holding a stale token
+// for an affected row must fail on their NEXT targeted update rather than
+// overwrite a change they never saw.
+//
+// Every OTHER mutation in this file that takes a version parameter must be
+// :one with RETURNING so a conflict is detectable; see scripts/check-version-conflicts.sh.
 func (q *Queries) ClearPrimaryForPerson(ctx context.Context, personID int64) error {
 	_, err := q.db.ExecContext(ctx, clearPrimaryForPerson, personID)
 	return err
