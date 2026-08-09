@@ -56,7 +56,7 @@ func setupHandler(t *testing.T) *testEnv {
 
 	var sessionCookie *http.Cookie
 	for _, c := range w.Result().Cookies() {
-		if c.Name == sessionCookieName {
+		if c.Name == authn.DefaultSessionCookieName {
 			sessionCookie = c
 			break
 		}

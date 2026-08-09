@@ -57,7 +57,7 @@ func setupHandlerWithRoles(t *testing.T, roles ...string) *testEnv {
 
 	var cookie *http.Cookie
 	for _, c := range w.Result().Cookies() {
-		if c.Name == sessionCookieName {
+		if c.Name == authn.DefaultSessionCookieName {
 			cookie = c
 		}
 	}

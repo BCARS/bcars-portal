@@ -284,8 +284,9 @@ func TestTreasurySmoke(t *testing.T) {
 }
 
 // webLogin signs in through the admin UI's own login form and returns its
-// session cookie. The UI and the API use different cookie names, so an
-// API session does not authenticate a UI request.
+// session cookie. Both surfaces now issue one cookie (bcars-portal-6q6.3), so
+// this cookie also authenticates API requests; it is obtained through the form
+// here because that is the path an officer actually takes.
 func (e *env) webLogin(email, password string) *http.Cookie {
 	e.t.Helper()
 
@@ -299,13 +300,11 @@ func (e *env) webLogin(email, password string) *http.Cookie {
 	defer resp.Body.Close()
 	require.Equal(e.t, http.StatusSeeOther, resp.StatusCode, "admin UI login must succeed")
 
-	for _, c := range resp.Cookies() {
-		if c.Name == "portal_session" {
-			return c
-		}
+	c := sessionCookie(resp)
+	if c == nil {
+		e.t.Fatal("the admin UI login returned no session cookie")
 	}
-	e.t.Fatal("the admin UI login returned no session cookie")
-	return nil
+	return c
 }
 
 // decodeJSON asserts the status and decodes the body.
