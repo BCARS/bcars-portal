@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -335,4 +336,62 @@ func TestHandoffLeavesNoOrphanWhenLinkingFails(t *testing.T) {
 	var batches int
 	require.NoError(t, e.h.db.QueryRow(`SELECT count(*) FROM payment_batches`).Scan(&batches))
 	assert.Zero(t, batches, "a failed handoff must leave no orphan batch")
+}
+
+// TestWorksheetAsOfIsValidatedNotRepaired proves a durable report parameter is
+// never silently replaced. The form previously substituted today's date when
+// as_of would not parse, so a tampered or mistyped submission produced a
+// perfectly valid-looking sheet judged against a date nobody chose.
+func TestWorksheetAsOfIsValidatedNotRepaired(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Alpha Member", "W3AAA", "2020-12-31")
+
+	t.Run("an invalid date is refused and nothing is written", func(t *testing.T) {
+		w := e.postForm(t, "/admin/treasury/worksheets", url.Values{
+			"label": {"July meeting"}, "as_of": {"2026-99-99"},
+			"filter_kind": {"active"}, "sort_order": {"call_sign"},
+			"include_email": {"yes"}, "guest_rows": {"7"},
+		})
+		require.Equal(t, http.StatusUnprocessableEntity, w.Code)
+		body := w.Body.String()
+		assert.Contains(t, body, "Enter the as-of date as YYYY-MM-DD")
+
+		var runs, rows int
+		require.NoError(t, e.h.db.QueryRow(`SELECT count(*) FROM dues_worksheet_runs`).Scan(&runs))
+		require.NoError(t, e.h.db.QueryRow(`SELECT count(*) FROM dues_worksheet_rows`).Scan(&rows))
+		assert.Zero(t, runs, "a refused submission creates no run")
+		assert.Zero(t, rows)
+
+		// Every submitted choice survives the rejection.
+		assert.Contains(t, body, `value="July meeting"`)
+		assert.Contains(t, body, `value="2026-99-99"`)
+		assert.Contains(t, body, `value="active" checked`)
+		assert.Contains(t, body, `value="call_sign" checked`)
+		assert.Contains(t, body, `name="include_email" value="yes" checked`)
+		assert.Contains(t, body, `value="7"`)
+	})
+
+	t.Run("a blank date defaults to today, as the API does", func(t *testing.T) {
+		w := e.postForm(t, "/admin/treasury/worksheets", url.Values{
+			"as_of": {""}, "filter_kind": {"owes"}, "sort_order": {"last_name"},
+		})
+		require.Equal(t, http.StatusSeeOther, w.Code)
+
+		var asOf string
+		require.NoError(t, e.h.db.QueryRow(
+			`SELECT as_of FROM dues_worksheet_runs ORDER BY id DESC LIMIT 1`).Scan(&asOf))
+		assert.Equal(t, time.Now().UTC().Format("2006-01-02"), asOf)
+	})
+
+	t.Run("a valid date is used as submitted", func(t *testing.T) {
+		w := e.postForm(t, "/admin/treasury/worksheets", url.Values{
+			"as_of": {"2026-07-01"}, "filter_kind": {"owes"}, "sort_order": {"last_name"},
+		})
+		require.Equal(t, http.StatusSeeOther, w.Code)
+
+		var asOf string
+		require.NoError(t, e.h.db.QueryRow(
+			`SELECT as_of FROM dues_worksheet_runs ORDER BY id DESC LIMIT 1`).Scan(&asOf))
+		assert.Equal(t, "2026-07-01", asOf)
+	})
 }

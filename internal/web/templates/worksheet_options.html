@@ -15,35 +15,35 @@
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Print a new sheet</h3>
     <form action="/admin/treasury/worksheets" method="post">
         <label for="label">Name this sheet</label>
-        <input type="text" id="label" name="label" placeholder="July meeting">
+        <input type="text" id="label" name="label" value="{{.Label}}" placeholder="July meeting">
 
         <label for="as_of">Judge dues standing as of</label>
-        <input type="date" id="as_of" name="as_of" value="{{.Today}}">
+        <input type="date" id="as_of" name="as_of" value="{{.AsOf}}">
 
         <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 12px 0;">
             <legend>Who should be listed?</legend>
-            <label><input type="radio" name="filter_kind" value="owes" checked> Everyone who owes</label><br>
-            <label><input type="radio" name="filter_kind" value="active"> All active members</label><br>
-            <label><input type="radio" name="filter_kind" value="unpaid_since_run"> Follow up on an earlier sheet</label>
+            <label><input type="radio" name="filter_kind" value="owes" {{if eq .FilterKind "owes"}}checked{{end}}> Everyone who owes</label><br>
+            <label><input type="radio" name="filter_kind" value="active" {{if eq .FilterKind "active"}}checked{{end}}> All active members</label><br>
+            <label><input type="radio" name="filter_kind" value="unpaid_since_run" {{if eq .FilterKind "unpaid_since_run"}}checked{{end}}> Follow up on an earlier sheet</label>
             <br>
             <label for="source_run_id">Which earlier sheet?</label>
             <select id="source_run_id" name="source_run_id">
                 <option value="0">&mdash;</option>
-                {{range .Runs}}<option value="{{.ID}}">{{.Label}} ({{.GeneratedAt}})</option>{{end}}
+                {{range .Runs}}<option value="{{.ID}}" {{if eq .ID $.SourceRunID}}selected{{end}}>{{.Label}} ({{.GeneratedAt}})</option>{{end}}
             </select>
         </fieldset>
 
         <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 12px 0;">
             <legend>Order</legend>
-            <label><input type="radio" name="sort_order" value="last_name" checked> Last name</label><br>
-            <label><input type="radio" name="sort_order" value="call_sign"> Call sign</label><br>
-            <label><input type="radio" name="sort_order" value="longest_overdue"> Longest overdue first</label>
+            <label><input type="radio" name="sort_order" value="last_name" {{if eq .SortOrder "last_name"}}checked{{end}}> Last name</label><br>
+            <label><input type="radio" name="sort_order" value="call_sign" {{if eq .SortOrder "call_sign"}}checked{{end}}> Call sign</label><br>
+            <label><input type="radio" name="sort_order" value="longest_overdue" {{if eq .SortOrder "longest_overdue"}}checked{{end}}> Longest overdue first</label>
         </fieldset>
 
         <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 12px 0;">
             <legend>Optional columns</legend>
-            <label><input type="checkbox" name="include_email" value="yes"> Email</label><br>
-            <label><input type="checkbox" name="include_phone" value="yes"> Phone</label>
+            <label><input type="checkbox" name="include_email" value="yes" {{if .IncludeEmail}}checked{{end}}> Email</label><br>
+            <label><input type="checkbox" name="include_phone" value="yes" {{if .IncludePhone}}checked{{end}}> Phone</label>
             <p style="margin: 8px 0 0; color: #555;">
                 Contact details are included only if you are allowed to see them, and the sheet
                 records when they were good as of.
@@ -51,7 +51,7 @@
         </fieldset>
 
         <label for="guest_rows">Blank rows for guests</label>
-        <input type="number" id="guest_rows" name="guest_rows" value="3" min="0" max="20">
+        <input type="number" id="guest_rows" name="guest_rows" value="{{.GuestRows}}" min="0" max="20">
 
         <button type="submit" class="btn btn-primary">Generate sheet</button>
     </form>
