@@ -144,6 +144,29 @@ See the backup manifest JSON for schema version, file size, and SHA-256 checksum
 | `--smtp-user` | — | — | SMTP username; empty means no authentication |
 | `--smtp-from` | — | — | From address (required for `--mail-transport=smtp`) |
 | — | `PORTAL_SMTP_PASSWORD` | — | SMTP password; env-only so it never appears in process listings |
+| `--trusted-proxy-header` | — | *(none)* | Header carrying the real client address behind a reverse proxy, e.g. `X-Forwarded-For`. See below. |
+
+### Client addresses behind a proxy
+
+Sessions and password-recovery links record a keyed hash of the requesting
+client's address, which is what per-source abuse limiting and audit correlation
+group on. By default the address is the transport peer — the only value a
+client cannot choose for itself.
+
+Set `--trusted-proxy-header` **only** when a reverse proxy you control sits in
+front of the portal and *overwrites* that header on every inbound request. If
+the header is honoured on a directly reachable deployment, any caller can send
+`X-Forwarded-For: <anything>` and appear as a different source on every
+request, which silently disables the limiting the value exists to feed. The
+leftmost entry of the header is used; an unparseable value falls back to the
+peer address.
+
+The hash is an HMAC keyed by a subkey derived from `PORTAL_PASSWORD_PEPPER`
+rather than by a secret of its own — a bare digest of an IPv4 address is
+reversible by enumeration, and a second secret with the same threat model and
+the same lifecycle is one more thing to lose. Running with
+`--allow-empty-pepper` therefore records no address hash at all; the column is
+left empty rather than filled with a reversible or meaningless value.
 
 Production deployments should set `--base-url` to the externally reachable URL
 and use `--mail-transport=smtp`; the default `filelog` transport writes messages

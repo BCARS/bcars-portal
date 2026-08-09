@@ -13,6 +13,7 @@
 package smoke
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 
 	"github.com/bcars/bcars-portal/internal/mail"
 )
@@ -150,6 +152,41 @@ func (e *env) recoveryRoundTrip(email string) {
 	resp = e.do(http.MethodPost, "/api/v1/sessions", nil,
 		fmt.Sprintf(`{"email":%q,"password":%q}`, email, officerPass))
 	assert.Equal(e.t, http.StatusUnauthorized, resp.StatusCode, "the old password must stop working")
+
+	// The running server must record a real, keyed hash of the requesting
+	// client — not the timestamp digest that made every request look like a
+	// new source (bcars-portal-fmc.9).
+	hashes := e.queryStrings(
+		`SELECT COALESCE(requested_ip_hash, '') FROM email_links WHERE purpose = 'password_recovery' ORDER BY id`)
+	require.NotEmpty(e.t, hashes, "the recovery request must be recorded")
+	last := hashes[len(hashes)-1]
+	assert.NotEmpty(e.t, last, "the deployed server must record a client-address hash")
+	assert.NotContains(e.t, last, "127.0.0.1", "the address must not be stored in the clear")
+	for _, h := range hashes {
+		assert.Equal(e.t, last, h, "every request from this client must hash identically")
+	}
+}
+
+// queryStrings reads a single-column result from the server's database. The
+// server is still running, so the connection is read-only.
+func (e *env) queryStrings(query string) []string {
+	e.t.Helper()
+	d, err := sql.Open("sqlite", "file:"+e.dbPath+"?mode=ro")
+	require.NoError(e.t, err)
+	defer d.Close()
+
+	rows, err := d.Query(query)
+	require.NoError(e.t, err)
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var v string
+		require.NoError(e.t, rows.Scan(&v))
+		out = append(out, v)
+	}
+	require.NoError(e.t, rows.Err())
+	return out
 }
 
 // waitForMailToken polls the filelog mail directory for the newest message of

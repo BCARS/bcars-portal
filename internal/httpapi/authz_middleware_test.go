@@ -46,7 +46,14 @@ func setupAuthzTest(t *testing.T, roleCodes ...string) *authzEnv {
 		TTL:     1 * time.Hour,
 	})
 
-	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test", DB: d})
+	handler, api := httpapi.NewRouter(httpapi.Config{
+		Version: "test",
+		DB:      d,
+		// Keyed so the recorded client-address hashes are the real thing;
+		// without a key the server records "unknown" and the tests that check
+		// the value would pass on an empty string.
+		ClientIP: httpapi.ClientIPConfig{HashKey: []byte("authz-test-client-ip-secret-32b!")},
+	})
 	capLoader := &authn.SQLCapabilityLoader{DB: d}
 	wrapped := authn.Middleware(store, capLoader, authn.SessionCookieConfig{Name: cookieName})(handler)
 

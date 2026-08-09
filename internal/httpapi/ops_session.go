@@ -2,10 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"sort"
 	"time"
@@ -110,8 +107,10 @@ func RegisterSessions(api huma.API, deps Deps) {
 			return nil, ErrNotImplemented()
 		}
 
-		// Hash the remote IP for session tracking (privacy).
-		ipHash := hashIP(ctx)
+		// Keyed hash of the client address, resolved by ClientIPMiddleware.
+		// Empty when no address is available; stored as NULL rather than as a
+		// value that would group nothing.
+		ipHash := ClientIPHashFrom(ctx)
 
 		sessionID, err := deps.AuthService.SignIn(
 			input.Body.Email, input.Body.Password, ipHash, "api",
@@ -240,7 +239,9 @@ func RegisterSessions(api huma.API, deps Deps) {
 			return nil, ErrNotImplemented()
 		}
 		// Always return success to prevent email enumeration.
-		_ = deps.EmailLinkService.RequestRecovery(ctx, input.Body.Email, "")
+		// The IP hash is what per-source recovery-abuse limiting groups on, so
+		// it has to be the real client address rather than a placeholder.
+		_ = deps.EmailLinkService.RequestRecovery(ctx, input.Body.Email, ClientIPHashFrom(ctx))
 		return &RecoveryRequestOutput{}, nil
 	})
 
@@ -348,15 +349,6 @@ func RegisterSessions(api huma.API, deps Deps) {
 			},
 		}, nil
 	})
-}
-
-// hashIP creates a privacy-preserving hash of the client's remote address.
-func hashIP(ctx context.Context) string {
-	// Try to get RemoteAddr from the request if available via context.
-	// For API handlers we just hash a placeholder; the middleware can
-	// inject the real IP later.
-	h := sha256.Sum256([]byte(fmt.Sprintf("api-%d", time.Now().UnixNano())))
-	return hex.EncodeToString(h[:8])
 }
 
 // sortedCaps converts a capability set to a sorted slice.
