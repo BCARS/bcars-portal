@@ -252,9 +252,12 @@
     "category": "treasury",
     "ai_tool_eligibility": "never",
     "operation_ids": [
+      "ledger-list",
+      "payment-batch-activity",
       "payment-batch-get",
       "payment-batches-list",
-      "payment-get"
+      "payment-get",
+      "payment-receipt"
     ]
   },
   {
@@ -295,7 +298,10 @@
     "description": "Export treasury records to CSV.",
     "category": "treasury",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "export-payment-batch",
+      "export-treasury"
+    ]
   },
   {
     "code": "dues.worksheet.manage",
