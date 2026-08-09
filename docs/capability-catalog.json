@@ -271,7 +271,8 @@
       "payment-batch-entry-delete",
       "payment-batch-entry-update",
       "payment-batch-open",
-      "payment-batch-update"
+      "payment-batch-update",
+      "worksheet-link-batch"
     ]
   },
   {
@@ -308,7 +309,12 @@
     "description": "Generate and read renewal worksheet runs.",
     "category": "treasury",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "worksheet-create",
+      "worksheet-get",
+      "worksheet-list",
+      "worksheet-rows"
+    ]
   },
   {
     "code": "audit.read",

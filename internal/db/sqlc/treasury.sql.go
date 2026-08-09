@@ -167,7 +167,7 @@ const createPaymentBatch = `-- name: CreatePaymentBatch :one
 
 INSERT INTO payment_batches (label, default_amount_cents, default_paid_through, opened_by, opened_at)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version
+RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version, worksheet_run_id
 `
 
 type CreatePaymentBatchParams struct {
@@ -206,6 +206,7 @@ func (q *Queries) CreatePaymentBatch(ctx context.Context, arg CreatePaymentBatch
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.WorksheetRunID,
 	)
 	return i, err
 }
@@ -424,7 +425,7 @@ func (q *Queries) GetPayment(ctx context.Context, id int64) (Payment, error) {
 }
 
 const getPaymentBatch = `-- name: GetPaymentBatch :one
-SELECT id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version FROM payment_batches WHERE id = ?
+SELECT id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version, worksheet_run_id FROM payment_batches WHERE id = ?
 `
 
 func (q *Queries) GetPaymentBatch(ctx context.Context, id int64) (PaymentBatch, error) {
@@ -446,6 +447,7 @@ func (q *Queries) GetPaymentBatch(ctx context.Context, id int64) (PaymentBatch, 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.WorksheetRunID,
 	)
 	return i, err
 }
@@ -682,7 +684,7 @@ SET state = 'abandoned', abandoned_by = ?, abandoned_at = ?, abandon_reason = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ? AND state = 'open'
-RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version
+RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version, worksheet_run_id
 `
 
 type MarkPaymentBatchAbandonedParams struct {
@@ -718,6 +720,7 @@ func (q *Queries) MarkPaymentBatchAbandoned(ctx context.Context, arg MarkPayment
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.WorksheetRunID,
 	)
 	return i, err
 }
@@ -729,7 +732,7 @@ SET state = 'posted', posted_by = ?, posted_at = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ? AND state = 'open'
-RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version
+RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version, worksheet_run_id
 `
 
 type MarkPaymentBatchPostedParams struct {
@@ -764,6 +767,7 @@ func (q *Queries) MarkPaymentBatchPosted(ctx context.Context, arg MarkPaymentBat
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.WorksheetRunID,
 	)
 	return i, err
 }

@@ -104,6 +104,37 @@ type DuesRate struct {
 	Version     int64
 }
 
+type DuesWorksheetRow struct {
+	ID           int64
+	RunID        int64
+	Ordinal      int64
+	MembershipID int64
+	DisplayName  string
+	CallSign     sql.NullString
+	BaseType     string
+	DuesStatus   string
+	PaidThrough  sql.NullString
+	Email        sql.NullString
+	Phone        sql.NullString
+	CreatedAt    string
+}
+
+type DuesWorksheetRun struct {
+	ID           int64
+	Label        sql.NullString
+	AsOf         string
+	FilterKind   string
+	SourceRunID  sql.NullInt64
+	SortOrder    string
+	IncludeEmail int64
+	IncludePhone int64
+	WarningDays  int64
+	GeneratedBy  int64
+	GeneratedAt  string
+	RowCount     int64
+	CreatedAt    string
+}
+
 type EmailLink struct {
 	ID               int64
 	Purpose          string
@@ -265,6 +296,7 @@ type PaymentBatch struct {
 	CreatedAt          string
 	UpdatedAt          string
 	Version            int64
+	WorksheetRunID     sql.NullInt64
 }
 
 type PaymentBatchEntry struct {

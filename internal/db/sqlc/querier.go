@@ -62,6 +62,12 @@ type Querier interface {
 	CreateStagedRow(ctx context.Context, arg CreateStagedRowParams) (StagedImportRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVisibilityEvent(ctx context.Context, arg CreateVisibilityEventParams) (ContactMethodVisibilityEvent, error)
+	CreateWorksheetRow(ctx context.Context, arg CreateWorksheetRowParams) (DuesWorksheetRow, error)
+	// Renewal worksheet runs and their snapshot rows.
+	//
+	// Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
+	// offset, so a multi-byte character above a query corrupts the SQL it parses.
+	CreateWorksheetRun(ctx context.Context, arg CreateWorksheetRunParams) (DuesWorksheetRun, error)
 	DeactivatePerson(ctx context.Context, arg DeactivatePersonParams) (Person, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeletePaymentBatchEntry(ctx context.Context, arg DeletePaymentBatchEntryParams) (sql.Result, error)
@@ -112,10 +118,13 @@ type Querier interface {
 	GetPaymentWithMember(ctx context.Context, id int64) (GetPaymentWithMemberRow, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByCallSign(ctx context.Context, callSign sql.NullString) (Person, error)
+	// The member's current primary email and phone, for the worksheet snapshot.
+	GetPrimaryContact(ctx context.Context, personID int64) (GetPrimaryContactRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	GetStagedRow(ctx context.Context, id int64) (StagedImportRow, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetWorksheetRun(ctx context.Context, id int64) (DuesWorksheetRun, error)
 	IncrementFailedLogin(ctx context.Context, id int64) error
 	InsertDuesRate(ctx context.Context, arg InsertDuesRateParams) (DuesRate, error)
 	ListAcsAresSharingHistory(ctx context.Context, personID int64) ([]AcsAresSharingEvent, error)
@@ -190,6 +199,15 @@ type Querier interface {
 	ListStagedRowsRequiringManual(ctx context.Context, arg ListStagedRowsRequiringManualParams) ([]StagedImportRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
 	ListVisibilityHistory(ctx context.Context, contactMethodID int64) ([]ContactMethodVisibilityEvent, error)
+	// The memberships on an earlier sheet with no payment posted since it ran.
+	ListWorksheetMembershipsUnpaidSince(ctx context.Context, runID int64) ([]int64, error)
+	//
+	// Rows as printed, plus whether a payment has been posted for that member since
+	// the sheet was generated. The snapshot itself is never rewritten; this flag is
+	// computed at read time, so an old sheet keeps saying what it said while still
+	// telling the treasurer which lines are already done.
+	ListWorksheetRows(ctx context.Context, arg ListWorksheetRowsParams) ([]ListWorksheetRowsRow, error)
+	ListWorksheetRuns(ctx context.Context, arg ListWorksheetRunsParams) ([]DuesWorksheetRun, error)
 	LockUser(ctx context.Context, arg LockUserParams) error
 	MarkDeceased(ctx context.Context, arg MarkDeceasedParams) (Person, error)
 	MarkPaymentBatchAbandoned(ctx context.Context, arg MarkPaymentBatchAbandonedParams) (PaymentBatch, error)
@@ -213,7 +231,9 @@ type Querier interface {
 	// caller's value needs no wildcard escaping); the rest are exact matches.
 	// The tiebreak on id keeps the order total, which offset paging requires.
 	SearchAuditEvents(ctx context.Context, arg SearchAuditEventsParams) ([]AuditEvent, error)
+	SetPaymentBatchWorksheetRun(ctx context.Context, arg SetPaymentBatchWorksheetRunParams) error
 	SetPrimary(ctx context.Context, id int64) error
+	SetWorksheetRunRowCount(ctx context.Context, arg SetWorksheetRunRowCountParams) error
 	SumPaymentBatchEntries(ctx context.Context, batchID int64) (SumPaymentBatchEntriesRow, error)
 	// Bumps the batch version after an entry mutation, so a browser holding a
 	// stale batch ETag cannot post a batch whose rows have since changed.
