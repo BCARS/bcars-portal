@@ -53,38 +53,6 @@ func (q *Queries) ActiveRolesForUser(ctx context.Context, userID int64) ([]Activ
 	return items, nil
 }
 
-const capabilitiesForRole = `-- name: CapabilitiesForRole :many
-SELECT rc.capability_code
-FROM role_capabilities rc
-WHERE rc.role_code = ?
-ORDER BY rc.capability_code
-`
-
-// CapabilitiesForRole backs the invitation escalation guard: an inviter may
-// only confer a role whose capabilities they already hold themselves.
-func (q *Queries) CapabilitiesForRole(ctx context.Context, roleCode string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, capabilitiesForRole, roleCode)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var capability_code string
-		if err := rows.Scan(&capability_code); err != nil {
-			return nil, err
-		}
-		items = append(items, capability_code)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const createCapabilityGrant = `-- name: CreateCapabilityGrant :one
 INSERT INTO user_capability_grants (user_id, capability_code, granted_by, granted_at, reason)
 VALUES (?, ?, ?, ?, ?)

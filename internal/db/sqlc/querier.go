@@ -13,9 +13,6 @@ type Querier interface {
 	ActiveRolesForUser(ctx context.Context, userID int64) ([]ActiveRolesForUserRow, error)
 	ApproveMembership(ctx context.Context, arg ApproveMembershipParams) (Membership, error)
 	ArchiveContactMethod(ctx context.Context, arg ArchiveContactMethodParams) error
-	// CapabilitiesForRole backs the invitation escalation guard: an inviter may
-	// only confer a role whose capabilities they already hold themselves.
-	CapabilitiesForRole(ctx context.Context, roleCode string) ([]string, error)
 	ClearPrimaryForPerson(ctx context.Context, personID int64) error
 	CommitImportRun(ctx context.Context, arg CommitImportRunParams) (ImportRun, error)
 	ConsumeEmailLink(ctx context.Context, id int64) error

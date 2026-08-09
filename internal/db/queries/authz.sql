@@ -55,13 +55,5 @@ SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     revoked_by = ?
 WHERE id = ? AND revoked_at IS NULL;
 
--- CapabilitiesForRole backs the invitation escalation guard: an inviter may
--- only confer a role whose capabilities they already hold themselves.
--- name: CapabilitiesForRole :many
-SELECT rc.capability_code
-FROM role_capabilities rc
-WHERE rc.role_code = ?
-ORDER BY rc.capability_code;
-
 -- name: RoleExists :one
 SELECT EXISTS(SELECT 1 FROM roles WHERE code = ?) AS found;

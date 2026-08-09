@@ -93,22 +93,21 @@ func TestInvitationRoleRequiresRoleGrant(t *testing.T) {
 		"conferring a role must require role.grant in addition to user.invite")
 }
 
-// TestInvitationCannotEscalateBeyondInviter is the sufficient half, and the
-// reason this endpoint is not simply "user.invite + role.grant": otherwise
-// anyone who could invite could mint an administrator and use that account,
-// routing around the entire capability model.
-func TestInvitationCannotEscalateBeyondInviter(t *testing.T) {
+// TestInvitationMayConferUnheldRole records the deliberate policy: role.grant
+// is the whole gate. An earlier version also required the inviter to hold
+// every capability the role confers; that was dropped for a club whose seven
+// or eight officers know each other and where the rule blocked ordinary
+// onboarding. Every invitation is audited.
+func TestInvitationMayConferUnheldRole(t *testing.T) {
 	env := setupAuthzTest(t)
-	// Holds the two invite-related capabilities but nothing an administrator
-	// holds beyond them.
+	// Holds only the two invite-related capabilities — nothing an
+	// administrator holds beyond them.
 	env.grantCapability(t, "user.invite", "role.grant", "session.self.read")
 	cookie := env.signIn(t)
 
 	resp := env.do(t, http.MethodPost, "/api/v1/invitations", cookie,
 		`{"email":"new@bcars.org","role_code":"administrator"}`)
-	require.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"an inviter must not confer capabilities they do not hold")
-	assert.Contains(t, readAll(t, resp), "capabilities you do not hold")
+	require.Equal(t, http.StatusCreated, resp.StatusCode, readAll(t, resp))
 }
 
 // TestInvitationAllowsConferringHeldRole is the other side: an administrator
