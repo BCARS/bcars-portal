@@ -7,17 +7,9 @@ SELECT * FROM dues_rates WHERE year = ?;
 -- name: ListDuesRates :many
 SELECT * FROM dues_rates ORDER BY year DESC;
 
--- name: UpsertDuesRate :one
-INSERT INTO dues_rates (year, amount_cents, note, set_by, set_at)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (year) DO UPDATE
-SET amount_cents = excluded.amount_cents,
-    note         = excluded.note,
-    set_by       = excluded.set_by,
-    set_at       = excluded.set_at,
-    version      = dues_rates.version + 1,
-    updated_at   = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-RETURNING *;
+-- Rate writes live in dues.sql: InsertDuesRate and the version-guarded
+-- UpdateDuesRate. There is deliberately no blind upsert, so a revision cannot
+-- overwrite another officer's without presenting the version it saw.
 
 -- name: CreatePaymentBatch :one
 INSERT INTO payment_batches (label, default_amount_cents, default_paid_through, opened_by, opened_at)

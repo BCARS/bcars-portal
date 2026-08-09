@@ -28,9 +28,12 @@ server-rendered adapter over the same operations and authorization rules.
 
 ## Product decisions carried forward
 
-1. The club dues year ends December 31. New paid-through decisions must be a
-   December 31 date. Historical imported dates are preserved even if they do not
-   satisfy the new-write rule.
+1. The club dues year ends December 31, and suggestions default to that date.
+   The server does **not** reject an off-cycle paid-through date (owner decision,
+   2026-08-09). Recording what actually happened outranks enforcing the club
+   convention, and historical imported dates are preserved unchanged. If the
+   year-end is ever enforced it becomes per-club configuration — anniversary
+   date versus end of year — which is deliberately out of scope for Phase 2.
 2. Money received and coverage granted are separate facts. The server never
    derives `paid_through` from `amount_cents` or note text.
 3. Suggestions are optional display data. A client submits the chosen
@@ -190,8 +193,9 @@ remains the only audit emitter for HTTP operations.
   contract rather than replaying different work.
 - Idempotency keys are scoped by actor and operation. The database, not process
   memory, owns replay detection so retries remain safe after restart.
-- New paid-through dates must be December 31. Historical imported values are not
-  rewritten merely to satisfy new-write validation.
+- A paid-through date must be a real ISO `YYYY-MM-DD` date. It need not be
+  December 31: an off-cycle or historical date is accepted as written, and no
+  imported value is rewritten. See product decision 1.
 - Amount and paid-through are validated independently. No rule asserts that a
   particular amount buys a particular date.
 - Cash, check, and `other` are accepted methods; Phase 2 adds no online processor.

@@ -164,6 +164,7 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 }
 
 const createPaymentBatch = `-- name: CreatePaymentBatch :one
+
 INSERT INTO payment_batches (label, default_amount_cents, default_paid_through, opened_by, opened_at)
 VALUES (?, ?, ?, ?, ?)
 RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version
@@ -177,6 +178,9 @@ type CreatePaymentBatchParams struct {
 	OpenedAt           string
 }
 
+// Rate writes live in dues.sql: InsertDuesRate and the version-guarded
+// UpdateDuesRate. There is deliberately no blind upsert, so a revision cannot
+// overwrite another officer's without presenting the version it saw.
 func (q *Queries) CreatePaymentBatch(ctx context.Context, arg CreatePaymentBatchParams) (PaymentBatch, error) {
 	row := q.db.QueryRowContext(ctx, createPaymentBatch,
 		arg.Label,
@@ -819,48 +823,5 @@ func (q *Queries) SumPaymentBatchEntries(ctx context.Context, batchID int64) (Su
 	row := q.db.QueryRowContext(ctx, sumPaymentBatchEntries, batchID)
 	var i SumPaymentBatchEntriesRow
 	err := row.Scan(&i.EntryCount, &i.TotalCents)
-	return i, err
-}
-
-const upsertDuesRate = `-- name: UpsertDuesRate :one
-INSERT INTO dues_rates (year, amount_cents, note, set_by, set_at)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (year) DO UPDATE
-SET amount_cents = excluded.amount_cents,
-    note         = excluded.note,
-    set_by       = excluded.set_by,
-    set_at       = excluded.set_at,
-    version      = dues_rates.version + 1,
-    updated_at   = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-RETURNING year, amount_cents, note, set_by, set_at, created_at, updated_at, version
-`
-
-type UpsertDuesRateParams struct {
-	Year        int64
-	AmountCents int64
-	Note        sql.NullString
-	SetBy       int64
-	SetAt       string
-}
-
-func (q *Queries) UpsertDuesRate(ctx context.Context, arg UpsertDuesRateParams) (DuesRate, error) {
-	row := q.db.QueryRowContext(ctx, upsertDuesRate,
-		arg.Year,
-		arg.AmountCents,
-		arg.Note,
-		arg.SetBy,
-		arg.SetAt,
-	)
-	var i DuesRate
-	err := row.Scan(
-		&i.Year,
-		&i.AmountCents,
-		&i.Note,
-		&i.SetBy,
-		&i.SetAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Version,
-	)
 	return i, err
 }

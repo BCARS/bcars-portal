@@ -46,6 +46,9 @@ type Querier interface {
 	CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error)
 	CreateNoteRevision(ctx context.Context, arg CreateNoteRevisionParams) (NoteRevision, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
+	// Rate writes live in dues.sql: InsertDuesRate and the version-guarded
+	// UpdateDuesRate. There is deliberately no blind upsert, so a revision cannot
+	// overwrite another officer's without presenting the version it saw.
 	CreatePaymentBatch(ctx context.Context, arg CreatePaymentBatchParams) (PaymentBatch, error)
 	CreatePaymentBatchEntry(ctx context.Context, arg CreatePaymentBatchEntryParams) (PaymentBatchEntry, error)
 	CreatePaymentCorrection(ctx context.Context, arg CreatePaymentCorrectionParams) (PaymentCorrection, error)
@@ -64,6 +67,7 @@ type Querier interface {
 	FindContactMethodByNorm(ctx context.Context, arg FindContactMethodByNormParams) ([]ContactMethod, error)
 	FindExternalID(ctx context.Context, arg FindExternalIDParams) (ExternalID, error)
 	GetContactMethod(ctx context.Context, id int64) (ContactMethod, error)
+	GetCoverageEvent(ctx context.Context, id int64) (CoverageEvent, error)
 	// Phase 2 ledger primitives. Domain services compose these; no query here
 	// derives a paid-through date from an amount.
 	GetDuesRate(ctx context.Context, year int64) (DuesRate, error)
@@ -89,14 +93,33 @@ type Querier interface {
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	IncrementFailedLogin(ctx context.Context, id int64) error
+	InsertDuesRate(ctx context.Context, arg InsertDuesRateParams) (DuesRate, error)
 	ListAcsAresSharingHistory(ctx context.Context, personID int64) ([]AcsAresSharingEvent, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListAuditEventsByResource(ctx context.Context, arg ListAuditEventsByResourceParams) ([]AuditEvent, error)
 	ListCapabilities(ctx context.Context) ([]Capability, error)
 	ListContactMethods(ctx context.Context, personID int64) ([]ContactMethod, error)
 	ListCoverageEventsByMembership(ctx context.Context, membershipID int64) ([]CoverageEvent, error)
+	ListCoverageEventsPage(ctx context.Context, arg ListCoverageEventsPageParams) ([]CoverageEvent, error)
 	ListDecisionsForRow(ctx context.Context, stagedImportRowID int64) ([]ReconciliationDecision, error)
 	ListDuesRates(ctx context.Context) ([]DuesRate, error)
+	// Derived dues standing and coverage reads.
+	//
+	// Standing is never stored. It is computed as of an explicit date so that
+	// tests, worksheets, and reports are deterministic. `expiring` in particular is
+	// a classification of this query, not a state any row carries.
+	//
+	// One row per membership with its effective coverage decision, any active
+	// honorary waiver, and the derived status. Serves both the filtered list and
+	// the single-membership lookup: pass membership_id = 0 to list, or a specific
+	// id to fetch one. include_ended = 1 keeps resigned/rejected/deceased rows,
+	// which the single lookup needs and the working list does not want.
+	//
+	// The status filter below repeats the CASE arms as predicates rather than
+	// filtering on the alias, which SQLite does not allow in WHERE. Each arm must
+	// stay the exact complement of its CASE arm, or a filtered list would return
+	// rows labelled with a status other than the one that was asked for.
+	ListDuesStanding(ctx context.Context, arg ListDuesStandingParams) ([]ListDuesStandingRow, error)
 	ListExternalIDsForEntity(ctx context.Context, arg ListExternalIDsForEntityParams) ([]ExternalID, error)
 	ListFCCVerificationsByMembership(ctx context.Context, membershipID int64) ([]FccVerification, error)
 	ListHonoraryGrantsByMembership(ctx context.Context, membershipID int64) ([]HonoraryGrant, error)
@@ -139,6 +162,8 @@ type Querier interface {
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	TransitionLifecycle(ctx context.Context, arg TransitionLifecycleParams) (Membership, error)
 	UpdateContactMethod(ctx context.Context, arg UpdateContactMethodParams) (ContactMethod, error)
+	// Version-guarded so a revision cannot silently overwrite another officer's.
+	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)
 	// is_lifetime is written explicitly because the table CHECK forbids a lifetime
 	// grant from carrying an end date; giving a grant an end date converts it to a
 	// term grant.
@@ -149,7 +174,6 @@ type Querier interface {
 	UpdateStagedRowAction(ctx context.Context, arg UpdateStagedRowActionParams) (StagedImportRow, error)
 	UpdateUserLastLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
-	UpsertDuesRate(ctx context.Context, arg UpsertDuesRateParams) (DuesRate, error)
 }
 
 var _ Querier = (*Queries)(nil)
