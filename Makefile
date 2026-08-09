@@ -67,6 +67,7 @@ golangci:
 
 check-secrets:
 	./scripts/check-no-secrets.sh
+	./scripts/check-version-conflicts.sh
 
 lint: fmt vet staticcheck golangci check-secrets
 

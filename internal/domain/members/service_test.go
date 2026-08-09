@@ -589,3 +589,95 @@ func TestSharingPreferences(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), sharing.Participates)
 }
+
+// --- Version-conflict detection (bcars-portal-fmc.19) ---
+//
+// Each of these used a :exec query, so a stale version updated nothing and
+// reported success. The assertions check the row is untouched, not merely that
+// an error came back — a test that only checks the error would still pass if
+// the write happened AND an error was returned.
+
+func TestDeactivatePersonDetectsStaleVersion(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "Stale Deactivate", SortName: "Deactivate, Stale", BaseType: "full",
+	})
+	require.NoError(t, err)
+
+	err = svc.DeactivatePerson(ctx, p, person.ID, person.Version+99)
+	require.ErrorIs(t, err, db.ErrStale)
+
+	after, err := svc.GetPerson(ctx, p, person.ID)
+	require.NoError(t, err)
+	assert.False(t, after.DeactivatedAt.Valid, "a stale deactivate must not deactivate")
+	assert.Equal(t, person.Version, after.Version, "a stale deactivate must not bump version")
+}
+
+func TestDeactivatePersonSucceedsWithCurrentVersion(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "Good Deactivate", SortName: "Deactivate, Good", BaseType: "full",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.DeactivatePerson(ctx, p, person.ID, person.Version))
+
+	after, err := svc.GetPerson(ctx, p, person.ID)
+	require.NoError(t, err)
+	assert.True(t, after.DeactivatedAt.Valid)
+}
+
+func TestDeactivateMissingPersonIsNotFoundNotConflict(t *testing.T) {
+	svc, p := setupTest(t)
+
+	err := svc.DeactivatePerson(context.Background(), p, 999999, 1)
+	assert.ErrorIs(t, err, sql.ErrNoRows,
+		"a missing person must not be misreported as a version conflict")
+}
+
+func TestReactivatePersonDetectsStaleVersion(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "Stale Reactivate", SortName: "Reactivate, Stale", BaseType: "full",
+	})
+	require.NoError(t, err)
+	require.NoError(t, svc.DeactivatePerson(ctx, p, person.ID, person.Version))
+
+	// The deactivate moved the version, so the original one is now stale.
+	err = svc.ReactivatePerson(ctx, p, person.ID, person.Version)
+	require.ErrorIs(t, err, db.ErrStale)
+
+	after, err := svc.GetPerson(ctx, p, person.ID)
+	require.NoError(t, err)
+	assert.True(t, after.DeactivatedAt.Valid, "a stale reactivate must not reactivate")
+}
+
+func TestArchiveContactMethodDetectsStaleVersion(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "Stale Archive", SortName: "Archive, Stale", BaseType: "full",
+	})
+	require.NoError(t, err)
+
+	cm, err := svc.CreateContactMethod(ctx, p, CreateContactMethodParams{
+		PersonID: person.ID, Kind: "email",
+		ValueRaw: "stale@bcars.example", ValueNorm: "stale@bcars.example",
+	})
+	require.NoError(t, err)
+
+	err = svc.ArchiveContactMethod(ctx, p, cm.ID, cm.Version+99)
+	require.ErrorIs(t, err, db.ErrStale)
+
+	after, err := svc.Q.GetContactMethod(ctx, cm.ID)
+	require.NoError(t, err)
+	assert.False(t, after.ArchivedAt.Valid, "a stale archive must not archive")
+	assert.Equal(t, cm.Version, after.Version)
+}

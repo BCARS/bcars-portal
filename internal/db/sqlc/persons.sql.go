@@ -39,12 +39,13 @@ func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) (Per
 	return i, err
 }
 
-const deactivatePerson = `-- name: DeactivatePerson :exec
+const deactivatePerson = `-- name: DeactivatePerson :one
 UPDATE persons
 SET deactivated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
 `
 
 type DeactivatePersonParams struct {
@@ -52,9 +53,21 @@ type DeactivatePersonParams struct {
 	Version int64
 }
 
-func (q *Queries) DeactivatePerson(ctx context.Context, arg DeactivatePersonParams) error {
-	_, err := q.db.ExecContext(ctx, deactivatePerson, arg.ID, arg.Version)
-	return err
+func (q *Queries) DeactivatePerson(ctx context.Context, arg DeactivatePersonParams) (Person, error) {
+	row := q.db.QueryRowContext(ctx, deactivatePerson, arg.ID, arg.Version)
+	var i Person
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.SortName,
+		&i.CallSign,
+		&i.DeceasedAt,
+		&i.DeactivatedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
 }
 
 const getPerson = `-- name: GetPerson :one
@@ -223,12 +236,13 @@ func (q *Queries) ListPersonsByName(ctx context.Context, arg ListPersonsByNamePa
 	return items, nil
 }
 
-const markDeceased = `-- name: MarkDeceased :exec
+const markDeceased = `-- name: MarkDeceased :one
 UPDATE persons
 SET deceased_at = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
 `
 
 type MarkDeceasedParams struct {
@@ -237,17 +251,30 @@ type MarkDeceasedParams struct {
 	Version    int64
 }
 
-func (q *Queries) MarkDeceased(ctx context.Context, arg MarkDeceasedParams) error {
-	_, err := q.db.ExecContext(ctx, markDeceased, arg.DeceasedAt, arg.ID, arg.Version)
-	return err
+func (q *Queries) MarkDeceased(ctx context.Context, arg MarkDeceasedParams) (Person, error) {
+	row := q.db.QueryRowContext(ctx, markDeceased, arg.DeceasedAt, arg.ID, arg.Version)
+	var i Person
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.SortName,
+		&i.CallSign,
+		&i.DeceasedAt,
+		&i.DeactivatedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
 }
 
-const reactivatePerson = `-- name: ReactivatePerson :exec
+const reactivatePerson = `-- name: ReactivatePerson :one
 UPDATE persons
 SET deactivated_at = NULL,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
 `
 
 type ReactivatePersonParams struct {
@@ -255,9 +282,21 @@ type ReactivatePersonParams struct {
 	Version int64
 }
 
-func (q *Queries) ReactivatePerson(ctx context.Context, arg ReactivatePersonParams) error {
-	_, err := q.db.ExecContext(ctx, reactivatePerson, arg.ID, arg.Version)
-	return err
+func (q *Queries) ReactivatePerson(ctx context.Context, arg ReactivatePersonParams) (Person, error) {
+	row := q.db.QueryRowContext(ctx, reactivatePerson, arg.ID, arg.Version)
+	var i Person
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.SortName,
+		&i.CallSign,
+		&i.DeceasedAt,
+		&i.DeactivatedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
 }
 
 const updatePerson = `-- name: UpdatePerson :one

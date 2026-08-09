@@ -360,12 +360,13 @@ func (q *Queries) UpdateUserLastLogin(ctx context.Context, id int64) error {
 	return err
 }
 
-const updateUserPassword = `-- name: UpdateUserPassword :exec
+const updateUserPassword = `-- name: UpdateUserPassword :one
 UPDATE users
 SET password_hash = ?, password_algo_params = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
+RETURNING id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version
 `
 
 type UpdateUserPasswordParams struct {
@@ -375,12 +376,28 @@ type UpdateUserPasswordParams struct {
 	Version            int64
 }
 
-func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserPassword,
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserPassword,
 		arg.PasswordHash,
 		arg.PasswordAlgoParams,
 		arg.ID,
 		arg.Version,
 	)
-	return err
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerifiedAt,
+		&i.PasswordHash,
+		&i.PasswordAlgoParams,
+		&i.PersonID,
+		&i.IsActive,
+		&i.LastLoginAt,
+		&i.FailedLoginCount,
+		&i.LockedUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
 }
