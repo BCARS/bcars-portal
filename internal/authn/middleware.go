@@ -14,10 +14,13 @@ type CapabilityLoader interface {
 // Middleware resolves the session cookie → Principal and attaches it to the
 // request context. Unauthenticated requests pass through with a nil principal
 // (the authz layer decides whether to allow or deny).
-func Middleware(store *SessionStore, capLoader CapabilityLoader, cookieName string) func(http.Handler) http.Handler {
+// The cookie configuration is shared with the surfaces that set the cookie so
+// the clearing cookie carries the same attributes; a mismatch leaves the
+// original cookie in place.
+func Middleware(store *SessionStore, capLoader CapabilityLoader, cookies SessionCookieConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cookie, err := r.Cookie(cookieName)
+			cookie, err := r.Cookie(cookies.Name)
 			if err != nil {
 				// No cookie — unauthenticated; let authz decide.
 				next.ServeHTTP(w, r)
@@ -27,14 +30,7 @@ func Middleware(store *SessionStore, capLoader CapabilityLoader, cookieName stri
 			sess, err := store.Get(cookie.Value)
 			if err != nil {
 				// Expired/revoked/invalid — clear the cookie and continue unauthed.
-				http.SetCookie(w, &http.Cookie{
-					Name:     cookieName,
-					Value:    "",
-					MaxAge:   -1,
-					Path:     "/",
-					HttpOnly: true,
-					SameSite: http.SameSiteLaxMode,
-				})
+				http.SetCookie(w, cookies.Clear())
 				next.ServeHTTP(w, r)
 				return
 			}

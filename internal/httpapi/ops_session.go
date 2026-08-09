@@ -74,22 +74,22 @@ type InvitationConsumeOutput struct {
 	Body      sessionInfo
 }
 
-// sessionCookie builds the session cookie for every endpoint that creates a
-// session. It is shared so sign-in, recovery consumption and invitation
-// consumption cannot disagree about the cookie's attributes — and so that an
+// cookieConfig is the shared source of session-cookie attributes for every
+// endpoint that creates or clears a session, so sign-in, recovery consumption,
+// invitation consumption and sign-out cannot disagree — and so that an
 // endpoint which creates a session cannot forget to hand one back, which is
 // how recovery and invitation left the caller signed in on the server but
-// anonymous in the browser.
-func sessionCookie(name, sessionID string, expiresAt time.Time) *http.Cookie {
-	return &http.Cookie{
-		Name:     name,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(time.Until(expiresAt).Seconds()),
+// anonymous in the browser. The same configuration type backs the admin UI.
+func (d Deps) cookieConfig() authn.SessionCookieConfig {
+	return authn.SessionCookieConfig{
+		Name:          d.CookieName,
+		AllowInsecure: d.AllowInsecureCookies,
 	}
+}
+
+// sessionCookie builds the cookie handed back by a session-creating endpoint.
+func (d Deps) sessionCookie(sessionID string, expiresAt time.Time) *http.Cookie {
+	return d.cookieConfig().Set(sessionID, expiresAt)
 }
 
 // RegisterSessions registers all session and auth endpoints.
@@ -141,7 +141,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 		}
 
 		return &SignInOutput{
-			SetCookie: sessionCookie(deps.CookieName, sessionID, sess.ExpiresAt).String(),
+			SetCookie: deps.sessionCookie(sessionID, sess.ExpiresAt).String(),
 			Body: sessionInfo{
 				UserID:       sess.UserID,
 				Email:        input.Body.Email,
@@ -177,15 +177,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 		}
 
 		// Clear the session cookie.
-		cookie := &http.Cookie{
-			Name:     deps.CookieName,
-			Value:    "",
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   -1,
-		}
+		cookie := deps.cookieConfig().Clear()
 
 		return &SignOutOutput{
 			SetCookie: cookie.String(),
@@ -292,7 +284,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 		}
 
 		return &RecoveryConsumeOutput{
-			SetCookie: sessionCookie(deps.CookieName, sessionID, sess.ExpiresAt).String(),
+			SetCookie: deps.sessionCookie(sessionID, sess.ExpiresAt).String(),
 			Body: sessionInfo{
 				UserID:    *link.UserID,
 				Email:     link.Email,
@@ -348,7 +340,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 		}
 
 		return &InvitationConsumeOutput{
-			SetCookie: sessionCookie(deps.CookieName, sessionID, sess.ExpiresAt).String(),
+			SetCookie: deps.sessionCookie(sessionID, sess.ExpiresAt).String(),
 			Body: sessionInfo{
 				UserID:    userID,
 				Email:     link.Email,

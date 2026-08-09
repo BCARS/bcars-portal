@@ -67,6 +67,8 @@ Environment:
 	smtpFrom := fs.String("smtp-from", "", "From address for outbound mail (required when -mail-transport=smtp)")
 	allowEmptyPepper := fs.Bool("allow-empty-pepper", false,
 		"start without "+authn.PepperEnvVar+" (DEVELOPMENT ONLY; passwords are hashed without a pepper)")
+	allowInsecureCookies := fs.Bool("allow-insecure-cookies", false,
+		"issue session cookies without the Secure attribute (DEVELOPMENT ONLY; required to sign in over plaintext http://localhost)")
 	// The SMTP password is read from the environment so it never appears in
 	// process listings or shell history.
 	smtpPassword := os.Getenv("PORTAL_SMTP_PASSWORD")
@@ -149,13 +151,15 @@ Environment:
 	handler, err := buildHandler(database, assemblyConfig{
 		Pepper:           []byte(os.Getenv(authn.PepperEnvVar)),
 		AllowEmptyPepper: *allowEmptyPepper,
-		Logger:           logger,
-		Version:          version.Get().Short(),
-		CookieName:       "bcars_session",
-		SessionTTL:       24 * time.Hour,
-		BaseURL:          *baseURL,
-		EmailLinkTTL:     24 * time.Hour,
-		Mailer:           mailer,
+
+		AllowInsecureCookies: *allowInsecureCookies,
+		Logger:               logger,
+		Version:              version.Get().Short(),
+		CookieName:           "bcars_session",
+		SessionTTL:           24 * time.Hour,
+		BaseURL:              *baseURL,
+		EmailLinkTTL:         24 * time.Hour,
+		Mailer:               mailer,
 	})
 	if err != nil {
 		logger.Error("failed to assemble server", slog.String("error", err.Error()))

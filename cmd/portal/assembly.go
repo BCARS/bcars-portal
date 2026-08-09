@@ -29,6 +29,10 @@ type assemblyConfig struct {
 	// must be set explicitly to run without one.
 	Pepper           []byte
 	AllowEmptyPepper bool
+
+	// AllowInsecureCookies drops the Secure attribute from session cookies
+	// on both surfaces. Development only, for plaintext http://localhost.
+	AllowInsecureCookies bool
 }
 
 // buildHandler assembles the production HTTP handler: session store, auth
@@ -67,11 +71,12 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 	})
 
 	handler, api := httpapi.NewRouter(httpapi.Config{
-		Logger:  cfg.Logger,
-		Version: cfg.Version,
-		DB:      database,
-		Mailer:  cfg.Mailer,
-		BaseURL: cfg.BaseURL,
+		Logger:               cfg.Logger,
+		Version:              cfg.Version,
+		DB:                   database,
+		Mailer:               cfg.Mailer,
+		BaseURL:              cfg.BaseURL,
+		AllowInsecureCookies: cfg.AllowInsecureCookies,
 	})
 	httpapi.RegisterAll(api, httpapi.Deps{
 		DB:               database,
@@ -80,6 +85,8 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 		EmailLinkService: emailLinks,
 		CookieName:       cfg.CookieName,
 		EmailLinkTTL:     cfg.EmailLinkTTL,
+
+		AllowInsecureCookies: cfg.AllowInsecureCookies,
 	})
 
 	// Startup check: every operation must have metadata.
@@ -91,7 +98,11 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 	// request. Without this the capability middleware finds a nil principal
 	// and every authenticated call fails with 401.
 	capLoader := &authn.SQLCapabilityLoader{DB: database}
-	return authn.Middleware(sessionStore, capLoader, cfg.CookieName)(handler), nil
+	cookies := authn.SessionCookieConfig{
+		Name:          cfg.CookieName,
+		AllowInsecure: cfg.AllowInsecureCookies,
+	}
+	return authn.Middleware(sessionStore, capLoader, cookies)(handler), nil
 }
 
 // mailConfig describes the configured outbound mail transport.
