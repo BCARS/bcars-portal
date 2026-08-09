@@ -442,12 +442,12 @@ func (s *Service) Commit(ctx context.Context, runID int64, committedBy int64) (*
 		for _, row := range rows {
 			switch row.ProposedAction {
 			case "create":
-				if err := s.applyCreateTx(ctx, qtx, row, committedBy); err != nil {
+				if err := s.applyCreateTx(ctx, qtx, row, runID, committedBy); err != nil {
 					return nil, fmt.Errorf("importd: apply create row %d: %w", row.SourceRowIndex, err)
 				}
 				result.Created++
 			case "update":
-				if err := s.applyUpdateTx(ctx, qtx, row, committedBy); err != nil {
+				if err := s.applyUpdateTx(ctx, qtx, row, runID, committedBy); err != nil {
 					return nil, fmt.Errorf("importd: apply update row %d: %w", row.SourceRowIndex, err)
 				}
 				result.Updated++
@@ -501,13 +501,21 @@ func (s *Service) Discard(ctx context.Context, runID int64) error {
 }
 
 // applyCreateTx creates a person and related records within a transaction.
-func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, staged sqlcgen.StagedImportRow, actorID int64) error {
+func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, staged sqlcgen.StagedImportRow, runID, actorID int64) error {
 	var norm NormalizedRecord
 	if err := json.Unmarshal([]byte(staged.NormalizedJson), &norm); err != nil {
 		return fmt.Errorf("unmarshal normalized: %w", err)
 	}
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+
+	// An officer's recorded decision overrides what normalization proposed for
+	// the rows it refused to guess at.
+	payload, err := decisionFor(ctx, qtx, staged.ID)
+	if err != nil {
+		return err
+	}
+	baseType := baseTypeFor(norm, payload)
 
 	// Create person.
 	person, err := qtx.CreatePerson(ctx, sqlcgen.CreatePersonParams{
@@ -576,18 +584,19 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		}
 	}
 
-	// Create membership if base type is known.
-	if norm.BaseType != "" {
+	// Create membership if base type is known, then record what the import
+	// says about dues: the paid-through date, or a lifetime honorary grant.
+	if baseType != "" {
 		m, err := qtx.CreateMembership(ctx, sqlcgen.CreateMembershipParams{
 			PersonID: person.ID,
-			BaseType: norm.BaseType,
+			BaseType: baseType,
 		})
 		if err != nil {
 			return fmt.Errorf("create membership: %w", err)
 		}
 
 		_, err = qtx.ApproveMembership(ctx, sqlcgen.ApproveMembershipParams{
-			BaseType: norm.BaseType,
+			BaseType: baseType,
 			JoinedOn: sqlNullString(now[:10]),
 			ID:       m.ID,
 			Version:  m.Version,
@@ -599,13 +608,17 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		_, err = qtx.CreateMembershipApproval(ctx, sqlcgen.CreateMembershipApprovalParams{
 			MembershipID: m.ID,
 			Decision:     "approved",
-			ApprovedType: sqlNullString(norm.BaseType),
+			ApprovedType: sqlNullString(baseType),
 			DecidedBy:    actorID,
 			DecidedAt:    now,
 			Reason:       sqlNullString("import from Groups.io"),
 		})
 		if err != nil {
 			return fmt.Errorf("create approval: %w", err)
+		}
+
+		if err := s.applyDuesDecisions(ctx, qtx, m.ID, norm, payload, runID, actorID, now); err != nil {
+			return fmt.Errorf("apply dues decisions: %w", err)
 		}
 	}
 
@@ -618,7 +631,7 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 }
 
 // applyUpdateTx updates an existing person within a transaction.
-func (s *Service) applyUpdateTx(ctx context.Context, qtx *sqlcgen.Queries, staged sqlcgen.StagedImportRow, actorID int64) error {
+func (s *Service) applyUpdateTx(ctx context.Context, qtx *sqlcgen.Queries, staged sqlcgen.StagedImportRow, runID, actorID int64) error {
 	if !staged.MatchPersonID.Valid {
 		return nil
 	}
@@ -682,6 +695,23 @@ func (s *Service) applyUpdateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 			if err != nil {
 				return fmt.Errorf("create external id: %w", err)
 			}
+		}
+	}
+
+	// Record what the import says about dues for the matched person, on the
+	// membership they already have or one created for them.
+	payload, err := decisionFor(ctx, qtx, staged.ID)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	membershipID, err := s.membershipForPerson(ctx, qtx, personID, baseTypeFor(norm, payload), actorID, now)
+	if err != nil {
+		return err
+	}
+	if membershipID != 0 {
+		if err := s.applyDuesDecisions(ctx, qtx, membershipID, norm, payload, runID, actorID, now); err != nil {
+			return fmt.Errorf("apply dues decisions: %w", err)
 		}
 	}
 
