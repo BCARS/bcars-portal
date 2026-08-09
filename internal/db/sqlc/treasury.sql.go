@@ -590,49 +590,6 @@ func (q *Queries) ListPaymentBatchEntries(ctx context.Context, batchID int64) ([
 	return items, nil
 }
 
-const listPaymentBatchesByState = `-- name: ListPaymentBatchesByState :many
-SELECT id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version FROM payment_batches WHERE state = ? ORDER BY opened_at DESC, id DESC
-`
-
-func (q *Queries) ListPaymentBatchesByState(ctx context.Context, state string) ([]PaymentBatch, error) {
-	rows, err := q.db.QueryContext(ctx, listPaymentBatchesByState, state)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []PaymentBatch{}
-	for rows.Next() {
-		var i PaymentBatch
-		if err := rows.Scan(
-			&i.ID,
-			&i.Label,
-			&i.State,
-			&i.DefaultAmountCents,
-			&i.DefaultPaidThrough,
-			&i.OpenedBy,
-			&i.OpenedAt,
-			&i.PostedBy,
-			&i.PostedAt,
-			&i.AbandonedBy,
-			&i.AbandonedAt,
-			&i.AbandonReason,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Version,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listPaymentsByBatch = `-- name: ListPaymentsByBatch :many
 SELECT id, membership_id, batch_id, amount_cents, method, reference, received_on, received_by_officer, entered_by, entered_at, receipt_code, entry_kind, corrects_payment_id, treasurer_note, created_at FROM payments WHERE batch_id = ? ORDER BY id
 `
@@ -766,6 +723,7 @@ func (q *Queries) MarkPaymentBatchAbandoned(ctx context.Context, arg MarkPayment
 }
 
 const markPaymentBatchPosted = `-- name: MarkPaymentBatchPosted :one
+
 UPDATE payment_batches
 SET state = 'posted', posted_by = ?, posted_at = ?,
     version = version + 1,
@@ -781,6 +739,7 @@ type MarkPaymentBatchPostedParams struct {
 	Version  int64
 }
 
+// Batch listing lives in batches.sql, where the state filter is optional.
 func (q *Queries) MarkPaymentBatchPosted(ctx context.Context, arg MarkPaymentBatchPostedParams) (PaymentBatch, error) {
 	row := q.db.QueryRowContext(ctx, markPaymentBatchPosted,
 		arg.PostedBy,

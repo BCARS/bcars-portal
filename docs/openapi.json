@@ -44,6 +44,29 @@
         ],
         "type": "object"
       },
+      "AbandonBatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/AbandonBatchBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why this batch was abandoned. Required, and permanent.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "AdminRole": {
         "additionalProperties": false,
         "properties": {
@@ -223,6 +246,215 @@
           "action",
           "outcome",
           "occurred_at"
+        ],
+        "type": "object"
+      },
+      "BatchEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "batch_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "check",
+              "other"
+            ],
+            "type": "string"
+          },
+          "paid_through": {
+            "description": "The coverage this row will grant when the batch is posted.",
+            "format": "date",
+            "type": "string"
+          },
+          "received_by_officer": {
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "reference": {
+            "description": "Check number or similar.",
+            "type": "string"
+          },
+          "sequence": {
+            "description": "Server-assigned and stable; removing a row never renumbers the others.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "treasurer_note": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "batch_id",
+          "membership_id",
+          "sequence",
+          "amount_cents",
+          "method",
+          "received_on",
+          "paid_through",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "BatchEntryBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchEntryBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "amount_cents": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "membership_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "check",
+              "other"
+            ],
+            "type": "string"
+          },
+          "paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "received_by_officer": {
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "treasurer_note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "membership_id",
+          "amount_cents",
+          "method",
+          "received_on",
+          "paid_through"
+        ],
+        "type": "object"
+      },
+      "BatchEntryOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchEntryOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch": {
+            "$ref": "#/components/schemas/PaymentBatch"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/BatchEntry"
+          }
+        },
+        "required": [
+          "entry",
+          "batch"
+        ],
+        "type": "object"
+      },
+      "BatchTotals": {
+        "additionalProperties": false,
+        "properties": {
+          "cash_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cash_total_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "check_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "check_total_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "entry_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "net_total_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "other_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "other_total_cents": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry_count",
+          "cash_count",
+          "cash_total_cents",
+          "check_count",
+          "check_total_cents",
+          "other_count",
+          "other_total_cents",
+          "net_total_cents"
         ],
         "type": "object"
       },
@@ -1787,6 +2019,38 @@
         ],
         "type": "object"
       },
+      "OpenBatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/OpenBatchBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "default_amount_cents": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default_paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "label": {
+            "description": "How the treasurer will recognise this batch later.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "type": "object"
+      },
       "PageAdminUser": {
         "additionalProperties": false,
         "properties": {
@@ -2043,6 +2307,38 @@
         ],
         "type": "object"
       },
+      "PagePaymentBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PagePaymentBatch.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "data": {
+            "description": "Slice of results for this page.",
+            "items": {
+              "$ref": "#/components/schemas/PaymentBatch"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Pass as cursor= to fetch the next page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "PageStagedRowResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2104,6 +2400,110 @@
         },
         "required": [
           "data"
+        ],
+        "type": "object"
+      },
+      "PaymentBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PaymentBatch.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "abandon_reason": {
+            "type": "string"
+          },
+          "abandoned_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "abandoned_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "default_amount_cents": {
+            "description": "Prefill hint for a new row. Every entry still carries explicit values.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "default_paid_through": {
+            "description": "Prefill hint for a new row.",
+            "format": "date",
+            "type": "string"
+          },
+          "entries": {
+            "description": "Present on batch detail, absent from the list.",
+            "items": {
+              "$ref": "#/components/schemas/BatchEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "opened_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "posted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "posted_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "posted",
+              "abandoned"
+            ],
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/BatchTotals",
+            "description": "Always calculated by the server; a client never submits a total."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "state",
+          "totals",
+          "opened_by_user_id",
+          "opened_at",
+          "version",
+          "created_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -2495,6 +2895,37 @@
         "required": [
           "kind",
           "occurred_at"
+        ],
+        "type": "object"
+      },
+      "UpdateBatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UpdateBatchBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "default_amount_cents": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default_paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
         ],
         "type": "object"
       },
@@ -5229,6 +5660,533 @@
         "summary": "Edit a note (writes a revision row)",
         "tags": [
           "notes"
+        ]
+      }
+    },
+    "/payment-batches": {
+      "get": {
+        "operationId": "payment-batches-list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of items to return.",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque pagination cursor returned by a previous list call.",
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque pagination cursor returned by a previous list call.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by batch state.",
+            "explode": false,
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": "Filter by batch state.",
+              "enum": [
+                "open",
+                "posted",
+                "abandoned"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePaymentBatch"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List payment batches",
+        "tags": [
+          "payments"
+        ]
+      },
+      "post": {
+        "description": "A draft batch creates no payment and no coverage event, and changes no member's dues standing until it is posted.",
+        "operationId": "payment-batch-open",
+        "parameters": [
+          {
+            "description": "Optional client-generated key so a retry cannot open a second batch.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Optional client-generated key so a retry cannot open a second batch.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenBatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentBatch"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Open a draft batch",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payment-batches/{id}": {
+      "get": {
+        "operationId": "payment-batch-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentBatch"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read a batch with its entries and server-calculated totals",
+        "tags": [
+          "payments"
+        ]
+      },
+      "patch": {
+        "operationId": "payment-batch-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Batch version you last read. Required: a missing header is a 428.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Batch version you last read. Required: a missing header is a 428.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentBatch"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Change an open batch's label and new-row defaults",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payment-batches/{id}/abandon": {
+      "post": {
+        "description": "Terminal and audited. The draft rows stay readable as the record of what was abandoned.",
+        "operationId": "payment-batch-abandon",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Batch version you last read. Required: a missing header is a 428.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Batch version you last read. Required: a missing header is a 428.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbandonBatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentBatch"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Abandon an open batch",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payment-batches/{id}/entries": {
+      "post": {
+        "description": "Returns the row and the batch, whose version and totals both move on every entry mutation.",
+        "operationId": "payment-batch-entry-create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional client-generated key so a retry cannot add the row twice.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Optional client-generated key so a retry cannot add the row twice.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchEntryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchEntryOutputBody"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a draft row",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payment-batches/{id}/entries/{entry_id}": {
+      "delete": {
+        "description": "Remaining sequence numbers are left alone so an order already read off a printed sheet does not shift.",
+        "operationId": "payment-batch-entry-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Entry version you last read. Required: a missing header is a 428.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Entry version you last read. Required: a missing header is a 428.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentBatch"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove a draft row",
+        "tags": [
+          "payments"
+        ]
+      },
+      "put": {
+        "description": "Only open batches allow this. A posted payment is corrected, never edited.",
+        "operationId": "payment-batch-entry-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Entry version you last read. Required: a missing header is a 428.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Entry version you last read. Required: a missing header is a 428.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchEntryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchEntryOutputBody"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Edit a draft row",
+        "tags": [
+          "payments"
         ]
       }
     },
