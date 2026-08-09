@@ -138,7 +138,10 @@ an image. See [deployment.md](deployment.md) and
 | `PORTAL_BACKUP_PASSPHRASE` | `portalctl backup` / `restore` | every existing backup is unreadable |
 | `PORTAL_SMTP_PASSWORD` | outbound mail | recovery and invitation mail stops |
 
-`ExpectedMigrationVersion` is 6. `/readyz` reports 503 until migrations run,
+`ExpectedMigrationVersion` was 6 **at Phase 1 close**. It moves with every
+migration — Phase 2 took it to 8 — so read the constant in
+`internal/httpapi/router.go` rather than this document.
+`/readyz` reports 503 until migrations run,
 so a deployment must migrate before its health check can pass.
 
 ### Quality gates
