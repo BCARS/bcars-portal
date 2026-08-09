@@ -470,11 +470,62 @@ type dashboardData struct {
 	PendingApprovals  int
 	ImportRuns        int
 	RecentAudit       []sqlcgen.AuditEvent
+
+	// Nav shows only the routes this caller may actually follow, so the
+	// dashboard never advertises a page that answers 403.
+	Nav navLinks
+	// DuesOwed counts the memberships a treasurer would chase, so the
+	// dashboard says whether the treasury needs attention rather than only
+	// offering a link to go and look.
+	DuesOwed int
+}
+
+// navLinks records which surfaces a principal may reach. Capabilities decide
+// what is offered, not what the template happens to hard-code: the header has
+// always shown Members and Imports to everyone, which sends officers to a
+// permission error to discover what they cannot do.
+type navLinks struct {
+	Members    bool
+	Imports    bool
+	Standing   bool
+	Batches    bool
+	Worksheets bool
+	Payments   bool
+	Audit      bool
+}
+
+// navFor reads the routes a principal may follow.
+func navFor(p *authz.Principal) navLinks {
+	return navLinks{
+		Members:    hasCap(p, "member.read"),
+		Imports:    hasCap(p, "import.upload"),
+		Standing:   hasCap(p, "dues.read"),
+		Batches:    hasCap(p, "payment.read"),
+		Worksheets: hasCap(p, "dues.worksheet.manage"),
+		Payments:   hasCap(p, "payment.post"),
+		Audit:      hasCap(p, "audit.read"),
+	}
+}
+
+// AnyTreasury reports whether the caller can reach any treasury surface.
+func (n navLinks) AnyTreasury() bool {
+	return n.Standing || n.Batches || n.Worksheets
 }
 
 func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := dashboardData{}
+	p := h.principalFromRequest(r)
+	data := dashboardData{Nav: navFor(p)}
+
+	if data.Nav.Standing {
+		// Counted through the domain service so the dashboard cannot disagree
+		// with the standing pages about who owes.
+		if owing, err := h.dues.ListStanding(ctx, p, dues.StandingQuery{
+			Status: dues.StatusExpired, Limit: statusCountsLimit,
+		}); err == nil {
+			data.DuesOwed = len(owing)
+		}
+	}
 
 	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM persons WHERE deactivated_at IS NULL`).Scan(&data.TotalPersons)
 	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'approved'`).Scan(&data.ActiveMemberships)

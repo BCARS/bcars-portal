@@ -28,11 +28,41 @@
     <div class="card">
         <h2>Quick Actions</h2>
         <div style="display: flex; flex-direction: column; gap: 8px;">
+            {{if .Nav.Members}}
             <a href="/admin/members" class="btn btn-primary" style="text-align: center;">Search Members</a>
             <a href="/admin/members/new" class="btn btn-secondary" style="text-align: center;">Create Member</a>
+            {{end}}
+            {{if .Nav.Imports}}
             <a href="/admin/imports" class="btn btn-secondary" style="text-align: center;">Import Review</a>
+            {{end}}
+            {{if .Nav.Standing}}
+            <a href="/admin/treasury" class="btn btn-secondary" style="text-align: center;">Treasury</a>
+            {{end}}
         </div>
     </div>
+
+    {{if .Nav.AnyTreasury}}
+    <div class="card">
+        <h2>Treasury</h2>
+        {{if .Nav.Standing}}
+        <p style="margin: 0 0 12px;">
+            {{if .DuesOwed}}{{.DuesOwed}} member(s) have expired dues.{{else}}No members have expired dues.{{end}}
+        </p>
+        {{end}}
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            {{if .Nav.Standing}}
+            <a href="/admin/treasury" class="btn btn-secondary" style="text-align: center;">Dues standing</a>
+            <a href="/admin/treasury/standing?status=expired" class="btn btn-secondary" style="text-align: center;">Who owes</a>
+            {{end}}
+            {{if .Nav.Batches}}
+            <a href="/admin/treasury/batches" class="btn btn-secondary" style="text-align: center;">Payment batches</a>
+            {{end}}
+            {{if .Nav.Worksheets}}
+            <a href="/admin/treasury/worksheets" class="btn btn-secondary" style="text-align: center;">Renewal worksheets</a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
 
     <div class="card">
         <h2>Recent Activity</h2>
