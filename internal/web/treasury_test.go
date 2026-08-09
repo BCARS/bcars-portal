@@ -333,3 +333,56 @@ func TestSessionCookieIsSameSiteLax(t *testing.T) {
 }
 
 func itoa(v int64) string { return strconv.FormatInt(v, 10) }
+
+// TestDashboardOffersOnlyReachableTreasuryLinks proves navigation matches what
+// the caller may actually do. Phase 2 shipped every treasury page unreachable
+// from the UI; linking them is only useful if the links do not advertise a 403.
+func TestDashboardOffersOnlyReachableTreasuryLinks(t *testing.T) {
+	t.Run("a treasurer sees every treasury route", func(t *testing.T) {
+		e := setupHandlerWithRoles(t, "treasurer")
+		seedMember(t, e, "Expired Member", "W3EXP", "2020-12-31")
+
+		body := e.get(t, "/admin/").Body.String()
+		assert.Contains(t, body, "/admin/treasury\"")
+		assert.Contains(t, body, "/admin/treasury/standing?status=expired")
+		assert.Contains(t, body, "/admin/treasury/batches")
+		assert.Contains(t, body, "/admin/treasury/worksheets")
+		assert.Contains(t, body, "have expired dues", "and whether the treasury needs attention")
+	})
+
+	t.Run("an executive sees standing but not the ledger", func(t *testing.T) {
+		e := setupHandlerWithRoles(t, "president")
+		body := e.get(t, "/admin/").Body.String()
+
+		assert.Contains(t, body, "/admin/treasury/standing?status=expired",
+			"dues.read reaches safe standing")
+		assert.NotContains(t, body, "/admin/treasury/batches",
+			"payment.read is what opens the batches, and a president has none")
+		assert.NotContains(t, body, "/admin/treasury/worksheets")
+	})
+
+	t.Run("a member sees no treasury links at all", func(t *testing.T) {
+		e := setupHandlerWithRoles(t, "member")
+		body := e.get(t, "/admin/").Body.String()
+
+		assert.NotContains(t, body, "/admin/treasury/standing")
+		assert.NotContains(t, body, "/admin/treasury/batches")
+		assert.NotContains(t, body, "/admin/treasury/worksheets")
+		assert.NotContains(t, body, "Search Members", "nor member links they cannot follow")
+	})
+}
+
+// TestHeaderNavReachesTreasury proves the treasury is reachable from every page
+// rather than only by typing a URL.
+func TestHeaderNavReachesTreasury(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Alpha Member", "W3AAA", "2020-12-31")
+
+	for _, page := range []string{"/admin/", "/admin/members", "/admin/treasury"} {
+		t.Run(page, func(t *testing.T) {
+			body := e.get(t, page).Body.String()
+			assert.Contains(t, body, `<a href="/admin/treasury">Treasury</a>`,
+				"the header must reach the treasury from %s", page)
+		})
+	}
+}
