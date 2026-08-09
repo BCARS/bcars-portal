@@ -241,7 +241,14 @@ func RegisterSessions(api huma.API, deps Deps) {
 		// Always return success to prevent email enumeration.
 		// The IP hash is what per-source recovery-abuse limiting groups on, so
 		// it has to be the real client address rather than a placeholder.
-		_ = deps.EmailLinkService.RequestRecovery(ctx, input.Body.Email, ClientIPHashFrom(ctx))
+		err := deps.EmailLinkService.RequestRecovery(ctx, input.Body.Email, ClientIPHashFrom(ctx))
+		if errors.Is(err, authn.ErrRateLimited) {
+			// 429 for everyone at the bound, known address or not. The limiter
+			// decided without looking the address up, and this response must
+			// not undo that: a 429 here and a 204 there would answer the
+			// question the uniform success response exists to hide.
+			return nil, huma.Error429TooManyRequests("too many requests; try again later")
+		}
 		return &RecoveryRequestOutput{}, nil
 	})
 

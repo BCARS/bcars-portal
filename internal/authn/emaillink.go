@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bcars/bcars-portal/internal/mail"
+	"github.com/bcars/bcars-portal/internal/ratelimit"
 )
 
 // Purpose identifies what an email link authorizes.
@@ -72,6 +73,11 @@ type EmailLinkConfig struct {
 	// package exports, and a test asserts they resolve to real routes.
 	RecoveryPath   string
 	InvitationPath string
+
+	// Limiter bounds recovery requests per source and per target. Nil disables
+	// limiting, which is correct for a service assembled without a database
+	// but must never be the production configuration.
+	Limiter *ratelimit.Limiter
 }
 
 // Defaults used when a path is not configured.
@@ -99,17 +105,42 @@ type EmailLinkService struct {
 	db     *sql.DB
 	mailer mail.Sender
 	cfg    EmailLinkConfig
+
+	// limiter bounds recovery requests. It lives here rather than in each
+	// transport so a surface cannot forget it: the admin UI form and the API
+	// endpoint both reach recovery through this method, and an unbounded
+	// second door would make the first door's bound pointless. Nil disables
+	// limiting.
+	limiter *ratelimit.Limiter
 }
+
+// ErrRateLimited reports that a request exceeded its abuse bound.
+//
+// Callers MUST translate it to the same response for every target. It is
+// returned without consulting whether the address exists, so the caller has
+// nothing target-specific to leak — but a caller that rendered a different
+// message for a known address would reintroduce the enumeration oracle this
+// limiter is shaped to avoid.
+var ErrRateLimited = errors.New("authn: too many requests")
 
 // NewEmailLinkService creates a new service.
 func NewEmailLinkService(db *sql.DB, mailer mail.Sender, cfg EmailLinkConfig) *EmailLinkService {
-	return &EmailLinkService{db: db, mailer: mailer, cfg: cfg}
+	return &EmailLinkService{db: db, mailer: mailer, cfg: cfg, limiter: cfg.Limiter}
 }
 
 // RequestRecovery creates a recovery link and sends it via the mailer.
 // Always succeeds (returns nil) even if the email doesn't exist, to prevent
 // email enumeration.
 func (s *EmailLinkService) RequestRecovery(ctx context.Context, email, ipHash string) error {
+	// The bound is evaluated BEFORE the existence lookup below, and counts
+	// requests rather than sends. That ordering is the whole design: a limiter
+	// that only counted real addresses would make "were you limited" a reliable
+	// answer to "is this address a member", which is exactly what the uniform
+	// success response exists to hide.
+	if d := s.limiter.Allow(ctx, ratelimit.RecoveryRule, ipHash, email); !d.Allowed {
+		return ErrRateLimited
+	}
+
 	// Check if user exists.
 	var userID int64
 	err := s.db.QueryRow("SELECT id FROM users WHERE email = ? AND is_active = 1", email).Scan(&userID)

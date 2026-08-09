@@ -11,6 +11,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/httpapi"
 	"github.com/bcars/bcars-portal/internal/mail"
+	"github.com/bcars/bcars-portal/internal/ratelimit"
 	"github.com/bcars/bcars-portal/internal/web"
 )
 
@@ -72,6 +73,10 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 		// link cannot point at a path the router does not serve.
 		RecoveryPath:   web.RouteResetPassword,
 		InvitationPath: web.RouteInvitationConsume,
+		// Same database and same secret as the admin UI's limiter, so both
+		// doors into recovery draw on one set of counts. An unbounded second
+		// door would make the first door's bound decorative.
+		Limiter: ratelimit.New(database, ratelimit.Config{HashKey: cfg.Pepper}),
 	})
 
 	handler, api := httpapi.NewRouter(httpapi.Config{

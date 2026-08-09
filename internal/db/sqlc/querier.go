@@ -39,6 +39,12 @@ type Querier interface {
 	//
 	// A request resolves only when this reaches zero.
 	CountPendingChangeRequestItems(ctx context.Context, requestID int64) (int64, error)
+	//
+	// Attempts from one source within the window, whatever their outcome. Counting
+	// limited attempts too means sustained hammering keeps extending the block
+	// rather than draining it, which is the intended behaviour for abuse.
+	CountRequestAttemptsBySource(ctx context.Context, arg CountRequestAttemptsBySourceParams) (int64, error)
+	CountRequestAttemptsByTarget(ctx context.Context, arg CountRequestAttemptsByTargetParams) (int64, error)
 	CountStagedRowsByAction(ctx context.Context, importRunID int64) ([]CountStagedRowsByActionRow, error)
 	CountUnresolvedManualRows(ctx context.Context, importRunID int64) (int64, error)
 	CreateAcsAresSharingEvent(ctx context.Context, arg CreateAcsAresSharingEventParams) (AcsAresSharingEvent, error)
@@ -105,6 +111,10 @@ type Querier interface {
 	DecideChangeRequestItem(ctx context.Context, arg DecideChangeRequestItemParams) (MemberChangeRequestItem, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeletePaymentBatchEntry(ctx context.Context, arg DeletePaymentBatchEntryParams) (sql.Result, error)
+	//
+	// Pruning. The table is an abuse control, not a retention record; rows older
+	// than the longest window answer no question.
+	DeleteRequestAttemptsBefore(ctx context.Context, attemptedAt string) error
 	EffectiveCapabilities(ctx context.Context, arg EffectiveCapabilitiesParams) ([]string, error)
 	ExpireHonoraryGrant(ctx context.Context, arg ExpireHonoraryGrantParams) (HonoraryGrant, error)
 	FindContactMethodByNorm(ctx context.Context, arg FindContactMethodByNormParams) ([]ContactMethod, error)
@@ -301,6 +311,15 @@ type Querier interface {
 	// so a printed worksheet and the grid keep agreeing.
 	NextPaymentBatchEntrySequence(ctx context.Context, batchID int64) (int64, error)
 	ReactivatePerson(ctx context.Context, arg ReactivatePersonParams) (Person, error)
+	// Request-attempt log backing the reusable abuse limiter.
+	//
+	// Every attempt is recorded regardless of outcome and regardless of whether the
+	// target exists, so a count here never depends on an answer the endpoint is
+	// trying not to reveal.
+	//
+	// Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
+	// offset, so a multi-byte character above a query corrupts the SQL it parses.
+	RecordRequestAttempt(ctx context.Context, arg RecordRequestAttemptParams) (RequestAttempt, error)
 	RejectMembership(ctx context.Context, arg RejectMembershipParams) (Membership, error)
 	RevokeAllSessionsForUser(ctx context.Context, userID int64) error
 	RevokeCapabilityGrant(ctx context.Context, arg RevokeCapabilityGrantParams) error
