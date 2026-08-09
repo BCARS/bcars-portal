@@ -1,22 +1,24 @@
-# Local Deployment Guide
+# Local Operation and Deployment Notes
 
 ## Quick Start
 
 ```bash
-# 1. Build
+# 1. Build and initialize the local database
 make build
+./bin/portalctl bootstrap-admin --email admin@yourclub.org --db bcars.db
 
-# 2. Initialize database and create admin
-./bin/portalctl bootstrap-admin --email admin@yourclub.org --db data/portal.db
-
-# 3. Run
-./bin/portal --db data/portal.db --addr :8080
+# 2. Start the development server
+make run
 ```
+
+Open the single-use invitation URL printed by `bootstrap-admin`. `make run`
+serves `http://localhost:8080` and deliberately relaxes the password-pepper and
+Secure-cookie requirements for local development only.
 
 ## Prerequisites
 
-- Go 1.22+ (for building from source)
-- SQLite 3.35+ (bundled via go-sqlite3)
+- Go 1.26.0 (the Makefile selects this toolchain)
+- SQLite is embedded through a pure-Go driver; no separate install is needed
 - No external services required
 
 ## Build
@@ -25,6 +27,10 @@ make build
 make build              # Builds bin/portal and bin/portalctl
 make test               # Run all tests
 make lint               # Run linter
+make migration-updown   # Verify migration up/down/up
+make sqlc-diff          # Verify generated query code
+make openapi-diff       # Verify OpenAPI and capability catalogs
+make smoke              # Exercise the shipped binaries outside the repo
 ```
 
 ## Database Setup
@@ -58,99 +64,56 @@ Even in a tagged build the command refuses to run against a database that
 holds any user other than the demo accounts, because seeding overwrites
 existing passwords by email. Never point it at a database with real members.
 
-## Running
+## Running locally
 
-### Direct
-
-```bash
-./bin/portal \
-  --db data/portal.db \
-  --addr :8080 \
-  --log-level info
-```
-
-### systemd
-
-Create `/etc/systemd/system/bcars-portal.service`:
-
-```ini
-[Unit]
-Description=BCARS Members Portal
-After=network.target
-
-[Service]
-Type=simple
-User=portal
-Group=portal
-WorkingDirectory=/opt/bcars-portal
-ExecStart=/opt/bcars-portal/bin/portal --db /opt/bcars-portal/data/portal.db --addr :8080
-Restart=on-failure
-RestartSec=5
-
-# Security hardening
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-ReadWritePaths=/opt/bcars-portal/data
-PrivateTmp=yes
-
-[Install]
-WantedBy=multi-user.target
-```
+Use the Makefile target for an ordinary local session:
 
 ```bash
-sudo systemctl enable --now bcars-portal
-sudo systemctl status bcars-portal
+make run
 ```
 
-### Docker
-
-```dockerfile
-FROM golang:1.22-bookworm AS builder
-WORKDIR /src
-COPY . .
-RUN make build
-
-FROM debian:bookworm-slim
-RUN groupadd -r portal && useradd -r -g portal portal
-COPY --from=builder /src/bin/portal /usr/local/bin/
-COPY --from=builder /src/bin/portalctl /usr/local/bin/
-COPY --from=builder /src/internal/web/templates /opt/bcars-portal/templates
-COPY --from=builder /src/internal/web/static /opt/bcars-portal/static
-RUN mkdir -p /data && chown portal:portal /data
-USER portal
-VOLUME /data
-EXPOSE 8080
-ENTRYPOINT ["portal", "--db", "/data/portal.db", "--addr", ":8080"]
-```
+The default database is `bcars.db` and the default file-log mail directory is
+`mail-outbox`. Both can be changed without editing the Makefile:
 
 ```bash
-docker build -t bcars-portal .
-docker run -d -p 8080:8080 -v portal-data:/data bcars-portal
+make run RUN_DB=/tmp/bcars-portal.db RUN_MAIL_DIR=/tmp/bcars-mail
 ```
+
+`make run` passes `--allow-empty-pepper` and `--allow-insecure-cookies`; never
+copy those flags into a production service.
+
+## Production packaging is deferred
+
+There is no supported checked-in Dockerfile or systemd unit yet. Packaging,
+service supervision, and environment-variable equivalents for non-secret flags
+belong to deferred Bead `bcars-portal-fmc.8`. The configuration and security
+notes below describe the runtime invariants that packaging must preserve; they
+are not a complete production deployment recipe.
 
 ## Backup & Restore
 
 ```bash
-# Backup (WAL-safe, with SHA-256 manifest)
+# Backup (WAL-safe, encrypted, with SHA-256 manifest)
+export PORTAL_BACKUP_PASSPHRASE='<from the password manager>'
 ./bin/portalctl backup --db data/portal.db --to backups/
 
 # Restore (never overwrites live DB)
-./bin/portalctl restore --from backups/portal-backup-*.db --into restored/
+./bin/portalctl restore --from backups/portal-backup-*.db.age --into restored/
 ```
 
-See the backup manifest JSON for schema version, file size, and SHA-256 checksum.
+Follow `docs/runbooks/backup-restore.md` for custody, restore validation, and
+drill instructions.
 
 ## Configuration
 
 | Flag | Env var | Default | Description |
 |------|---------|---------|-------------|
-| `--db` | `PORTAL_DB` | `portal.db` | Path to SQLite database |
+| `--db` | — | `portal.db` | Path to SQLite database |
 | — | `PORTAL_PASSWORD_PEPPER` | *(none)* | **Required.** Secret mixed into every password hash. Minimum 16 bytes. |
 | `--allow-empty-pepper` | — | `false` | Development only. Start without a pepper. |
 | `--allow-insecure-cookies` | — | `false` | Development only. Issue session cookies without `Secure`. |
-| `--addr` | `PORTAL_ADDR` | `:8080` | Listen address |
-| `--log-level` | `PORTAL_LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
+| `--addr` | — | `:8080` | Listen address |
+| `--log-level` | — | `info` | Log level (debug/info/warn/error) |
 | `--base-url` | — | `http://localhost:8080` | Public base URL used to build recovery/invitation links |
 | `--mail-transport` | — | `filelog` | Outbound mail transport: `filelog` (JSON files, dev) or `smtp` |
 | `--mail-dir` | — | `mail-outbox` | Directory for the `filelog` transport (created if missing) |
@@ -192,7 +155,7 @@ to disk instead of delivering them.
 - `GET /healthz` — liveness (always 200)
 - `GET /readyz` — readiness (checks DB, migrations, pragmas)
 
-## File Permissions
+## Illustrative file permissions
 
 ```
 /opt/bcars-portal/
@@ -231,7 +194,7 @@ cookie is never sent back — which presents as being unable to stay signed in
 after a successful sign-in. Run the development server as:
 
 ```bash
-./bin/portal -db data/portal.db -allow-insecure-cookies
+make run
 ```
 
 Never set this in production: without `Secure` the session cookie is eligible

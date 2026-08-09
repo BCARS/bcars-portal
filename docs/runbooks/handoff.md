@@ -132,43 +132,22 @@ can sign into.
 
 ## 6. Deployment Upgrade
 
-```bash
-# 1. Create a backup FIRST
-./bin/portalctl backup --db data/portal.db --to /backups/bcars-portal/
+Supported production packaging and its exact upgrade/rollback commands are
+deferred to `bcars-portal-fmc.8`. There is currently no checked-in systemd unit
+or Dockerfile, so do not assume a particular process manager or install path.
 
-# 2. Pull latest code
-git pull
-
-# 3. Rebuild
-make build
-
-# 4. Restart the service
-sudo systemctl restart bcars-portal
-
-# 5. Verify health
-curl http://localhost:8080/readyz
-# Should return {"status":"ok"}
-```
-
-### Rollback
-
-```bash
-# If something goes wrong, restore the previous binary and database
-./bin/portalctl restore --from /backups/bcars-portal/<latest>.db --into data/
-sudo systemctl restart bcars-portal
-```
+Before any upgrade, the technical contact must take an encrypted backup, retain
+the previously deployed binary, and follow the procedure for the actual host.
+After restart, verify `GET /healthz` and `GET /readyz`; if either fails, restore
+the previous binary and, if a data rollback is required, follow
+[backup-restore.md](backup-restore.md#restoring) using the matching `.db.age`
+artifact. Replace this section with concrete operator commands when `fmc.8`
+lands.
 
 ## 7. Logs
 
-Application logs go to stderr (captured by systemd journal or logrotate).
-
-```bash
-# View recent logs
-sudo journalctl -u bcars-portal --since "1 hour ago"
-
-# View errors only
-sudo journalctl -u bcars-portal -p err
-```
+Application logs go to stderr. Their storage and query commands depend on the
+process supervisor selected by deferred packaging Bead `bcars-portal-fmc.8`.
 
 Logs automatically redact email addresses, phone numbers, and credentials.
 See `docs/log-retention.md` for retention policy.
@@ -176,7 +155,7 @@ See `docs/log-retention.md` for retention policy.
 ## 8. Secret Rotation
 
 ### Session secrets
-Sessions are stored in the database with configurable TTL (default: 24 hours).
+Sessions are stored in the database with a 24-hour TTL.
 To force all users to re-authenticate:
 
 ```bash

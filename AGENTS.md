@@ -162,7 +162,11 @@ out of band, remain under ignored paths such as `data/`, and are never committed
    make migration-updown
    make sqlc-diff
    make openapi-diff
+   make smoke
    ```
+
+   These seven Makefile targets are the repository-specific gates. Generic
+   `bd preflight` output does not replace them.
 
 7. Review `git status`, `git diff`, generated artifacts, and the secret/PII
    check. Commit, push, and open the PR.
