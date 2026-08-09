@@ -55,6 +55,27 @@ func binPath(t *testing.T, name string) string {
 }
 
 // repoRoot walks up from the test's working directory to the module root.
+// requireOutsideRepo fails if dir sits inside the module, which would defeat
+// the point of running the binaries from it.
+func requireOutsideRepo(t *testing.T, dir string) {
+	t.Helper()
+	root, err := filepath.Abs(repoRoot(t))
+	require.NoError(t, err)
+	abs, err := filepath.Abs(dir)
+	require.NoError(t, err)
+
+	rel, err := filepath.Rel(root, abs)
+	require.NoError(t, err)
+	require.True(t, strings.HasPrefix(rel, ".."),
+		"the run directory %s is inside the repository at %s; the binaries must run elsewhere", abs, root)
+
+	// Belt and braces: nothing that looks like a source tree.
+	for _, name := range []string{"go.mod", "cmd", "internal"} {
+		_, err := os.Stat(filepath.Join(abs, name))
+		require.True(t, os.IsNotExist(err), "run directory unexpectedly contains %s", name)
+	}
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -75,8 +96,18 @@ func start(t *testing.T) *env {
 	t.Helper()
 
 	tmp := t.TempDir()
+
+	// A directory deliberately unrelated to the repository. Both binaries are
+	// invoked from here so the test proves what a deployment relies on: that
+	// the portal carries its migrations and templates inside the binary and
+	// needs nothing from the tree it was built in.
+	runDir := filepath.Join(tmp, "elsewhere")
+	require.NoError(t, os.MkdirAll(runDir, 0o750))
+	requireOutsideRepo(t, runDir)
+
 	e := &env{
 		t:       t,
+		runDir:  runDir,
 		dbPath:  filepath.Join(tmp, "smoke.db"),
 		mailDir: filepath.Join(tmp, "mail"),
 		client: &http.Client{
@@ -109,6 +140,11 @@ func start(t *testing.T) *env {
 	// server started with -allow-empty-pepper would not be the artifact that
 	// deploys.
 	cmd.Env = append(os.Environ(), smokePepperEnv)
+	// Run from a directory with no source, no go.mod and no configuration.
+	// A deployed portal has none of those nearby, so anything the binary
+	// reads relative to its working directory must fail here rather than
+	// silently resolving against the repository it was built from.
+	cmd.Dir = e.runDir
 	var logBuf syncBuffer
 	cmd.Stdout = &logBuf
 	cmd.Stderr = &logBuf
@@ -217,6 +253,7 @@ func (e *env) run(name string, args ...string) string {
 	e.t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Env = append(os.Environ(), smokePepperEnv)
+	cmd.Dir = e.runDir // see the note on cmd.Dir in start()
 	out, err := cmd.CombinedOutput()
 	require.NoError(e.t, err, "%s %s failed:\n%s", filepath.Base(name), strings.Join(args, " "), out)
 	return string(out)
