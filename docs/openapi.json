@@ -3193,6 +3193,11 @@
           "version": {
             "format": "int64",
             "type": "integer"
+          },
+          "worksheet_run_id": {
+            "description": "The renewal sheet this batch was opened from, when it was one.",
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [

@@ -145,6 +145,11 @@ type Batch struct {
 	AbandonedAt       string
 	AbandonReason     string
 
+	// WorksheetRunID names the renewal sheet this batch was opened from, when
+	// it was. A consumer that ignores it cannot show the treasurer the order
+	// the paper is in, which is the only reason the link exists.
+	WorksheetRunID int64
+
 	Version   int64
 	CreatedAt string
 	UpdatedAt string
@@ -613,6 +618,7 @@ func (s *Service) assemble(ctx context.Context, q *sqlcgen.Queries, row sqlcgen.
 		AbandonedByUserID:  row.AbandonedBy.Int64,
 		AbandonedAt:        row.AbandonedAt.String,
 		AbandonReason:      row.AbandonReason.String,
+		WorksheetRunID:     row.WorksheetRunID.Int64,
 		Version:            row.Version,
 		CreatedAt:          row.CreatedAt,
 		UpdatedAt:          row.UpdatedAt,

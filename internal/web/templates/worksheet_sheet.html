@@ -54,6 +54,7 @@
             No amounts are filled in: you type what is written on the paper.
         </p>
         <form action="/admin/treasury/worksheets/{{.Run.ID}}/batch" method="post">
+            <input type="hidden" name="idempotency_key" value="{{.HandoffKey}}">
             <button type="submit" class="btn btn-primary">Enter this sheet now</button>
         </form>
     </div>

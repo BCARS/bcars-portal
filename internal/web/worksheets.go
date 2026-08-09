@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bcars/bcars-portal/internal/domain/authz"
-	"github.com/bcars/bcars-portal/internal/domain/batches"
 	"github.com/bcars/bcars-portal/internal/domain/dues"
 	"github.com/bcars/bcars-portal/internal/domain/treasury"
 	"github.com/bcars/bcars-portal/internal/domain/worksheets"
@@ -138,6 +137,9 @@ type worksheetSheetData struct {
 	EnteredAny bool
 	CanBatch   bool
 	Error      string
+	// HandoffKey makes "Enter this sheet now" retry-safe: resubmitting the
+	// rendered form returns the batch it already opened.
+	HandoffKey string
 }
 
 // worksheetSheet renders the printable sheet.
@@ -177,6 +179,7 @@ func (h *Handler) worksheetSheetData(r *http.Request, p *authz.Principal, id int
 		ShowContact: run.IncludeEmail || run.IncludePhone,
 		FollowUp:    run.FilterKind == worksheets.FilterUnpaidSinceRun,
 		CanBatch:    hasCap(p, "payment.batch.manage"),
+		HandoffKey:  fmt.Sprintf("worksheet-%d-handoff", run.ID),
 		RateYear:    now.Year(),
 		AnnualRate:  "not set",
 	}
@@ -247,29 +250,17 @@ func (h *Handler) worksheetBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	run, err := h.worksheets.Get(r.Context(), p, id)
+	// One operation creates and links the batch, so a retried submission
+	// returns the same batch instead of opening a second empty one.
+	batchID, err := h.worksheets.OpenBatchForRun(r.Context(), p, id,
+		strings.TrimSpace(r.FormValue("label")),
+		strings.TrimSpace(r.FormValue("idempotency_key")),
+		time.Now())
 	if err != nil {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	label := run.Label
-	if label == "" {
-		label = fmt.Sprintf("Sheet %d, entered %s", run.ID, time.Now().UTC().Format(dues.ISODate))
-	}
-
-	batch, err := h.batches.Open(r.Context(), p, batches.OpenParams{
-		Label:          label,
-		IdempotencyKey: strings.TrimSpace(r.FormValue("idempotency_key")),
-	}, time.Now())
-	if err != nil {
-		h.renderDomainError(w, r, err)
-		return
-	}
-	if err := h.worksheets.LinkBatch(r.Context(), p, id, batch.ID); err != nil {
-		h.renderDomainError(w, r, err)
-		return
-	}
-	http.Redirect(w, r, fmt.Sprintf("/admin/treasury/batches/%d", batch.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/admin/treasury/batches/%d", batchID), http.StatusSeeOther)
 }
 
 func (h *Handler) renderWorksheetOptionsError(w http.ResponseWriter, r *http.Request, p *authz.Principal, msg string) {

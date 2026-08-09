@@ -13,12 +13,14 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/dues"
+	"github.com/bcars/bcars-portal/internal/domain/idem"
 )
 
 // Filter kinds.
@@ -401,6 +403,90 @@ func (s *Service) Rows(ctx context.Context, p *authz.Principal, runID, limit, of
 		}
 	}
 	return out, nil
+}
+
+// OpBatchFromRun is the idempotent operation name for the worksheet handoff.
+const OpBatchFromRun = "worksheet-batch-open"
+
+// OpenBatchForRun creates a batch for a worksheet run and links the two in one
+// transaction under one idempotency key.
+//
+// Doing it in two steps left two failure modes: a retried "Enter this sheet
+// now" opened a second empty batch, and a link that failed after the batch was
+// created left an orphan. Both are avoided by making creation and linkage the
+// same operation.
+//
+// It creates no entries. Seeding the grid means seeding the ordered work queue,
+// not payment rows: inventing an amount from a worksheet would be inventing a
+// payment.
+func (s *Service) OpenBatchForRun(ctx context.Context, p *authz.Principal, runID int64, label, idempotencyKey string, now time.Time) (int64, error) {
+	if err := authz.Authorize(ctx, p, "payment.batch.manage", nil); err != nil {
+		return 0, err
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	run, err := s.Q.GetWorksheetRun(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	if strings.TrimSpace(label) == "" {
+		label = defaultBatchLabel(run, now)
+	}
+	requestHash := idem.Hash(strconv.FormatInt(runID, 10), label)
+
+	var batchID int64
+	err = s.inTx(ctx, func(qtx *sqlcgen.Queries) error {
+		claim, err := idem.Begin(ctx, qtx, p.UserID, OpBatchFromRun, idempotencyKey, requestHash)
+		if err != nil {
+			return err
+		}
+		if claim.Replay {
+			batchID = claim.ResourceID
+			return nil
+		}
+
+		batch, err := qtx.CreatePaymentBatch(ctx, sqlcgen.CreatePaymentBatchParams{
+			Label:    label,
+			OpenedBy: p.UserID,
+			OpenedAt: now.UTC().Format(isoTimestamp),
+		})
+		if err != nil {
+			return err
+		}
+		if err := qtx.SetPaymentBatchWorksheetRun(ctx, sqlcgen.SetPaymentBatchWorksheetRunParams{
+			WorksheetRunID: nullInt(runID),
+			ID:             batch.ID,
+		}); err != nil {
+			return err
+		}
+		batchID = batch.ID
+		return claim.Complete(ctx, qtx, "payment_batch", batch.ID)
+	})
+	return batchID, err
+}
+
+// defaultBatchLabel names a batch after the sheet it came from, so a treasurer
+// recognises it in a list months later.
+func defaultBatchLabel(run sqlcgen.DuesWorksheetRun, now time.Time) string {
+	if run.Label.Valid && run.Label.String != "" {
+		return run.Label.String
+	}
+	return fmt.Sprintf("Sheet %d, entered %s", run.ID, now.UTC().Format(isoDate))
+}
+
+// inTx runs fn in a transaction.
+func (s *Service) inTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(s.Q.WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // LinkBatch records that a batch was created from a run, so a later print can

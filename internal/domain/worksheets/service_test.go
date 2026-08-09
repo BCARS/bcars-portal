@@ -12,6 +12,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/batches"
+	"github.com/bcars/bcars-portal/internal/domain/idem"
 	"github.com/bcars/bcars-portal/internal/domain/worksheets"
 )
 
@@ -383,4 +384,58 @@ func TestAuthorization(t *testing.T) {
 	_, err = f.svc.List(ctx, outsider(), 50, 0)
 	assert.ErrorIs(t, err, authz.ErrDenied)
 	assert.ErrorIs(t, f.svc.LinkBatch(ctx, outsider(), run.ID, 1), authz.ErrDenied)
+}
+
+// TestOpenBatchForRunIsAtomicAndIdempotent proves the handoff cannot leave an
+// orphan batch or open a second one on retry.
+func TestOpenBatchForRunIsAtomicAndIdempotent(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.member(t, "Alpha Member", "W3AAA", "2025-12-31", "")
+
+	run, _, err := f.svc.Create(ctx, treasurer(), params(worksheets.FilterOwes, worksheets.SortLastName), asOf)
+	require.NoError(t, err)
+
+	first, err := f.svc.OpenBatchForRun(ctx, treasurer(), run.ID, "", "handoff-1", time.Now())
+	require.NoError(t, err)
+	require.NotZero(t, first)
+
+	second, err := f.svc.OpenBatchForRun(ctx, treasurer(), run.ID, "", "handoff-1", time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, first, second, "an exact retry returns the same batch")
+
+	var batches int
+	require.NoError(t, f.db.QueryRow(`SELECT count(*) FROM payment_batches`).Scan(&batches))
+	assert.Equal(t, 1, batches)
+
+	var linked sql.NullInt64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT worksheet_run_id FROM payment_batches WHERE id = ?`, first).Scan(&linked))
+	assert.Equal(t, run.ID, linked.Int64)
+
+	t.Run("no entries are invented", func(t *testing.T) {
+		var entries int
+		require.NoError(t, f.db.QueryRow(
+			`SELECT count(*) FROM payment_batch_entries WHERE batch_id = ?`, first).Scan(&entries))
+		assert.Zero(t, entries)
+	})
+
+	t.Run("a different label with the same key conflicts", func(t *testing.T) {
+		_, err := f.svc.OpenBatchForRun(ctx, treasurer(), run.ID, "Renamed", "handoff-1", time.Now())
+		assert.ErrorIs(t, err, idem.ErrKeyReused)
+	})
+
+	t.Run("an unknown run creates nothing", func(t *testing.T) {
+		_, err := f.svc.OpenBatchForRun(ctx, treasurer(), 999, "", "handoff-2", time.Now())
+		assert.ErrorIs(t, err, sql.ErrNoRows)
+
+		var batches int
+		require.NoError(t, f.db.QueryRow(`SELECT count(*) FROM payment_batches`).Scan(&batches))
+		assert.Equal(t, 1, batches, "no orphan batch is left behind")
+	})
+
+	t.Run("it requires payment.batch.manage", func(t *testing.T) {
+		_, err := f.svc.OpenBatchForRun(ctx, outsider(), run.ID, "", "handoff-3", time.Now())
+		assert.ErrorIs(t, err, authz.ErrDenied)
+	})
 }

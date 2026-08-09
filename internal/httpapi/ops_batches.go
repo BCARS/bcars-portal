@@ -62,6 +62,8 @@ type PaymentBatch struct {
 	AbandonedAt       string `json:"abandoned_at,omitempty" format:"date-time"`
 	AbandonReason     string `json:"abandon_reason,omitempty"`
 
+	WorksheetRunID int64 `json:"worksheet_run_id,omitempty" doc:"The renewal sheet this batch was opened from, when it was one."`
+
 	Version   int64  `json:"version"`
 	CreatedAt string `json:"created_at" format:"date-time"`
 	UpdatedAt string `json:"updated_at" format:"date-time"`
@@ -222,6 +224,7 @@ func batchToResponse(b batches.Batch) PaymentBatch {
 		AbandonedByUserID:  b.AbandonedByUserID,
 		AbandonedAt:        b.AbandonedAt,
 		AbandonReason:      b.AbandonReason,
+		WorksheetRunID:     b.WorksheetRunID,
 		Version:            b.Version,
 		CreatedAt:          b.CreatedAt,
 		UpdatedAt:          b.UpdatedAt,

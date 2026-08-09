@@ -254,3 +254,85 @@ func TestWorksheetPagesDenyNonTreasurers(t *testing.T) {
 	require.NoError(t, e.h.db.QueryRow(`SELECT count(*) FROM dues_worksheet_runs`).Scan(&runs))
 	assert.Zero(t, runs)
 }
+
+// TestLinkedBatchPresentsSheetInOrder is the property the earlier tests missed:
+// they proved the link and the ordinals existed separately, not that a
+// treasurer can work down the sheet from the batch page. This one fails if the
+// batch surface ignores worksheet_run_id.
+func TestLinkedBatchPresentsSheetInOrder(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	zulu := seedMember(t, e, "Zulu Member", "W3ZZZ", "2020-12-31")
+	seedMember(t, e, "Alpha Member", "W3AAA", "2020-12-31")
+
+	id := generateSheet(t, e, url.Values{
+		"label": {"July meeting"}, "filter_kind": {"owes"}, "sort_order": {"last_name"},
+	})
+	require.Equal(t, http.StatusSeeOther,
+		e.postForm(t, "/admin/treasury/worksheets/"+itoa(id)+"/batch", url.Values{}).Code)
+
+	var batchID int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT id FROM payment_batches ORDER BY id DESC LIMIT 1`).Scan(&batchID))
+
+	body := e.get(t, "/admin/treasury/batches/"+itoa(batchID)).Body.String()
+
+	assert.Contains(t, body, "Working down sheet "+itoa(id),
+		"the batch page must name the sheet it came from")
+	assert.Contains(t, body, "Alpha Member")
+	assert.Contains(t, body, "Zulu Member")
+	assert.Contains(t, body, "0 of 2 entered")
+
+	// Saved ordinal order, not database or alphabetical accident.
+	alphaAt := indexOf(body, "Alpha Member")
+	zuluAt := indexOf(body, "Zulu Member")
+	assert.Less(t, alphaAt, zuluAt, "the sheet's saved order is what the grid shows")
+
+	// Entering a row moves progress without touching the snapshot.
+	addRow(t, e, batchID, zulu, "40.00", "cash", "row-1")
+	body = e.get(t, "/admin/treasury/batches/"+itoa(batchID)).Body.String()
+	assert.Contains(t, body, "1 of 2 entered")
+
+	var snapshotRows int
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT count(*) FROM dues_worksheet_rows WHERE run_id = ?`, id).Scan(&snapshotRows))
+	assert.Equal(t, 2, snapshotRows, "the worksheet snapshot is unchanged")
+}
+
+// TestWorksheetHandoffIsRetrySafe proves a resubmitted "Enter this sheet now"
+// returns the same batch instead of opening a second empty one.
+func TestWorksheetHandoffIsRetrySafe(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Alpha Member", "W3AAA", "2020-12-31")
+
+	id := generateSheet(t, e, url.Values{
+		"filter_kind": {"owes"}, "sort_order": {"last_name"},
+	})
+
+	form := url.Values{"idempotency_key": {"handoff-1"}}
+	first := e.postForm(t, "/admin/treasury/worksheets/"+itoa(id)+"/batch", form)
+	require.Equal(t, http.StatusSeeOther, first.Code)
+	second := e.postForm(t, "/admin/treasury/worksheets/"+itoa(id)+"/batch", form)
+	require.Equal(t, http.StatusSeeOther, second.Code)
+
+	assert.Equal(t, first.Header().Get("Location"), second.Header().Get("Location"),
+		"a retry must land on the same batch")
+
+	var batches int
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT count(*) FROM payment_batches`).Scan(&batches))
+	assert.Equal(t, 1, batches, "a retry must not open a second empty batch")
+}
+
+// TestHandoffLeavesNoOrphanWhenLinkingFails proves creation and linkage are one
+// transaction: a run that vanishes mid-flight leaves no batch behind.
+func TestHandoffLeavesNoOrphanWhenLinkingFails(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Alpha Member", "W3AAA", "2020-12-31")
+
+	w := e.postForm(t, "/admin/treasury/worksheets/999/batch", url.Values{})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var batches int
+	require.NoError(t, e.h.db.QueryRow(`SELECT count(*) FROM payment_batches`).Scan(&batches))
+	assert.Zero(t, batches, "a failed handoff must leave no orphan batch")
+}
