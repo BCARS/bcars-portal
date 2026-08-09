@@ -47,6 +47,11 @@ type Config struct {
 	// means no trusted forwarding header and no hashing — see clientip.go.
 	ClientIP ClientIPConfig
 
+	// CookieName is the session cookie both surfaces issue. Empty means
+	// authn.DefaultSessionCookieName. It is threaded to the admin UI here so
+	// one assembly cannot give the API one cookie and the UI another.
+	CookieName string
+
 	// Pepper is handed to the admin UI so it verifies passwords against the
 	// same hashes the API does. Omitting it leaves the UI unable to sign
 	// anyone in whenever the deployment configures a pepper.
@@ -95,7 +100,8 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 			Pepper:               cfg.Pepper,
 			// Same construction as the API middleware above, so a limiter
 			// reading requested_ip_hash groups both surfaces together.
-			ClientIP: cfg.ClientIP,
+			ClientIP:          cfg.ClientIP,
+			SessionCookieName: cfg.CookieName,
 		})
 		if err != nil {
 			cfg.Logger.Error("failed to initialize admin UI", slog.String("error", err.Error()))

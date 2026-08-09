@@ -18,15 +18,15 @@ func TestSessionCookieSecure(t *testing.T) {
 		cfg        SessionCookieConfig
 		wantSecure bool
 	}{
-		{"default is secure", SessionCookieConfig{Name: "portal_session"}, true},
-		{"explicit opt-out", SessionCookieConfig{Name: "portal_session", AllowInsecure: true}, false},
+		{"default is secure", SessionCookieConfig{Name: "custom_session"}, true},
+		{"explicit opt-out", SessionCookieConfig{Name: "custom_session", AllowInsecure: true}, false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			set := tc.cfg.Set("abc123", time.Now().Add(time.Hour))
 			assert.Equal(t, tc.wantSecure, set.Secure, "Set")
-			assert.Equal(t, "portal_session", set.Name)
+			assert.Equal(t, "custom_session", set.Name)
 			assert.True(t, set.HttpOnly)
 			assert.Equal(t, http.SameSiteLaxMode, set.SameSite)
 			assert.Positive(t, set.MaxAge)
@@ -43,7 +43,7 @@ func TestSessionCookieSecure(t *testing.T) {
 // A zero expiry means a browser-session cookie: no MaxAge, so it is not
 // deleted on arrival the way a negative MaxAge would be.
 func TestSessionCookieZeroExpiryHasNoMaxAge(t *testing.T) {
-	c := SessionCookieConfig{Name: "portal_session"}.Set("abc123", time.Time{})
+	c := SessionCookieConfig{Name: "custom_session"}.Set("abc123", time.Time{})
 	assert.Equal(t, 0, c.MaxAge)
 }
 

@@ -62,8 +62,6 @@ type Handler struct {
 // mailerForTest exposes the sender a test injected.
 func (h *Handler) mailerForTest() *mail.FilelogSender { return h.testMailer }
 
-const sessionCookieName = "portal_session"
-
 // Routes the emailed links point at. They are exported so the assembly can
 // configure authn.EmailLinkConfig from the same constants RegisterRoutes uses,
 // rather than the link generator hardcoding a path the router never served.
@@ -98,6 +96,11 @@ type HandlerConfig struct {
 	// login form and got a 401 (bcars-portal-pma.12).
 	Pepper []byte
 
+	// SessionCookieName is the cookie both surfaces use. Empty means
+	// authn.DefaultSessionCookieName, which is how the admin UI and the API
+	// stay on one cookie without either restating the name.
+	SessionCookieName string
+
 	// ClientIP MUST match the API's configuration. The admin UI and the API
 	// record client addresses into the same columns, and a limiter reading
 	// them cannot group two different constructions. Leaving it zero disables
@@ -131,8 +134,13 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 	cfg = cfg.withDefaults()
 	logger := cfg.Logger
 
+	cookies := authn.SessionCookieConfig{
+		Name:          cfg.SessionCookieName,
+		AllowInsecure: cfg.AllowInsecureCookies,
+	}
+
 	sessStore := authn.NewSessionStore(database, authn.SessionConfig{
-		CookieName: sessionCookieName,
+		CookieName: cookies.CookieName(),
 		TTL:        cfg.SessionTTL,
 	})
 	authSvc := authn.NewAuthService(database, sessStore, cfg.Pepper)
@@ -164,11 +172,8 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 		sess:       sessStore,
 		emailLinks: emailLinks,
 		audit:      audit.NewSQLRecorder(database, logger),
-		cookies: authn.SessionCookieConfig{
-			Name:          sessionCookieName,
-			AllowInsecure: cfg.AllowInsecureCookies,
-		},
-		clientIP: clientip.NewHasher(cfg.ClientIP),
+		cookies:    cookies,
+		clientIP:   clientip.NewHasher(cfg.ClientIP),
 	}, nil
 }
 
@@ -387,7 +392,7 @@ func detailJSON(r *http.Request, rt AdminRoute) string {
 // principalFromRequest resolves the authenticated principal from the session
 // cookie. Returns nil if unauthenticated.
 func (h *Handler) principalFromRequest(r *http.Request) *authz.Principal {
-	cookie, err := r.Cookie(sessionCookieName)
+	cookie, err := r.Cookie(h.cookies.CookieName())
 	if err != nil {
 		return nil
 	}
@@ -461,7 +466,7 @@ func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(sessionCookieName)
+	cookie, err := r.Cookie(h.cookies.CookieName())
 	if err == nil {
 		_ = h.auth.SignOut(cookie.Value)
 	}

@@ -44,11 +44,11 @@ func setupCookieHandler(t *testing.T, allowInsecure bool) *http.ServeMux {
 func sessionCookieFrom(t *testing.T, res *http.Response) *http.Cookie {
 	t.Helper()
 	for _, c := range res.Cookies() {
-		if c.Name == sessionCookieName {
+		if c.Name == authn.DefaultSessionCookieName {
 			return c
 		}
 	}
-	t.Fatalf("no %s cookie in response", sessionCookieName)
+	t.Fatalf("no %s cookie in response", authn.DefaultSessionCookieName)
 	return nil
 }
 

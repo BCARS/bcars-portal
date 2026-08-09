@@ -20,7 +20,10 @@ type CapabilityLoader interface {
 func Middleware(store *SessionStore, capLoader CapabilityLoader, cookies SessionCookieConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cookie, err := r.Cookie(cookies.Name)
+			// CookieName(), never the bare field: a config that leaves the
+			// name unset must read the same cookie Set and Clear write, or the
+			// middleware silently looks for a cookie named "".
+			cookie, err := r.Cookie(cookies.CookieName())
 			if err != nil {
 				// No cookie — unauthenticated; let authz decide.
 				next.ServeHTTP(w, r)

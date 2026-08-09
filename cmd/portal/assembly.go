@@ -80,6 +80,7 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 	})
 
 	handler, api := httpapi.NewRouter(httpapi.Config{
+		CookieName:           cfg.CookieName,
 		Logger:               cfg.Logger,
 		Version:              cfg.Version,
 		DB:                   database,

@@ -162,7 +162,7 @@ Environment:
 		TrustedProxyHeader:   *trustedProxyHeader,
 		Logger:               logger,
 		Version:              version.Get().Short(),
-		CookieName:           "bcars_session",
+		CookieName:           authn.DefaultSessionCookieName,
 		SessionTTL:           24 * time.Hour,
 		BaseURL:              *baseURL,
 		EmailLinkTTL:         24 * time.Hour,
