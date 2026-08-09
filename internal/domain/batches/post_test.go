@@ -460,3 +460,104 @@ func TestPostedPaymentsAreImmutable(t *testing.T) {
 		m, result.Payments[0].ReceiptCode)
 	assert.Error(t, err)
 }
+
+// TestSinglePaymentHashesTheEffectiveRequest proves the fingerprint covers the
+// whole request. Hashing only the ledger row meant a changed label replayed the
+// original payment instead of conflicting, even though the label names the
+// batch the payment is traceable to.
+func TestSinglePaymentHashesTheEffectiveRequest(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	m := f.member(t, "Labelled Payer")
+
+	first, err := f.svc.PostSinglePayment(ctx, poster(), batches.SingleParams{
+		Entry: entry(m, 4000, batches.MethodCash),
+		Label: "Meeting A", IdempotencyKey: "single-1", Confirm: true,
+	}, time.Now())
+	require.NoError(t, err)
+
+	t.Run("the same key with a different label conflicts", func(t *testing.T) {
+		_, err := f.svc.PostSinglePayment(ctx, poster(), batches.SingleParams{
+			Entry: entry(m, 4000, batches.MethodCash),
+			Label: "Meeting B", IdempotencyKey: "single-1", Confirm: true,
+		}, time.Now())
+		assert.ErrorIs(t, err, idem.ErrKeyReused)
+
+		var payments int
+		require.NoError(t, f.db.QueryRow(`SELECT count(*) FROM payments`).Scan(&payments))
+		assert.Equal(t, 1, payments, "a refused replay writes nothing")
+	})
+
+	t.Run("an exact replay with the explicit label returns the original", func(t *testing.T) {
+		again, err := f.svc.PostSinglePayment(ctx, poster(), batches.SingleParams{
+			Entry: entry(m, 4000, batches.MethodCash),
+			Label: "Meeting A", IdempotencyKey: "single-1", Confirm: true,
+		}, time.Now())
+		require.NoError(t, err)
+		assert.Equal(t, first.Payments[0].ID, again.Payments[0].ID)
+		assert.Equal(t, first.Batch.ID, again.Batch.ID)
+	})
+}
+
+// TestSinglePaymentReplayWithDefaultedLabel proves an omitted label replays
+// correctly: the default is computed before hashing, so the same request on the
+// same day fingerprints identically.
+func TestSinglePaymentReplayWithDefaultedLabel(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	m := f.member(t, "Unlabelled Payer")
+	at := time.Date(2026, 7, 5, 9, 0, 0, 0, time.UTC)
+
+	params := batches.SingleParams{
+		Entry: entry(m, 4000, batches.MethodCash), IdempotencyKey: "single-1", Confirm: true,
+	}
+	first, err := f.svc.PostSinglePayment(ctx, poster(), params, at)
+	require.NoError(t, err)
+
+	// Later the same day, the same omitted label defaults to the same value.
+	again, err := f.svc.PostSinglePayment(ctx, poster(), params, at.Add(3*time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, first.Payments[0].ID, again.Payments[0].ID)
+
+	var payments, batchCount int
+	require.NoError(t, f.db.QueryRow(`SELECT count(*) FROM payments`).Scan(&payments))
+	require.NoError(t, f.db.QueryRow(`SELECT count(*) FROM payment_batches`).Scan(&batchCount))
+	assert.Equal(t, 1, payments)
+	assert.Equal(t, 1, batchCount)
+
+	t.Run("an explicit label differing from the default conflicts", func(t *testing.T) {
+		changed := params
+		changed.Label = "Named explicitly"
+		_, err := f.svc.PostSinglePayment(ctx, poster(), changed, at)
+		assert.ErrorIs(t, err, idem.ErrKeyReused)
+	})
+}
+
+// TestSinglePaymentUpgradeDoesNotDuplicate proves the fix fails safe for keys
+// persisted before it. A record carrying the old entry-only hash must refuse the
+// retry, not be ignored: ignoring it would post the money a second time.
+func TestSinglePaymentUpgradeDoesNotDuplicate(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	m := f.member(t, "Upgraded Payer")
+
+	// A record as the previous release would have written it: same actor,
+	// operation, and key, but a hash computed without the label.
+	_, err := f.db.Exec(`
+		INSERT INTO idempotency_records (actor_user_id, operation, idempotency_key,
+			request_hash, resource_kind, resource_id)
+		VALUES (1, ?, 'single-1', 'hash-from-the-previous-release', 'payment_batch', 1)`,
+		batches.OpSinglePayent)
+	require.NoError(t, err)
+
+	_, err = f.svc.PostSinglePayment(ctx, poster(), batches.SingleParams{
+		Entry: entry(m, 4000, batches.MethodCash),
+		Label: "Meeting A", IdempotencyKey: "single-1", Confirm: true,
+	}, time.Now())
+	assert.ErrorIs(t, err, idem.ErrKeyReused,
+		"a key from before the fix must refuse, not silently post again")
+
+	var payments int
+	require.NoError(t, f.db.QueryRow(`SELECT count(*) FROM payments`).Scan(&payments))
+	assert.Zero(t, payments, "no second payment is written across the upgrade")
+}
