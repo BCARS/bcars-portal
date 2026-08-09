@@ -10,15 +10,18 @@ and AI transcripts are never committed. See `.gitignore` and
 
 ## Status
 
-Phase 1 (Administrative Membership MVP) is complete. Beads is the source of
-truth for deferred and remaining work; `docs/phase-1-progress.md` is the
-human-readable completion record. See:
+Phase 1 (Administrative Membership MVP) and Phase 2 (API-first treasurer
+workflow) are complete and reconciled against the shipped application. Beads
+is the source of truth for deferred and remaining work; the phase progress
+documents are the human-readable completion records. See:
 
 - `PLANNING.md` — product plan and decisions.
 - `docs/phase-1-design.md` — technical design.
 - `docs/phase-1-plan.md` — task-level implementation plan.
 - `docs/phase-2-design.md` — API-first treasurer workflow design.
 - `docs/phase-2-plan.md` — focused Phase 2 dependency and execution map.
+- `docs/phase-2-progress.md` — delivered work, reconciliation findings, and
+  assembled-binary evidence.
 - `docs/phase-3-design.md` — reviewed member requests, optional access, and directory design.
 - `docs/phase-3-plan.md` — focused Phase 3 dependency and execution map.
 - `docs/adr/` — architecture decision records.
