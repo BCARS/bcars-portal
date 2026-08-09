@@ -158,7 +158,7 @@ func TestRecoveryNonexistentEmail(t *testing.T) {
 func TestInvitationFlow(t *testing.T) {
 	env := setupEnv(t)
 
-	token, err := env.links.CreateInvitation(context.Background(), "new-officer@bcars.org", false)
+	token, err := env.links.CreateInvitation(context.Background(), "new-officer@bcars.org", "", false)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
@@ -168,6 +168,7 @@ func TestInvitationFlow(t *testing.T) {
 	assert.Equal(t, PurposeInvitation, link.Purpose)
 	assert.Equal(t, "new-officer@bcars.org", link.Email)
 	assert.Nil(t, link.UserID, "invitation has no pre-existing user")
+	assert.Empty(t, link.IntendedRoleCode, "an ordinary invitation confers no role")
 
 	// Second consume fails.
 	_, err = env.links.ConsumeLink(token)
@@ -177,7 +178,7 @@ func TestInvitationFlow(t *testing.T) {
 func TestInvitationWithEmail(t *testing.T) {
 	env := setupEnv(t)
 
-	_, err := env.links.CreateInvitation(context.Background(), "new@bcars.org", true)
+	_, err := env.links.CreateInvitation(context.Background(), "new@bcars.org", "", true)
 	require.NoError(t, err)
 
 	entries, err := env.mailer.ReadAll()

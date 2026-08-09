@@ -9,9 +9,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/bcars/bcars-portal/internal/audit"
 	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/mail"
+	"github.com/bcars/bcars-portal/internal/obs"
 	"github.com/bcars/bcars-portal/internal/version"
 )
 
@@ -82,6 +84,11 @@ func runBootstrapAdmin(args []string) error {
 	return bootstrapAdmin(d, *emailFlag, *force, *baseURL)
 }
 
+// bootstrapRoleCode is the role a bootstrap invitation confers. Consuming the
+// invitation grants it, which is what makes the resulting account a usable
+// administrator rather than an account with no capabilities.
+const bootstrapRoleCode = "administrator"
+
 func bootstrapAdmin(d *sql.DB, email string, force bool, baseURL string) error {
 	// Check for existing active administrator.
 	var count int
@@ -97,6 +104,22 @@ func bootstrapAdmin(d *sql.DB, email string, force bool, baseURL string) error {
 		return fmt.Errorf("an active administrator already exists; use --force to override (this will be audited)")
 	}
 
+	ctx := context.Background()
+	rec := audit.NewSQLRecorder(d, nil)
+
+	// The refusal message above promises the override is audited, so record
+	// it. Creating a second administrator out of band is exactly the event
+	// someone reviewing the log later needs to find.
+	if count > 0 && force {
+		rec.Record(ctx, audit.Event{
+			Action:       "auth.bootstrap_admin.force",
+			Outcome:      audit.OutcomeSuccess,
+			ResourceKind: "email_link",
+			DetailJSON: fmt.Sprintf(`{"invitee":%q,"role":%q,"existing_admins":%d,"surface":"portalctl"}`,
+				obs.SafeEmail(email), bootstrapRoleCode, count),
+		})
+	}
+
 	// Create invitation link (no email sent — print to stdout).
 	mailer := mail.NewFilelogSender(os.TempDir())
 	links := authn.NewEmailLinkService(d, mailer, authn.EmailLinkConfig{
@@ -104,14 +127,26 @@ func bootstrapAdmin(d *sql.DB, email string, force bool, baseURL string) error {
 		TTL:     24 * time.Hour,
 	})
 
-	token, err := links.CreateInvitation(context.Background(), email, false)
+	token, err := links.CreateInvitation(ctx, email, bootstrapRoleCode, false)
 	if err != nil {
 		return fmt.Errorf("create invitation: %w", err)
 	}
 
+	// portalctl runs outside the HTTP stack, so the generic middleware audit
+	// does not cover it. Record the issuance here; consuming the invitation is
+	// audited by the API under auth.invitation.consume.
+	rec.Record(ctx, audit.Event{
+		Action:       "auth.bootstrap_admin.invite",
+		Outcome:      audit.OutcomeSuccess,
+		ResourceKind: "email_link",
+		DetailJSON: fmt.Sprintf(`{"invitee":%q,"role":%q,"surface":"portalctl"}`,
+			obs.SafeEmail(email), bootstrapRoleCode),
+	})
+
 	url := fmt.Sprintf("%s/auth/invitations/consume?token=%s", baseURL, token)
 	fmt.Println("Bootstrap administrator invitation created.")
 	fmt.Printf("Email:   %s\n", email)
+	fmt.Printf("Role:    %s (granted when the invitation is accepted)\n", bootstrapRoleCode)
 	fmt.Printf("Expires: %s\n", time.Now().Add(24*time.Hour).Format(time.RFC3339))
 	fmt.Printf("URL:     %s\n", url)
 	fmt.Println("\nShare this URL securely. It can only be used once.")

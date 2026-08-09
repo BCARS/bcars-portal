@@ -22,7 +22,7 @@ func (q *Queries) ConsumeEmailLink(ctx context.Context, id int64) error {
 const createEmailLink = `-- name: CreateEmailLink :one
 INSERT INTO email_links (purpose, user_id, email, token_hash, created_at, expires_at, requested_ip_hash)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, purpose, user_id, email, token_hash, created_at, expires_at, consumed_at, requested_ip_hash
+RETURNING id, purpose, user_id, email, token_hash, created_at, expires_at, consumed_at, requested_ip_hash, intended_role_code
 `
 
 type CreateEmailLinkParams struct {
@@ -56,6 +56,7 @@ func (q *Queries) CreateEmailLink(ctx context.Context, arg CreateEmailLinkParams
 		&i.ExpiresAt,
 		&i.ConsumedAt,
 		&i.RequestedIpHash,
+		&i.IntendedRoleCode,
 	)
 	return i, err
 }
@@ -137,7 +138,7 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 }
 
 const getEmailLinkByTokenHash = `-- name: GetEmailLinkByTokenHash :one
-SELECT id, purpose, user_id, email, token_hash, created_at, expires_at, consumed_at, requested_ip_hash FROM email_links
+SELECT id, purpose, user_id, email, token_hash, created_at, expires_at, consumed_at, requested_ip_hash, intended_role_code FROM email_links
 WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 `
 
@@ -154,6 +155,7 @@ func (q *Queries) GetEmailLinkByTokenHash(ctx context.Context, tokenHash string)
 		&i.ExpiresAt,
 		&i.ConsumedAt,
 		&i.RequestedIpHash,
+		&i.IntendedRoleCode,
 	)
 	return i, err
 }

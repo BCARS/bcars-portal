@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -36,16 +37,21 @@ func setupAuthzTest(t *testing.T, roleCodes ...string) *authzEnv {
 		TTL:        1 * time.Hour,
 	})
 	authSvc := authn.NewAuthService(d, store, nil)
+	emailLinks := authn.NewEmailLinkService(d, nil, authn.EmailLinkConfig{
+		BaseURL: "http://localhost:8080",
+		TTL:     1 * time.Hour,
+	})
 
 	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test", DB: d})
 	capLoader := &authn.SQLCapabilityLoader{DB: d}
 	wrapped := authn.Middleware(store, capLoader, cookieName)(handler)
 
 	httpapi.RegisterAll(api, httpapi.Deps{
-		DB:           d,
-		AuthService:  authSvc,
-		SessionStore: store,
-		CookieName:   cookieName,
+		DB:               d,
+		AuthService:      authSvc,
+		SessionStore:     store,
+		EmailLinkService: emailLinks,
+		CookieName:       cookieName,
 	})
 	require.NoError(t, httpapi.VerifyAll(api))
 
@@ -323,4 +329,49 @@ func TestEveryOperationDeclaresKnownCapability(t *testing.T) {
 	for opID, m := range meta {
 		assert.NotEmpty(t, m.RequiredCapability, "operation %q declares no capability", opID)
 	}
+}
+
+// TestInvitationConsumeGrantsIntendedRole closes the loop for
+// bcars-portal-fmc.3 at the API layer: an invitation that carries a role must
+// produce a principal holding that role's capabilities, and the resulting
+// session must pass the capability middleware on a guarded endpoint.
+func TestInvitationConsumeGrantsIntendedRole(t *testing.T) {
+	env := setupAuthzTest(t)
+
+	links := authn.NewEmailLinkService(env.db, nil, authn.EmailLinkConfig{
+		BaseURL: "http://localhost:8080",
+		TTL:     1 * time.Hour,
+	})
+	token, err := links.CreateInvitation(context.Background(), "newadmin@bcars.org", "administrator", false)
+	require.NoError(t, err)
+
+	resp := env.do(t, http.MethodPost, "/api/v1/auth/invitations/consume", nil,
+		`{"token":"`+token+`","new_password":"correcthorsebatterystaple"}`)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var body struct {
+		UserID int64 `json:"user_id"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NotZero(t, body.UserID)
+
+	caps, err := (&authn.SQLCapabilityLoader{DB: env.db}).EffectiveCapabilities(body.UserID)
+	require.NoError(t, err)
+	assert.Contains(t, caps, "audit.read", "the invited role must actually be granted")
+
+	// And the account works: sign in and reach a capability-guarded endpoint.
+	signin := env.do(t, http.MethodPost, "/api/v1/sessions", nil,
+		`{"email":"newadmin@bcars.org","password":"correcthorsebatterystaple"}`)
+	require.Equal(t, http.StatusOK, signin.StatusCode)
+	var cookie *http.Cookie
+	for _, c := range signin.Cookies() {
+		if c.Name == "bcars_session" {
+			cookie = c
+		}
+	}
+	require.NotNil(t, cookie)
+
+	guarded := env.do(t, http.MethodGet, "/api/v1/audit-events", cookie, "")
+	assert.Equal(t, http.StatusOK, guarded.StatusCode,
+		"a bootstrapped administrator must pass the capability middleware")
 }
