@@ -36,12 +36,27 @@ make lint               # Run linter
   --db data/portal.db \
   --base-url https://portal.yourclub.org
 
-# (Optional) Seed demo users for testing
-./bin/portalctl seed-demo --db data/portal.db
 ```
 
 The `bootstrap-admin` command creates the database, runs migrations, and
-prints an invitation URL for the first administrator account.
+prints an invitation URL for the first administrator account. Everyone else is
+onboarded with `POST /invitations` from the running portal.
+
+### Demo users (development only)
+
+`portalctl seed-demo` creates accounts whose passwords are published in the
+source. It is **not** part of a production build: the code lives behind the
+`demoseed` build tag, so `make build` produces a binary in which the command
+does not exist. Developers who want it build their own:
+
+```bash
+go build -tags demoseed -o bin/portalctl-demo ./cmd/portalctl
+PORTAL_PASSWORD_PEPPER=<dev pepper> ./bin/portalctl-demo seed-demo --db /tmp/dev.db
+```
+
+Even in a tagged build the command refuses to run against a database that
+holds any user other than the demo accounts, because seeding overwrites
+existing passwords by email. Never point it at a database with real members.
 
 ## Running
 
