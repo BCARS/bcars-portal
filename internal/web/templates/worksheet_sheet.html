@@ -1,0 +1,147 @@
+{{template "layout.html" .}}
+
+{{define "title"}}{{.Run.Label}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<style>
+/* Screen: keep the sheet legible but out of the way of the controls. */
+.sheet { background: #fff; }
+.sheet table { width: 100%; border-collapse: collapse; }
+.sheet th, .sheet td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
+.sheet .write-box { min-width: 70px; }
+.sheet .rule { display: block; min-height: 18px; }
+
+@media print {
+    /* Letter portrait with a real margin, so nothing is lost to the printer. */
+    @page { size: letter portrait; margin: 0.5in; }
+
+    /* App chrome never reaches the paper. */
+    .header, .nav-tabs, .no-print, .skip-link { display: none !important; }
+    body { background: #fff; }
+    .container { max-width: none; padding: 0; }
+    .card { border: none; padding: 0; margin: 0; box-shadow: none; }
+
+    /* 12pt body text: this is filled in by hand, often in a hall with poor
+       light, by people who may not have their reading glasses. */
+    .sheet { font-size: 12pt; line-height: 1.35; color: #000; }
+    .sheet th, .sheet td { font-size: 12pt; }
+
+    /* Headers repeat on every page and a row is never split across a page
+       break, so a half-row is never signed on one page and paid on the next. */
+    .sheet thead { display: table-header-group; }
+    .sheet tfoot { display: table-footer-group; }
+    .sheet tr { page-break-inside: avoid; break-inside: avoid; }
+
+    a { color: #000; text-decoration: none; }
+}
+</style>
+
+<div class="no-print">
+    <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">{{.Run.Label}}</h2>
+    <p style="margin: 0 0 16px; color: #555;">
+        Preview. Use your browser's Print or Save as PDF.
+    </p>
+    <p>
+        <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+        <a href="/admin/treasury/worksheets" class="btn btn-secondary">Back to worksheets</a>
+    </p>
+
+    {{if .CanBatch}}
+    <div class="card">
+        <h3 style="margin: 0 0 8px; font-size: 1rem;">Enter this sheet now</h3>
+        <p style="margin: 0 0 8px; color: #555;">
+            Opens a batch linked to this sheet so you can work down the page in the same order.
+            No amounts are filled in: you type what is written on the paper.
+        </p>
+        <form action="/admin/treasury/worksheets/{{.Run.ID}}/batch" method="post">
+            <button type="submit" class="btn btn-primary">Enter this sheet now</button>
+        </form>
+    </div>
+    {{end}}
+</div>
+
+<div class="sheet card">
+    <h1 style="margin: 0 0 2px; font-size: 14pt;">Bedford County Amateur Radio Society</h1>
+    <h2 style="margin: 0 0 8px; font-size: 12pt; font-weight: 600;">Dues renewal worksheet &mdash; {{.Run.Label}}</h2>
+
+    <p style="margin: 0 0 4px;">
+        Sheet {{.Run.ID}} &middot; printed {{.PrintedAt}} &middot;
+        dues standing judged as of {{.Run.AsOf}} &middot;
+        details good as of {{.GoodAsOf}}
+    </p>
+    <p style="margin: 0 0 4px;">
+        Annual dues for {{.RateYear}}: ${{.AnnualRate}}
+    </p>
+    <p style="margin: 0 0 12px;">{{.YearEndRule}}</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 2em;">#</th>
+                <th>Name</th>
+                <th>Call sign</th>
+                {{if .ShowContact}}<th>{{.ContactKind}}</th>{{end}}
+                <th>Dues paid through</th>
+                {{if .FollowUp}}<th>Paid since last sheet</th>{{end}}
+                <th class="write-box">Amount</th>
+                <th class="write-box">Method</th>
+                <th class="write-box">Check no.</th>
+                <th class="write-box">Date</th>
+                <th style="width: 3em;">Done</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Rows}}
+            <tr>
+                <td>{{.Ordinal}}</td>
+                <td>{{.DisplayName}}</td>
+                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                {{if $.ShowContact}}<td>{{.Contact}}</td>{{end}}
+                <td>
+                    {{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}
+                    {{if eq .DuesStatus "expired"}}<br>Expired{{end}}
+                    {{if eq .DuesStatus "unknown"}}<br>No dues recorded{{end}}
+                    {{if eq .DuesStatus "honorary_waived"}}<br>Waived{{end}}
+                </td>
+                {{if $.FollowUp}}<td>{{if .EnteredSince}}Yes &mdash; already entered{{else}}No{{end}}</td>{{end}}
+                <td class="write-box"><span class="rule"></span></td>
+                <td class="write-box"><span class="rule"></span></td>
+                <td class="write-box"><span class="rule"></span></td>
+                <td class="write-box"><span class="rule"></span></td>
+                <td><span class="rule"></span></td>
+            </tr>
+            {{end}}
+
+            {{range .GuestRows}}
+            <tr>
+                <td>G{{.}}</td>
+                <td><span class="rule"></span></td>
+                <td><span class="rule"></span></td>
+                {{if $.ShowContact}}<td><span class="rule"></span></td>{{end}}
+                <td><span class="rule"></span></td>
+                {{if $.FollowUp}}<td><span class="rule"></span></td>{{end}}
+                <td class="write-box"><span class="rule"></span></td>
+                <td class="write-box"><span class="rule"></span></td>
+                <td class="write-box"><span class="rule"></span></td>
+                <td class="write-box"><span class="rule"></span></td>
+                <td><span class="rule"></span></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    <table style="margin-top: 12px; width: auto;">
+        <caption style="text-align: left; font-weight: 600; padding: 4px 0;">
+            Reconciliation &mdash; fill in at the end of the meeting
+        </caption>
+        <tbody>
+            <tr><th>Rows listed</th><td>{{.Run.RowCount}}</td></tr>
+            <tr><th>Cash counted</th><td class="write-box"><span class="rule"></span></td></tr>
+            <tr><th>Checks counted</th><td class="write-box"><span class="rule"></span></td></tr>
+            <tr><th>Other</th><td class="write-box"><span class="rule"></span></td></tr>
+            <tr><th>Total handed to the treasurer</th><td class="write-box"><span class="rule"></span></td></tr>
+            <tr><th>Counted by</th><td class="write-box"><span class="rule"></span></td></tr>
+        </tbody>
+    </table>
+</div>
+{{end}}

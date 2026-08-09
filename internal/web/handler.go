@@ -20,6 +20,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/importd"
 	"github.com/bcars/bcars-portal/internal/domain/members"
 	"github.com/bcars/bcars-portal/internal/domain/treasury"
+	"github.com/bcars/bcars-portal/internal/domain/worksheets"
 	"github.com/bcars/bcars-portal/internal/mail"
 )
 
@@ -31,6 +32,7 @@ type Handler struct {
 	dues       *dues.Service
 	batches    *batches.Service
 	treasury   *treasury.Service
+	worksheets *worksheets.Service
 	queries    *sqlcgen.Queries
 	db         *sql.DB
 	log        *slog.Logger
@@ -125,6 +127,7 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 		dues:       dues.NewService(database),
 		batches:    batches.NewService(database),
 		treasury:   treasury.NewService(database),
+		worksheets: worksheets.NewService(database),
 		imports:    importd.NewService(database),
 		queries:    sqlcgen.New(database),
 		db:         database,
@@ -198,6 +201,11 @@ func (h *Handler) AdminRoutes() []AdminRoute {
 		{Pattern: "POST /admin/treasury/batches/{id}/entries/{entry_id}/delete", Capability: "payment.batch.manage", AuditAction: "payment.batch.entry.delete", ResourceKind: "payment_batch_entry", handler: h.batchDeleteEntry},
 		{Pattern: "POST /admin/treasury/batches/{id}/post", Capability: "payment.post", AuditAction: "payment.batch.post", ResourceKind: "payment_batch", handler: h.batchPost},
 		{Pattern: "POST /admin/treasury/batches/{id}/abandon", Capability: "payment.batch.manage", AuditAction: "payment.batch.abandon", ResourceKind: "payment_batch", handler: h.batchAbandon},
+		{Pattern: "GET /admin/treasury/worksheets", Capability: "dues.worksheet.manage", ResourceKind: "dues_worksheet_run", handler: h.worksheetOptions},
+		{Pattern: "POST /admin/treasury/worksheets", Capability: "dues.worksheet.manage", AuditAction: "dues.worksheet.create", ResourceKind: "dues_worksheet_run", handler: h.worksheetCreate},
+		{Pattern: "GET /admin/treasury/worksheets/{id}", Capability: "dues.worksheet.manage", ResourceKind: "dues_worksheet_run", handler: h.worksheetSheet},
+		{Pattern: "POST /admin/treasury/worksheets/{id}/batch", Capability: "payment.batch.manage", AuditAction: "dues.worksheet.batch.link", ResourceKind: "payment_batch", handler: h.worksheetBatch},
+
 		{Pattern: "GET /admin/treasury/payments/{id}/receipt", Capability: "payment.read", ResourceKind: "payment", handler: h.receiptPage},
 		{Pattern: "GET /admin/treasury/payments/{id}/correct", Capability: "payment.correct", ResourceKind: "payment", handler: h.correctionForm},
 		{Pattern: "POST /admin/treasury/payments/{id}/correct", Capability: "payment.correct", AuditAction: "payment.correct", ResourceKind: "payment", handler: h.correctionSubmit},
