@@ -314,6 +314,75 @@
         ],
         "type": "object"
       },
+      "CoverageEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CoverageEvent.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decided_by_user_id": {
+            "description": "Absent for system decisions such as the legacy import.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "import_run_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "payment_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reason_kind": {
+            "enum": [
+              "payment",
+              "correction",
+              "adjustment",
+              "legacy_import",
+              "import"
+            ],
+            "type": "string"
+          },
+          "supersedes_event_id": {
+            "description": "The decision this one replaced, when it replaced any.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "membership_id",
+          "paid_through",
+          "reason_kind",
+          "decided_at"
+        ],
+        "type": "object"
+      },
       "CreateContactMethodBody": {
         "additionalProperties": false,
         "properties": {
@@ -345,6 +414,35 @@
         "required": [
           "kind",
           "value_raw"
+        ],
+        "type": "object"
+      },
+      "CreateCoverageEventBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateCoverageEventBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "paid_through": {
+            "description": "The coverage date being granted. Any real date is accepted; the club year-end is a convention, not a rule.",
+            "format": "date",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Plain-language explanation, required so the history reads back.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "paid_through",
+          "reason"
         ],
         "type": "object"
       },
@@ -549,6 +647,212 @@
         },
         "required": [
           "role_code"
+        ],
+        "type": "object"
+      },
+      "DuesRate": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/DuesRate.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "amount_cents": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "set_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "set_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "year": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "amount_cents",
+          "set_by_user_id",
+          "set_at",
+          "version"
+        ],
+        "type": "object"
+      },
+      "DuesStanding": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/DuesStanding.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "as_of": {
+            "description": "The date this standing was judged against.",
+            "format": "date",
+            "type": "string"
+          },
+          "base_type": {
+            "description": "Underlying membership right. An honorary waiver never changes this.",
+            "enum": [
+              "full",
+              "associate"
+            ],
+            "type": "string"
+          },
+          "call_sign": {
+            "type": "string"
+          },
+          "coverage_event_id": {
+            "description": "The effective coverage event, for reading its history.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "honorary": {
+            "$ref": "#/components/schemas/HonoraryWaiver",
+            "description": "Present only when status is honorary_waived."
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "membership_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "paid_through": {
+            "description": "Effective coverage date; absent when no decision has been recorded.",
+            "format": "date",
+            "type": "string"
+          },
+          "person_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "honorary_waived",
+              "current",
+              "expiring",
+              "expired",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "warning_days": {
+            "description": "Look-ahead window used to classify expiring.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "membership_id",
+          "person_id",
+          "display_name",
+          "base_type",
+          "lifecycle",
+          "status",
+          "as_of",
+          "warning_days"
+        ],
+        "type": "object"
+      },
+      "DuesSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "description": "Rate-derived hint. Zero when rate_known is false.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "rate_known": {
+            "description": "False when a covered year has no rate on file.",
+            "type": "boolean"
+          },
+          "years_covered": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "paid_through",
+          "label",
+          "years_covered",
+          "rate_known",
+          "explanation"
+        ],
+        "type": "object"
+      },
+      "DuesSuggestions": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/DuesSuggestions.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "as_of": {
+            "format": "date",
+            "type": "string"
+          },
+          "binding": {
+            "description": "Always false. Suggestions are display hints, never validation.",
+            "type": "boolean"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/DuesSuggestion"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "binding",
+          "choices",
+          "note"
         ],
         "type": "object"
       },
@@ -816,6 +1120,28 @@
           "grant_type",
           "is_lifetime",
           "granted_at"
+        ],
+        "type": "object"
+      },
+      "HonoraryWaiver": {
+        "additionalProperties": false,
+        "properties": {
+          "ends_on": {
+            "description": "End date of a fixed-term waiver, when one is set.",
+            "format": "date",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Whether the waiver is for life or for a fixed term.",
+            "enum": [
+              "lifetime",
+              "fixed_term"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
         ],
         "type": "object"
       },
@@ -1525,6 +1851,102 @@
         ],
         "type": "object"
       },
+      "PageCoverageEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PageCoverageEvent.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "data": {
+            "description": "Slice of results for this page.",
+            "items": {
+              "$ref": "#/components/schemas/CoverageEvent"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Pass as cursor= to fetch the next page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "PageDuesRate": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PageDuesRate.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "data": {
+            "description": "Slice of results for this page.",
+            "items": {
+              "$ref": "#/components/schemas/DuesRate"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Pass as cursor= to fetch the next page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "PageDuesStanding": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PageDuesStanding.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "data": {
+            "description": "Slice of results for this page.",
+            "items": {
+              "$ref": "#/components/schemas/DuesStanding"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Pass as cursor= to fetch the next page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "PageImportRunResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1732,6 +2154,32 @@
         },
         "required": [
           "audience"
+        ],
+        "type": "object"
+      },
+      "PutDuesRateBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PutDuesRateBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "amount_cents": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_cents"
         ],
         "type": "object"
       },
@@ -2596,6 +3044,260 @@
         "summary": "Record a new visibility preference event",
         "tags": [
           "sharing"
+        ]
+      }
+    },
+    "/dues-rates": {
+      "get": {
+        "operationId": "dues-rates-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageDuesRate"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List dues rates by effective year",
+        "tags": [
+          "dues"
+        ]
+      }
+    },
+    "/dues-rates/{year}": {
+      "put": {
+        "description": "Omit If-Match to create a rate for a year that has none. Send If-Match with the version you read to revise one. A rate informs suggestions and never validates a payment amount.",
+        "operationId": "dues-rate-put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "maximum": 2999,
+              "minimum": 1900,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Version of the rate being revised, as returned in ETag. Omit to create a rate for a year that has none.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Version of the rate being revised, as returned in ETag. Omit to create a rate for a year that has none.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutDuesRateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuesRate"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create or revise the dues rate for a year",
+        "tags": [
+          "dues"
+        ]
+      }
+    },
+    "/dues-standing": {
+      "get": {
+        "description": "Returns the safe standing summary only. Payment amounts, methods, references, receipts, and treasurer notes are not included at any capability level.",
+        "operationId": "dues-standing-list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of items to return.",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque pagination cursor returned by a previous list call.",
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque pagination cursor returned by a previous list call.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Judge standing as of this ISO date. Defaults to today (UTC).",
+            "explode": false,
+            "in": "query",
+            "name": "as_of",
+            "schema": {
+              "description": "Judge standing as of this ISO date. Defaults to today (UTC).",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Expiring look-ahead in days. Defaults to 60.",
+            "explode": false,
+            "in": "query",
+            "name": "warning_days",
+            "schema": {
+              "description": "Expiring look-ahead in days. Defaults to 60.",
+              "format": "int64",
+              "maximum": 365,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter to one derived status.",
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "Filter to one derived status.",
+              "enum": [
+                "honorary_waived",
+                "current",
+                "expiring",
+                "expired",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Match display name or call sign.",
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "description": "Match display name or call sign.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageDuesStanding"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List memberships by derived dues standing",
+        "tags": [
+          "dues"
+        ]
+      }
+    },
+    "/dues-suggestions": {
+      "get": {
+        "description": "Display hints only. The client submits the date the treasurer chose; the server never derives a paid-through date from an amount.",
+        "operationId": "dues-suggestions",
+        "parameters": [
+          {
+            "description": "Base the suggestions on this ISO date. Defaults to today (UTC).",
+            "explode": false,
+            "in": "query",
+            "name": "as_of",
+            "schema": {
+              "description": "Base the suggestions on this ISO date. Defaults to today (UTC).",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuesSuggestions"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Non-binding paid-through choices with explanations",
+        "tags": [
+          "dues"
         ]
       }
     },
@@ -3965,6 +4667,189 @@
         "summary": "Approve a pending membership and set base type",
         "tags": [
           "memberships"
+        ]
+      }
+    },
+    "/memberships/{id}/coverage-events": {
+      "get": {
+        "description": "Superseded decisions remain visible; that is how the history explains itself.",
+        "operationId": "coverage-events-list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of items to return.",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque pagination cursor returned by a previous list call.",
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque pagination cursor returned by a previous list call.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageCoverageEvent"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the append-only paid-through history",
+        "tags": [
+          "dues"
+        ]
+      },
+      "post": {
+        "description": "Appends a new decision superseding the effective one. Nothing is rewritten or deleted.",
+        "operationId": "coverage-event-create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCoverageEventBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoverageEvent"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record an independent paid-through adjustment",
+        "tags": [
+          "dues"
+        ]
+      }
+    },
+    "/memberships/{id}/dues-standing": {
+      "get": {
+        "operationId": "membership-dues-standing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Judge standing as of this ISO date. Defaults to today (UTC).",
+            "explode": false,
+            "in": "query",
+            "name": "as_of",
+            "schema": {
+              "description": "Judge standing as of this ISO date. Defaults to today (UTC).",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Expiring look-ahead in days. Defaults to 60.",
+            "explode": false,
+            "in": "query",
+            "name": "warning_days",
+            "schema": {
+              "description": "Expiring look-ahead in days. Defaults to 60.",
+              "format": "int64",
+              "maximum": 365,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuesStanding"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read one membership's derived dues standing",
+        "tags": [
+          "dues"
         ]
       }
     },

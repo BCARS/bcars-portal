@@ -47,6 +47,7 @@ func RegisterAll(api huma.API, deps Deps) {
 	RegisterMembers(api, deps)
 	RegisterContactMethods(api, deps)
 	RegisterMemberships(api, deps)
+	RegisterDues(api, deps)
 	RegisterNotes(api, deps)
 	RegisterImports(api, deps)
 	RegisterExports(api, deps)

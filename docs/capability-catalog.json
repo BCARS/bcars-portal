@@ -212,28 +212,39 @@
     "description": "Read safe dues standing, rates, and suggestions.",
     "category": "treasury",
     "ai_tool_eligibility": "read-only",
-    "operation_ids": null
+    "operation_ids": [
+      "dues-rates-list",
+      "dues-standing-list",
+      "dues-suggestions",
+      "membership-dues-standing"
+    ]
   },
   {
     "code": "dues.rate.manage",
     "description": "Create or revise the dues rate for a year.",
     "category": "treasury",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "dues-rate-put"
+    ]
   },
   {
     "code": "coverage.read",
     "description": "Read the append-only paid-through coverage history.",
     "category": "treasury",
     "ai_tool_eligibility": "read-only",
-    "operation_ids": null
+    "operation_ids": [
+      "coverage-events-list"
+    ]
   },
   {
     "code": "coverage.adjust",
     "description": "Record an independent paid-through adjustment.",
     "category": "treasury",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "coverage-event-create"
+    ]
   },
   {
     "code": "payment.read",
