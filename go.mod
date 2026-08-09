@@ -3,6 +3,7 @@ module github.com/bcars/bcars-portal
 go 1.26.0
 
 require (
+	filippo.io/age v1.3.1
 	github.com/danielgtaylor/huma/v2 v2.39.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/stretchr/testify v1.11.1
@@ -11,6 +12,7 @@ require (
 )
 
 require (
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
