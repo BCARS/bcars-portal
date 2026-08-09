@@ -194,6 +194,55 @@
     ]
   },
   {
+    "code": "change_request.manage",
+    "description": "Capture, list, and triage member change requests from any channel.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "change_request.review",
+    "description": "Decide and apply individual change-request items.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "member_access.manage",
+    "description": "Grant or revoke a member user access to person records.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "relationship.manage",
+    "description": "Maintain informational person relationships.",
+    "category": "membership",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "profile.self.read",
+    "description": "Read own explicitly granted safe profile and dues standing.",
+    "category": "member",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "change_request.submit.self",
+    "description": "Submit, track, and withdraw own change requests.",
+    "category": "member",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
+    "code": "directory.read",
+    "description": "Attempt the member directory; eligibility is checked separately.",
+    "category": "member",
+    "ai_tool_eligibility": "never",
+    "operation_ids": null
+  },
+  {
     "code": "notes.write.treasurer",
     "description": "Write treasurer-visibility notes.",
     "category": "treasury",

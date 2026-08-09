@@ -216,6 +216,69 @@ type ImportRun struct {
 	Version           int64
 }
 
+type MemberAccessGrant struct {
+	ID           int64
+	UserID       int64
+	PersonID     int64
+	AccessKind   string
+	Reason       sql.NullString
+	GrantedBy    sql.NullInt64
+	GrantedAt    string
+	RevokedAt    sql.NullString
+	RevokedBy    sql.NullInt64
+	RevokeReason sql.NullString
+	CreatedAt    string
+	UpdatedAt    string
+	Version      int64
+}
+
+type MemberChangeRequest struct {
+	ID                 int64
+	Source             string
+	Status             string
+	RequesterUserID    sql.NullInt64
+	TargetPersonID     sql.NullInt64
+	SuppliedName       sql.NullString
+	SuppliedCallSign   sql.NullString
+	SuppliedContact    sql.NullString
+	StatedRelationship sql.NullString
+	Summary            string
+	ReceivedBy         sql.NullInt64
+	SubmittedAt        string
+	TriagedBy          sql.NullInt64
+	TriagedAt          sql.NullString
+	ResolvedAt         sql.NullString
+	WithdrawnAt        sql.NullString
+	SourceIpHash       sql.NullString
+	CreatedAt          string
+	UpdatedAt          string
+	Version            int64
+}
+
+type MemberChangeRequestItem struct {
+	ID                     int64
+	RequestID              int64
+	Ordinal                int64
+	Operation              string
+	ProposedValue          sql.NullString
+	TargetKind             sql.NullString
+	TargetID               sql.NullInt64
+	TargetVersion          sql.NullInt64
+	Sensitivity            string
+	Status                 string
+	ReviewedBy             sql.NullInt64
+	ReviewedAt             sql.NullString
+	DecisionReason         sql.NullString
+	VerificationNote       sql.NullString
+	AppliedAt              sql.NullString
+	AppliedResourceKind    sql.NullString
+	AppliedResourceID      sql.NullInt64
+	AppliedResourceVersion sql.NullInt64
+	CreatedAt              string
+	UpdatedAt              string
+	Version                int64
+}
+
 type Membership struct {
 	ID        int64
 	PersonID  int64
@@ -334,6 +397,21 @@ type Person struct {
 	CallSign      sql.NullString
 	DeceasedAt    sql.NullString
 	DeactivatedAt sql.NullString
+	CreatedAt     string
+	UpdatedAt     string
+	Version       int64
+}
+
+type PersonRelationship struct {
+	ID            int64
+	FromPersonID  int64
+	ToPersonID    int64
+	Kind          string
+	Context       sql.NullString
+	CreatedBy     sql.NullInt64
+	ArchivedAt    sql.NullString
+	ArchivedBy    sql.NullInt64
+	ArchiveReason sql.NullString
 	CreatedAt     string
 	UpdatedAt     string
 	Version       int64
