@@ -360,7 +360,7 @@ func TestUploadJSON(t *testing.T) {
 func TestUploadIdempotency(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Bedford,15522,PA,false\n"
 
 	_, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "idem-dup")
 	require.NoError(t, err)
@@ -372,7 +372,7 @@ func TestUploadIdempotency(t *testing.T) {
 func TestUploadTransitionsToValidated(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "state-1")
 	require.NoError(t, err)
@@ -385,7 +385,7 @@ func TestUploadTransitionsToValidated(t *testing.T) {
 func TestListAndGetRuns(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest User,KA1ABC,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "list-1")
 	require.NoError(t, err)
@@ -403,7 +403,7 @@ func TestListAndGetRuns(t *testing.T) {
 func TestListAndGetRows(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice,KA1A,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Butler,16001,PA,false\nBob,KA1B,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice,KA1A,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Bedford,15522,PA,false\nBob,KA1B,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "rows-1")
 	require.NoError(t, err)
@@ -420,7 +420,7 @@ func TestListAndGetRows(t *testing.T) {
 func TestPreviewAndCommitHappyPath(t *testing.T) {
 	svc, d := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1AAA,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Butler,16001,PA,false\nBob Test,KA1BBB,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1AAA,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Bedford,15522,PA,false\nBob Test,KA1BBB,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "commit-1")
 	require.NoError(t, err)
@@ -471,7 +471,7 @@ func TestPreviewAndCommitHappyPath(t *testing.T) {
 func TestCommitRequiresPreviewedState(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1TST,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1TST,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "nopreview-1")
 	require.NoError(t, err)
@@ -486,7 +486,7 @@ func TestCommitRefusesUnresolvedManualRows(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
 	// Honorary without base type → requires manual.
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "manual-1")
 	require.NoError(t, err)
@@ -508,7 +508,7 @@ func TestRecordDecisionAndCommit(t *testing.T) {
 	svc, d := setupServiceDB(t)
 
 	// Honorary without base type → requires manual.
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "decide-1")
 	require.NoError(t, err)
@@ -551,7 +551,7 @@ func TestRecordDecisionApproveCreate(t *testing.T) {
 	svc, d := setupServiceDB(t)
 
 	// Honorary without base type → requires manual.
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "approve-1")
 	require.NoError(t, err)
@@ -585,7 +585,7 @@ func TestRecordDecisionApproveCreate(t *testing.T) {
 func TestRecordDecisionInvalidRunState(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nHonor Test,,12/31/2026,,Honorary,,555-444-4444,hon@example.invalid,4 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "invalid-state-1")
 	require.NoError(t, err)
@@ -618,7 +618,7 @@ func TestCommitUpdatesExistingPerson(t *testing.T) {
 	_, err := d.Exec(`INSERT INTO persons (display_name, sort_name, call_sign) VALUES ('Old Name', 'Name, Old', 'KA1UPD')`)
 	require.NoError(t, err)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nNew Name,KA1UPD,12/31/2026,,Full,General,555-333-3333,new@example.invalid,3 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nNew Name,KA1UPD,12/31/2026,,Full,General,555-333-3333,new@example.invalid,3 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "update-1")
 	require.NoError(t, err)
@@ -643,7 +643,7 @@ func TestCommitUpdatesExistingPerson(t *testing.T) {
 func TestDiscard(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nDiscard Test,KA1DIS,12/31/2026,,Full,General,555-555-5555,dis@example.invalid,5 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nDiscard Test,KA1DIS,12/31/2026,,Full,General,555-555-5555,dis@example.invalid,5 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "discard-1")
 	require.NoError(t, err)
@@ -669,7 +669,7 @@ func TestDiscard(t *testing.T) {
 func TestDiscardFromPreviewed(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1TST,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1TST,12/31/2026,,Full,General,555-000-0000,test@example.invalid,1 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "discard-prev-1")
 	require.NoError(t, err)
@@ -688,7 +688,7 @@ func TestDiscardFromPreviewed(t *testing.T) {
 func TestCommitIdempotentRetry(t *testing.T) {
 	svc, _ := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1IDM,12/31/2026,,Full,General,555-666-6666,idm@example.invalid,6 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest,KA1IDM,12/31/2026,,Full,General,555-666-6666,idm@example.invalid,6 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "idempotent-1")
 	require.NoError(t, err)
@@ -731,7 +731,7 @@ func TestSplitNotes(t *testing.T) {
 func TestCommitCreatesNotes(t *testing.T) {
 	svc, d := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1NTE,12/31/2026,Paid via PayPal on 1/1/2024. Paid via PayPal on 1/2/2025.,Full,General,555-111-1111,alice@example.invalid,1 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1NTE,12/31/2026,Paid via PayPal on 1/1/2024. Paid via PayPal on 1/2/2025.,Full,General,555-111-1111,alice@example.invalid,1 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "notes-1")
 	require.NoError(t, err)
@@ -773,7 +773,7 @@ func TestCommitNoteDedup(t *testing.T) {
 	svc, d := setupServiceDB(t)
 
 	// First import with a note.
-	csv1 := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nBob Test,KA1DDP,12/31/2026,Original note,Full,General,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
+	csv1 := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nBob Test,KA1DDP,12/31/2026,Original note,Full,General,555-222-2222,bob@example.invalid,2 Main,Bedford,15522,PA,false\n"
 
 	up1, err := svc.Upload(context.Background(), strings.NewReader(csv1), "csv", "test.csv", 1, "dedup-1")
 	require.NoError(t, err)
@@ -783,7 +783,7 @@ func TestCommitNoteDedup(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second import with same call sign — update path, same note + new note.
-	csv2 := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nBob Test,KA1DDP,12/31/2026,Original note. New note added,Full,General,555-222-2222,bob@example.invalid,2 Main,Butler,16001,PA,false\n"
+	csv2 := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nBob Test,KA1DDP,12/31/2026,Original note. New note added,Full,General,555-222-2222,bob@example.invalid,2 Main,Bedford,15522,PA,false\n"
 
 	up2, err := svc.Upload(context.Background(), strings.NewReader(csv2), "csv", "test.csv", 1, "dedup-2")
 	require.NoError(t, err)
@@ -804,7 +804,7 @@ func TestCommitIsTransactional(t *testing.T) {
 	// and persons are both updated atomically (both exist after commit).
 	svc, d := setupServiceDB(t)
 
-	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest1,KA1TX1,12/31/2026,,Full,General,555-000-0001,tx1@example.invalid,1 Main,Butler,16001,PA,false\nTest2,KA1TX2,12/31/2026,,Full,General,555-000-0002,tx2@example.invalid,2 Main,Butler,16001,PA,false\n"
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nTest1,KA1TX1,12/31/2026,,Full,General,555-000-0001,tx1@example.invalid,1 Main,Bedford,15522,PA,false\nTest2,KA1TX2,12/31/2026,,Full,General,555-000-0002,tx2@example.invalid,2 Main,Bedford,15522,PA,false\n"
 
 	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "txn-1")
 	require.NoError(t, err)

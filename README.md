@@ -1,6 +1,6 @@
 # BCARS Members Portal
 
-Private membership portal for the Butler County Amateur Radio Society.
+Private membership portal for the Bedford County Amateur Radio Society.
 
 **This repository contains no real member data.** All fixtures under
 `fixtures/synthetic/` are fabricated for testing. Real Groups.io exports,
