@@ -18,16 +18,15 @@ import (
 // --- Membership types ---
 
 type Membership struct {
-	ID                 int64  `json:"id"`
-	PersonID           int64  `json:"person_id"`
-	BaseType           string `json:"base_type" enum:"full,associate"`
-	Lifecycle          string `json:"lifecycle" enum:"pending,approved,rejected,inactive,resigned,deceased"`
-	JoinedOn           string `json:"joined_on,omitempty" format:"date"`
-	EndedOn            string `json:"ended_on,omitempty" format:"date"`
-	LegacyCurrentUntil string `json:"legacy_current_until,omitempty" format:"date"`
-	Version            int64  `json:"version"`
-	CreatedAt          string `json:"created_at" format:"date-time"`
-	UpdatedAt          string `json:"updated_at" format:"date-time"`
+	ID        int64  `json:"id"`
+	PersonID  int64  `json:"person_id"`
+	BaseType  string `json:"base_type" enum:"full,associate"`
+	Lifecycle string `json:"lifecycle" enum:"pending,approved,rejected,inactive,resigned,deceased"`
+	JoinedOn  string `json:"joined_on,omitempty" format:"date"`
+	EndedOn   string `json:"ended_on,omitempty" format:"date"`
+	Version   int64  `json:"version"`
+	CreatedAt string `json:"created_at" format:"date-time"`
+	UpdatedAt string `json:"updated_at" format:"date-time"`
 }
 
 type FCCVerification struct {
@@ -193,16 +192,15 @@ func honoraryFromDB(g sqlcgen.HonoraryGrant) HonoraryGrant {
 // membershipFromDB converts a sqlcgen.Membership to the API type.
 func membershipFromDB(m sqlcgen.Membership) Membership {
 	return Membership{
-		ID:                 m.ID,
-		PersonID:           m.PersonID,
-		BaseType:           m.BaseType,
-		Lifecycle:          m.Lifecycle,
-		JoinedOn:           m.JoinedOn.String,
-		EndedOn:            m.EndedOn.String,
-		LegacyCurrentUntil: m.LegacyCurrentUntil.String,
-		Version:            m.Version,
-		CreatedAt:          m.CreatedAt,
-		UpdatedAt:          m.UpdatedAt,
+		ID:        m.ID,
+		PersonID:  m.PersonID,
+		BaseType:  m.BaseType,
+		Lifecycle: m.Lifecycle,
+		JoinedOn:  m.JoinedOn.String,
+		EndedOn:   m.EndedOn.String,
+		Version:   m.Version,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
 	}
 }
 

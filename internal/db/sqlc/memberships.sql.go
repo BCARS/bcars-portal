@@ -16,7 +16,7 @@ SET lifecycle = 'approved', base_type = ?, joined_on = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, legacy_current_until, legacy_current_until_note, created_at, updated_at, version
+RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, created_at, updated_at, version
 `
 
 type ApproveMembershipParams struct {
@@ -41,8 +41,6 @@ func (q *Queries) ApproveMembership(ctx context.Context, arg ApproveMembershipPa
 		&i.Lifecycle,
 		&i.JoinedOn,
 		&i.EndedOn,
-		&i.LegacyCurrentUntil,
-		&i.LegacyCurrentUntilNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
@@ -140,7 +138,7 @@ func (q *Queries) CreateHonoraryGrant(ctx context.Context, arg CreateHonoraryGra
 const createMembership = `-- name: CreateMembership :one
 INSERT INTO memberships (person_id, base_type, lifecycle)
 VALUES (?, ?, 'pending')
-RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, legacy_current_until, legacy_current_until_note, created_at, updated_at, version
+RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, created_at, updated_at, version
 `
 
 type CreateMembershipParams struct {
@@ -158,8 +156,6 @@ func (q *Queries) CreateMembership(ctx context.Context, arg CreateMembershipPara
 		&i.Lifecycle,
 		&i.JoinedOn,
 		&i.EndedOn,
-		&i.LegacyCurrentUntil,
-		&i.LegacyCurrentUntilNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
@@ -292,7 +288,7 @@ func (q *Queries) GetHonoraryGrant(ctx context.Context, id int64) (HonoraryGrant
 }
 
 const getMembership = `-- name: GetMembership :one
-SELECT id, person_id, base_type, lifecycle, joined_on, ended_on, legacy_current_until, legacy_current_until_note, created_at, updated_at, version FROM memberships WHERE id = ?
+SELECT id, person_id, base_type, lifecycle, joined_on, ended_on, created_at, updated_at, version FROM memberships WHERE id = ?
 `
 
 func (q *Queries) GetMembership(ctx context.Context, id int64) (Membership, error) {
@@ -305,8 +301,6 @@ func (q *Queries) GetMembership(ctx context.Context, id int64) (Membership, erro
 		&i.Lifecycle,
 		&i.JoinedOn,
 		&i.EndedOn,
-		&i.LegacyCurrentUntil,
-		&i.LegacyCurrentUntilNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
@@ -396,7 +390,7 @@ func (q *Queries) ListHonoraryGrantsByMembership(ctx context.Context, membership
 }
 
 const listMembershipsByPerson = `-- name: ListMembershipsByPerson :many
-SELECT id, person_id, base_type, lifecycle, joined_on, ended_on, legacy_current_until, legacy_current_until_note, created_at, updated_at, version FROM memberships WHERE person_id = ? ORDER BY created_at DESC
+SELECT id, person_id, base_type, lifecycle, joined_on, ended_on, created_at, updated_at, version FROM memberships WHERE person_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListMembershipsByPerson(ctx context.Context, personID int64) ([]Membership, error) {
@@ -415,8 +409,6 @@ func (q *Queries) ListMembershipsByPerson(ctx context.Context, personID int64) (
 			&i.Lifecycle,
 			&i.JoinedOn,
 			&i.EndedOn,
-			&i.LegacyCurrentUntil,
-			&i.LegacyCurrentUntilNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
@@ -440,7 +432,7 @@ SET lifecycle = 'rejected',
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, legacy_current_until, legacy_current_until_note, created_at, updated_at, version
+RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, created_at, updated_at, version
 `
 
 type RejectMembershipParams struct {
@@ -458,8 +450,6 @@ func (q *Queries) RejectMembership(ctx context.Context, arg RejectMembershipPara
 		&i.Lifecycle,
 		&i.JoinedOn,
 		&i.EndedOn,
-		&i.LegacyCurrentUntil,
-		&i.LegacyCurrentUntilNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
@@ -535,7 +525,7 @@ SET lifecycle = ?, ended_on = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, legacy_current_until, legacy_current_until_note, created_at, updated_at, version
+RETURNING id, person_id, base_type, lifecycle, joined_on, ended_on, created_at, updated_at, version
 `
 
 type TransitionLifecycleParams struct {
@@ -560,8 +550,6 @@ func (q *Queries) TransitionLifecycle(ctx context.Context, arg TransitionLifecyc
 		&i.Lifecycle,
 		&i.JoinedOn,
 		&i.EndedOn,
-		&i.LegacyCurrentUntil,
-		&i.LegacyCurrentUntilNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,

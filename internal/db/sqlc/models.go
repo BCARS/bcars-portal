@@ -78,6 +78,32 @@ type ContactMethodVisibilityEvent struct {
 	CreatedAt       string
 }
 
+type CoverageEvent struct {
+	ID                int64
+	MembershipID      int64
+	PaidThrough       string
+	ReasonKind        string
+	Reason            sql.NullString
+	PaymentID         sql.NullInt64
+	ImportRunID       sql.NullInt64
+	SupersedesEventID sql.NullInt64
+	SourceNote        sql.NullString
+	DecidedBy         sql.NullInt64
+	DecidedAt         string
+	CreatedAt         string
+}
+
+type DuesRate struct {
+	Year        int64
+	AmountCents int64
+	Note        sql.NullString
+	SetBy       int64
+	SetAt       string
+	CreatedAt   string
+	UpdatedAt   string
+	Version     int64
+}
+
 type EmailLink struct {
 	ID               int64
 	Purpose          string
@@ -131,6 +157,17 @@ type HonoraryGrant struct {
 	Version      int64
 }
 
+type IdempotencyRecord struct {
+	ID             int64
+	ActorUserID    int64
+	Operation      string
+	IdempotencyKey string
+	RequestHash    string
+	ResourceKind   sql.NullString
+	ResourceID     sql.NullInt64
+	CreatedAt      string
+}
+
 type ImportRun struct {
 	ID                int64
 	SourceKind        string
@@ -149,17 +186,15 @@ type ImportRun struct {
 }
 
 type Membership struct {
-	ID                     int64
-	PersonID               int64
-	BaseType               string
-	Lifecycle              string
-	JoinedOn               sql.NullString
-	EndedOn                sql.NullString
-	LegacyCurrentUntil     sql.NullString
-	LegacyCurrentUntilNote sql.NullString
-	CreatedAt              string
-	UpdatedAt              string
-	Version                int64
+	ID        int64
+	PersonID  int64
+	BaseType  string
+	Lifecycle string
+	JoinedOn  sql.NullString
+	EndedOn   sql.NullString
+	CreatedAt string
+	UpdatedAt string
+	Version   int64
 }
 
 type MembershipApproval struct {
@@ -194,6 +229,70 @@ type NoteRevision struct {
 	EditedBy int64
 	EditedAt string
 	Reason   sql.NullString
+}
+
+type Payment struct {
+	ID                int64
+	MembershipID      int64
+	BatchID           sql.NullInt64
+	AmountCents       int64
+	Method            string
+	Reference         sql.NullString
+	ReceivedOn        string
+	ReceivedByOfficer sql.NullString
+	EnteredBy         int64
+	EnteredAt         string
+	ReceiptCode       string
+	EntryKind         string
+	CorrectsPaymentID sql.NullInt64
+	TreasurerNote     sql.NullString
+	CreatedAt         string
+}
+
+type PaymentBatch struct {
+	ID                 int64
+	Label              string
+	State              string
+	DefaultAmountCents sql.NullInt64
+	DefaultPaidThrough sql.NullString
+	OpenedBy           int64
+	OpenedAt           string
+	PostedBy           sql.NullInt64
+	PostedAt           sql.NullString
+	AbandonedBy        sql.NullInt64
+	AbandonedAt        sql.NullString
+	AbandonReason      sql.NullString
+	CreatedAt          string
+	UpdatedAt          string
+	Version            int64
+}
+
+type PaymentBatchEntry struct {
+	ID                int64
+	BatchID           int64
+	MembershipID      int64
+	Sequence          int64
+	AmountCents       int64
+	Method            string
+	Reference         sql.NullString
+	ReceivedOn        string
+	ReceivedByOfficer sql.NullString
+	PaidThrough       string
+	TreasurerNote     sql.NullString
+	CreatedAt         string
+	UpdatedAt         string
+	Version           int64
+}
+
+type PaymentCorrection struct {
+	ID                   int64
+	OriginalPaymentID    int64
+	ReversalPaymentID    int64
+	ReplacementPaymentID int64
+	Reason               string
+	CorrectedBy          int64
+	CorrectedAt          string
+	CreatedAt            string
 }
 
 type Person struct {
