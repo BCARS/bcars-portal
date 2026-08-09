@@ -60,7 +60,8 @@ type RecoveryConsumeBody struct {
 }
 type RecoveryConsumeInput struct{ Body RecoveryConsumeBody }
 type RecoveryConsumeOutput struct {
-	Body sessionInfo
+	SetCookie string `header:"Set-Cookie"`
+	Body      sessionInfo
 }
 
 type InvitationConsumeBody struct {
@@ -69,7 +70,26 @@ type InvitationConsumeBody struct {
 }
 type InvitationConsumeInput struct{ Body InvitationConsumeBody }
 type InvitationConsumeOutput struct {
-	Body sessionInfo
+	SetCookie string `header:"Set-Cookie"`
+	Body      sessionInfo
+}
+
+// sessionCookie builds the session cookie for every endpoint that creates a
+// session. It is shared so sign-in, recovery consumption and invitation
+// consumption cannot disagree about the cookie's attributes — and so that an
+// endpoint which creates a session cannot forget to hand one back, which is
+// how recovery and invitation left the caller signed in on the server but
+// anonymous in the browser.
+func sessionCookie(name, sessionID string, expiresAt time.Time) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
+	}
 }
 
 // RegisterSessions registers all session and auth endpoints.
@@ -120,18 +140,8 @@ func RegisterSessions(api huma.API, deps Deps) {
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to load capabilities")
 		}
 
-		cookie := &http.Cookie{
-			Name:     deps.CookieName,
-			Value:    sessionID,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   int(time.Until(sess.ExpiresAt).Seconds()),
-		}
-
 		return &SignInOutput{
-			SetCookie: cookie.String(),
+			SetCookie: sessionCookie(deps.CookieName, sessionID, sess.ExpiresAt).String(),
 			Body: sessionInfo{
 				UserID:       sess.UserID,
 				Email:        input.Body.Email,
@@ -262,7 +272,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 		if err != nil {
 			return nil, huma.NewError(http.StatusBadRequest, "invalid or expired recovery link")
 		}
-		if link.Purpose != "recovery" || link.UserID == nil {
+		if link.Purpose != authn.PurposeRecovery || link.UserID == nil {
 			return nil, huma.NewError(http.StatusBadRequest, "invalid recovery link")
 		}
 
@@ -274,9 +284,15 @@ func RegisterSessions(api huma.API, deps Deps) {
 		if err != nil {
 			return nil, huma.NewError(http.StatusInternalServerError, "password reset but login failed")
 		}
-		sess, _ := deps.SessionStore.Get(sessionID)
+		// Not ignorable: a zero session yields a cookie with a negative
+		// MaxAge, which deletes itself the moment the browser stores it.
+		sess, err := deps.SessionStore.Get(sessionID)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "session created but retrieval failed")
+		}
 
 		return &RecoveryConsumeOutput{
+			SetCookie: sessionCookie(deps.CookieName, sessionID, sess.ExpiresAt).String(),
 			Body: sessionInfo{
 				UserID:    *link.UserID,
 				Email:     link.Email,
@@ -305,7 +321,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 		if err != nil {
 			return nil, huma.NewError(http.StatusBadRequest, "invalid or expired invitation link")
 		}
-		if link.Purpose != "invitation" {
+		if link.Purpose != authn.PurposeInvitation {
 			return nil, huma.NewError(http.StatusBadRequest, "invalid invitation link")
 		}
 
@@ -324,9 +340,15 @@ func RegisterSessions(api huma.API, deps Deps) {
 		if err != nil {
 			return nil, huma.NewError(http.StatusInternalServerError, "account created but login failed")
 		}
-		sess, _ := deps.SessionStore.Get(sessionID)
+		// Not ignorable: a zero session yields a cookie with a negative
+		// MaxAge, which deletes itself the moment the browser stores it.
+		sess, err := deps.SessionStore.Get(sessionID)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "session created but retrieval failed")
+		}
 
 		return &InvitationConsumeOutput{
+			SetCookie: sessionCookie(deps.CookieName, sessionID, sess.ExpiresAt).String(),
 			Body: sessionInfo{
 				UserID:    userID,
 				Email:     link.Email,

@@ -17,6 +17,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/importd"
 	"github.com/bcars/bcars-portal/internal/domain/members"
+	"github.com/bcars/bcars-portal/internal/mail"
 )
 
 // Handler serves the admin UI pages.
@@ -31,30 +32,76 @@ type Handler struct {
 	sess       *authn.SessionStore
 	emailLinks *authn.EmailLinkService
 	audit      audit.Recorder
+
+	// testMailer is set by tests that need to read what was sent. Nil in
+	// production; the handler never reads it.
+	testMailer *mail.FilelogSender
 }
+
+// mailerForTest exposes the sender a test injected.
+func (h *Handler) mailerForTest() *mail.FilelogSender { return h.testMailer }
 
 const sessionCookieName = "portal_session"
 
+// Routes the emailed links point at. They are exported so the assembly can
+// configure authn.EmailLinkConfig from the same constants RegisterRoutes uses,
+// rather than the link generator hardcoding a path the router never served.
+const (
+	RouteLogin             = "/login"
+	RouteForgotPassword    = "/forgot-password"
+	RouteResetPassword     = "/reset-password"
+	RouteInvitationConsume = "/auth/invitations/consume"
+)
+
+// HandlerConfig holds the web UI's dependencies. Mailer and BaseURL are
+// required for the recovery and invitation flows: the previous constructor
+// hardcoded a nil sender, so requesting a password reset panicked on a nil
+// interface call.
+type HandlerConfig struct {
+	Logger       *slog.Logger
+	Mailer       mail.Sender
+	BaseURL      string
+	SessionTTL   time.Duration
+	EmailLinkTTL time.Duration
+}
+
+func (c HandlerConfig) withDefaults() HandlerConfig {
+	if c.Logger == nil {
+		c.Logger = slog.Default()
+	}
+	if c.BaseURL == "" {
+		c.BaseURL = "http://localhost:8080"
+	}
+	if c.SessionTTL == 0 {
+		c.SessionTTL = 24 * time.Hour
+	}
+	if c.EmailLinkTTL == 0 {
+		c.EmailLinkTTL = 24 * time.Hour
+	}
+	return c
+}
+
 // NewHandler creates a web handler with template rendering and domain services.
-func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
+func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 	r, err := NewRenderer()
 	if err != nil {
 		return nil, fmt.Errorf("web: parse templates: %w", err)
 	}
 
-	if logger == nil {
-		logger = slog.Default()
-	}
+	cfg = cfg.withDefaults()
+	logger := cfg.Logger
 
 	sessStore := authn.NewSessionStore(database, authn.SessionConfig{
 		CookieName: sessionCookieName,
-		TTL:        24 * time.Hour,
+		TTL:        cfg.SessionTTL,
 	})
 	authSvc := authn.NewAuthService(database, sessStore, nil)
 
-	emailLinks := authn.NewEmailLinkService(database, nil, authn.EmailLinkConfig{
-		BaseURL: "http://localhost:8080",
-		TTL:     24 * time.Hour,
+	emailLinks := authn.NewEmailLinkService(database, cfg.Mailer, authn.EmailLinkConfig{
+		BaseURL:        cfg.BaseURL,
+		TTL:            cfg.EmailLinkTTL,
+		RecoveryPath:   RouteResetPassword,
+		InvitationPath: RouteInvitationConsume,
 	})
 
 	return &Handler{
@@ -74,15 +121,15 @@ func NewHandler(database *sql.DB, logger *slog.Logger) (*Handler, error) {
 // RegisterRoutes registers all admin UI routes on the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Public: login/logout, recovery, invitation.
-	mux.Handle("GET /login", h.logged(h.loginPage))
-	mux.Handle("POST /login", h.logged(h.loginSubmit))
+	mux.Handle("GET "+RouteLogin, h.logged(h.loginPage))
+	mux.Handle("POST "+RouteLogin, h.logged(h.loginSubmit))
 	mux.Handle("POST /logout", h.logged(h.logout))
-	mux.Handle("GET /forgot-password", h.logged(h.forgotPasswordPage))
-	mux.Handle("POST /forgot-password", h.logged(h.forgotPasswordSubmit))
-	mux.Handle("GET /reset-password", h.logged(h.resetPasswordPage))
-	mux.Handle("POST /reset-password", h.logged(h.resetPasswordSubmit))
-	mux.Handle("GET /auth/invitations/consume", h.logged(h.invitationPage))
-	mux.Handle("POST /auth/invitations/consume", h.logged(h.invitationSubmit))
+	mux.Handle("GET "+RouteForgotPassword, h.logged(h.forgotPasswordPage))
+	mux.Handle("POST "+RouteForgotPassword, h.logged(h.forgotPasswordSubmit))
+	mux.Handle("GET "+RouteResetPassword, h.logged(h.resetPasswordPage))
+	mux.Handle("POST "+RouteResetPassword, h.logged(h.resetPasswordSubmit))
+	mux.Handle("GET "+RouteInvitationConsume, h.logged(h.invitationPage))
+	mux.Handle("POST "+RouteInvitationConsume, h.logged(h.invitationSubmit))
 
 	// Admin routes — each declares the capability it requires and, for
 	// mutations, the audit action it emits. AdminRoutes is the single source
@@ -1078,7 +1125,7 @@ func (h *Handler) resetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "This recovery link is invalid or has expired. Please request a new one."})
 		return
 	}
-	if link.Purpose != "recovery" || link.UserID == nil {
+	if link.Purpose != authn.PurposeRecovery || link.UserID == nil {
 		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "Invalid recovery link."})
 		return
 	}
@@ -1141,7 +1188,7 @@ func (h *Handler) invitationSubmit(w http.ResponseWriter, r *http.Request) {
 		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "This invitation link is invalid or has expired."})
 		return
 	}
-	if link.Purpose != "invitation" {
+	if link.Purpose != authn.PurposeInvitation {
 		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "Invalid invitation link."})
 		return
 	}

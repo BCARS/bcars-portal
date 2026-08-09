@@ -15,6 +15,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/mail"
 	"github.com/bcars/bcars-portal/internal/obs"
 	"github.com/bcars/bcars-portal/internal/version"
+	"github.com/bcars/bcars-portal/internal/web"
 )
 
 func main() {
@@ -125,6 +126,10 @@ func bootstrapAdmin(d *sql.DB, email string, force bool, baseURL string) error {
 	links := authn.NewEmailLinkService(d, mailer, authn.EmailLinkConfig{
 		BaseURL: baseURL,
 		TTL:     24 * time.Hour,
+		// Same route constants the server registers, so the URL printed here
+		// is the URL that actually resolves.
+		RecoveryPath:   web.RouteResetPassword,
+		InvitationPath: web.RouteInvitationConsume,
 	})
 
 	token, err := links.CreateInvitation(ctx, email, bootstrapRoleCode, false)
@@ -143,12 +148,11 @@ func bootstrapAdmin(d *sql.DB, email string, force bool, baseURL string) error {
 			obs.SafeEmail(email), bootstrapRoleCode),
 	})
 
-	url := fmt.Sprintf("%s/auth/invitations/consume?token=%s", baseURL, token)
 	fmt.Println("Bootstrap administrator invitation created.")
 	fmt.Printf("Email:   %s\n", email)
 	fmt.Printf("Role:    %s (granted when the invitation is accepted)\n", bootstrapRoleCode)
 	fmt.Printf("Expires: %s\n", time.Now().Add(24*time.Hour).Format(time.RFC3339))
-	fmt.Printf("URL:     %s\n", url)
+	fmt.Printf("URL:     %s\n", links.InvitationURL(token))
 	fmt.Println("\nShare this URL securely. It can only be used once.")
 
 	return nil

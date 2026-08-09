@@ -15,13 +15,16 @@ import (
 
 	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/httpapi"
+	"github.com/bcars/bcars-portal/internal/mail"
 )
 
 // authzEnv is a fully wired API server plus the database behind it, so tests
 // can both drive requests and inspect the audit trail they produce.
 type authzEnv struct {
-	ts *httptest.Server
-	db *sql.DB
+	ts     *httptest.Server
+	db     *sql.DB
+	mailer *mail.FilelogSender
+	links  *authn.EmailLinkService
 }
 
 // setupAuthzTest builds the API with authn.Middleware in front of it and seeds
@@ -37,7 +40,8 @@ func setupAuthzTest(t *testing.T, roleCodes ...string) *authzEnv {
 		TTL:        1 * time.Hour,
 	})
 	authSvc := authn.NewAuthService(d, store, nil)
-	emailLinks := authn.NewEmailLinkService(d, nil, authn.EmailLinkConfig{
+	mailer := mail.NewFilelogSender(t.TempDir())
+	emailLinks := authn.NewEmailLinkService(d, mailer, authn.EmailLinkConfig{
 		BaseURL: "http://localhost:8080",
 		TTL:     1 * time.Hour,
 	})
@@ -70,7 +74,7 @@ func setupAuthzTest(t *testing.T, roleCodes ...string) *authzEnv {
 
 	ts := httptest.NewServer(wrapped)
 	t.Cleanup(ts.Close)
-	return &authzEnv{ts: ts, db: d}
+	return &authzEnv{ts: ts, db: d, mailer: mailer, links: emailLinks}
 }
 
 func (e *authzEnv) signIn(t *testing.T) *http.Cookie {
@@ -338,11 +342,7 @@ func TestEveryOperationDeclaresKnownCapability(t *testing.T) {
 func TestInvitationConsumeGrantsIntendedRole(t *testing.T) {
 	env := setupAuthzTest(t)
 
-	links := authn.NewEmailLinkService(env.db, nil, authn.EmailLinkConfig{
-		BaseURL: "http://localhost:8080",
-		TTL:     1 * time.Hour,
-	})
-	token, err := links.CreateInvitation(context.Background(), "newadmin@bcars.org", "administrator", false)
+	token, err := env.links.CreateInvitation(context.Background(), "newadmin@bcars.org", "administrator", false)
 	require.NoError(t, err)
 
 	resp := env.do(t, http.MethodPost, "/api/v1/auth/invitations/consume", nil,

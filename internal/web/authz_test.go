@@ -14,6 +14,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
+	"github.com/bcars/bcars-portal/internal/mail"
 )
 
 // setupHandlerWithRoles builds a handler whose signed-in user holds exactly
@@ -38,8 +39,10 @@ func setupHandlerWithRoles(t *testing.T, roles ...string) *testEnv {
 		require.NoError(t, err)
 	}
 
-	h, err := NewHandler(d, nil)
+	mailer := testMailer(t)
+	h, err := NewHandler(d, HandlerConfig{Mailer: mailer, BaseURL: "http://portal.example"})
 	require.NoError(t, err)
+	h.testMailer = mailer
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -214,4 +217,11 @@ func TestWebSuccessIsAudited(t *testing.T) {
 	assert.Equal(t, "success", outcome)
 	assert.Equal(t, "person", kind)
 	assert.NotZero(t, resourceID.Int64)
+}
+
+// testMailer gives the handler a real sender so recovery and invitation flows
+// can be exercised, and so a test can read what was sent.
+func testMailer(t *testing.T) *mail.FilelogSender {
+	t.Helper()
+	return mail.NewFilelogSender(t.TempDir())
 }

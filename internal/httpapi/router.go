@@ -14,6 +14,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
 	"github.com/bcars/bcars-portal/internal/audit"
+	"github.com/bcars/bcars-portal/internal/mail"
 	"github.com/bcars/bcars-portal/internal/obs"
 	"github.com/bcars/bcars-portal/internal/web"
 )
@@ -30,6 +31,12 @@ type Config struct {
 	Logger  *slog.Logger
 	Version string
 	DB      *sql.DB // optional; enables admin UI when set
+
+	// Mailer and BaseURL are handed to the admin UI so its recovery and
+	// invitation flows can actually deliver mail and generate links that
+	// resolve. Leaving Mailer nil disables outbound mail from the UI.
+	Mailer  mail.Sender
+	BaseURL string
 }
 
 // NewRouter assembles the HTTP handler and Huma API.
@@ -61,7 +68,11 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 
 	// Admin UI routes (server-rendered HTML).
 	if cfg.DB != nil {
-		webHandler, err := web.NewHandler(cfg.DB, cfg.Logger)
+		webHandler, err := web.NewHandler(cfg.DB, web.HandlerConfig{
+			Logger:  cfg.Logger,
+			Mailer:  cfg.Mailer,
+			BaseURL: cfg.BaseURL,
+		})
 		if err != nil {
 			cfg.Logger.Error("failed to initialize admin UI", slog.String("error", err.Error()))
 		} else {
