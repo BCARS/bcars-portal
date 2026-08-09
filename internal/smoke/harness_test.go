@@ -1,8 +1,6 @@
 package smoke
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -259,11 +257,6 @@ func tokenFromURL(t *testing.T, out string) string {
 func readBody(resp *http.Response) string {
 	b, _ := io.ReadAll(resp.Body)
 	return string(b)
-}
-
-func sha256Hex(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])
 }
 
 func freePort(t *testing.T) int {

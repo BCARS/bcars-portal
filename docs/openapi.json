@@ -411,6 +411,33 @@
         ],
         "type": "object"
       },
+      "CreateInvitationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateInvitationBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "email": {
+            "description": "Address the invitation is sent to.",
+            "format": "email",
+            "type": "string"
+          },
+          "role_code": {
+            "description": "Role granted when the invitation is accepted. Requires role.grant, and the inviter must already hold every capability the role confers.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
       "CreateMemberBody": {
         "additionalProperties": false,
         "properties": {
@@ -1041,6 +1068,35 @@
         "required": [
           "token",
           "new_password"
+        ],
+        "type": "object"
+      },
+      "InvitationSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/InvitationSummary.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "role_code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "expires_at"
         ],
         "type": "object"
       },
@@ -3194,6 +3250,47 @@
         "summary": "Record a reconciliation decision for a staged row",
         "tags": [
           "imports"
+        ]
+      }
+    },
+    "/invitations": {
+      "post": {
+        "operationId": "invitation-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationSummary"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Invite a new officer or user",
+        "tags": [
+          "admin"
         ]
       }
     },

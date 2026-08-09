@@ -79,6 +79,7 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 		SessionStore:     sessionStore,
 		EmailLinkService: emailLinks,
 		CookieName:       cfg.CookieName,
+		EmailLinkTTL:     cfg.EmailLinkTTL,
 	})
 
 	// Startup check: every operation must have metadata.
