@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -146,5 +147,62 @@ func TestHonoraryGrantExpireNotFound(t *testing.T) {
 	cookie := env.signIn(t)
 
 	resp := env.do(t, http.MethodPost, "/api/v1/honorary-grants/999/expire", cookie, `{"version":1}`)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHonoraryGrantRevoke(t *testing.T) {
+	env := setupAuthzTest(t, "president")
+	cookie := env.signIn(t)
+	grantID, version := newHonoraryGrantViaAPI(t, env, cookie)
+
+	resp := env.do(t, http.MethodPost, fmt.Sprintf("/api/v1/honorary-grants/%d/revoke", grantID), cookie,
+		fmt.Sprintf(`{"reason":"Revoked by board","version":%d}`, version))
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Empty(t, body)
+
+	var revokedAt, revokeReason string
+	var newVersion int64
+	require.NoError(t, env.db.QueryRow(
+		`SELECT revoked_at, revoke_reason, version FROM honorary_grants WHERE id = ?`, grantID).
+		Scan(&revokedAt, &revokeReason, &newVersion))
+	assert.NotEmpty(t, revokedAt)
+	assert.Equal(t, "Revoked by board", revokeReason)
+	assert.Equal(t, version+1, newVersion)
+
+	events := env.auditEvents(t, "honorary.grant.revoke")
+	require.Len(t, events, 1)
+	assert.Equal(t, "success", events[0].Outcome)
+	assert.Equal(t, "honorary_grant", events[0].ResourceKind.String)
+	assert.Equal(t, grantID, events[0].ResourceID.Int64)
+}
+
+func TestHonoraryGrantRevokeVersionConflict(t *testing.T) {
+	env := setupAuthzTest(t, "president")
+	cookie := env.signIn(t)
+	grantID, version := newHonoraryGrantViaAPI(t, env, cookie)
+
+	resp := env.do(t, http.MethodPost, fmt.Sprintf("/api/v1/honorary-grants/%d/revoke", grantID), cookie,
+		fmt.Sprintf(`{"reason":"Stale revoke","version":%d}`, version+1))
+	assert.Equal(t, http.StatusPreconditionFailed, resp.StatusCode)
+
+	// The conflict must be a true no-op, not a 412 over a completed write.
+	var revokedAt, revokeReason sql.NullString
+	var newVersion int64
+	require.NoError(t, env.db.QueryRow(
+		`SELECT revoked_at, revoke_reason, version FROM honorary_grants WHERE id = ?`, grantID).
+		Scan(&revokedAt, &revokeReason, &newVersion))
+	assert.False(t, revokedAt.Valid)
+	assert.False(t, revokeReason.Valid)
+	assert.Equal(t, version, newVersion)
+}
+
+func TestHonoraryGrantRevokeNotFound(t *testing.T) {
+	env := setupAuthzTest(t, "president")
+	cookie := env.signIn(t)
+
+	resp := env.do(t, http.MethodPost, "/api/v1/honorary-grants/999/revoke", cookie,
+		`{"reason":"No such grant","version":1}`)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }

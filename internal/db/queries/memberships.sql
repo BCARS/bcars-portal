@@ -86,11 +86,12 @@ SET ends_on = date('now'),
 WHERE id = ? AND version = ?
 RETURNING *;
 
--- name: RevokeHonoraryGrant :exec
+-- name: RevokeHonoraryGrant :one
 UPDATE honorary_grants
 SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     revoked_by = ?,
     revoke_reason = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE id = ? AND version = ?;
+WHERE id = ? AND version = ?
+RETURNING *;

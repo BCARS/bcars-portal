@@ -484,7 +484,7 @@ func (q *Queries) RevokeFCCVerification(ctx context.Context, arg RevokeFCCVerifi
 	return err
 }
 
-const revokeHonoraryGrant = `-- name: RevokeHonoraryGrant :exec
+const revokeHonoraryGrant = `-- name: RevokeHonoraryGrant :one
 UPDATE honorary_grants
 SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     revoked_by = ?,
@@ -492,6 +492,7 @@ SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
+RETURNING id, membership_id, starts_on, ends_on, is_lifetime, reason, approved_by, approved_at, revoked_at, revoked_by, revoke_reason, created_at, updated_at, version
 `
 
 type RevokeHonoraryGrantParams struct {
@@ -501,14 +502,31 @@ type RevokeHonoraryGrantParams struct {
 	Version      int64
 }
 
-func (q *Queries) RevokeHonoraryGrant(ctx context.Context, arg RevokeHonoraryGrantParams) error {
-	_, err := q.db.ExecContext(ctx, revokeHonoraryGrant,
+func (q *Queries) RevokeHonoraryGrant(ctx context.Context, arg RevokeHonoraryGrantParams) (HonoraryGrant, error) {
+	row := q.db.QueryRowContext(ctx, revokeHonoraryGrant,
 		arg.RevokedBy,
 		arg.RevokeReason,
 		arg.ID,
 		arg.Version,
 	)
-	return err
+	var i HonoraryGrant
+	err := row.Scan(
+		&i.ID,
+		&i.MembershipID,
+		&i.StartsOn,
+		&i.EndsOn,
+		&i.IsLifetime,
+		&i.Reason,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.RevokedAt,
+		&i.RevokedBy,
+		&i.RevokeReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
 }
 
 const transitionLifecycle = `-- name: TransitionLifecycle :one
