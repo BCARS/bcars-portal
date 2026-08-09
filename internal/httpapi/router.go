@@ -42,6 +42,10 @@ type Config struct {
 	// session cookie. Development only, for serving the portal over
 	// plaintext http://localhost; the zero value keeps Secure on.
 	AllowInsecureCookies bool
+	// ClientIP controls how the client address behind each request is
+	// resolved and hashed for session and email-link records. A zero value
+	// means no trusted forwarding header and no hashing — see clientip.go.
+	ClientIP ClientIPConfig
 }
 
 // NewRouter assembles the HTTP handler and Huma API.
@@ -64,6 +68,11 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 	apiCfg := huma.DefaultConfig("BCARS Portal API", cfg.Version)
 	apiCfg.Info.Description = "BCARS Members Portal — officers-only administrative API (Phase 1)."
 	api := humago.NewWithPrefix(mux, "/api/v1", apiCfg)
+
+	// Resolve the client address before anything that records one. Installed
+	// first so the authz middleware's audit events and every handler see the
+	// same resolved value.
+	api.UseMiddleware(ClientIPMiddleware(cfg.ClientIP))
 
 	// Capability enforcement + generic audit. This must be installed before
 	// RegisterAll: huma snapshots api.Middlewares() when each operation is

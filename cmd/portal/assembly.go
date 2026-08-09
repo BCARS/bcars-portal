@@ -33,6 +33,10 @@ type assemblyConfig struct {
 	// AllowInsecureCookies drops the Secure attribute from session cookies
 	// on both surfaces. Development only, for plaintext http://localhost.
 	AllowInsecureCookies bool
+	// TrustedProxyHeader names the forwarding header carrying the real client
+	// address. Empty means the transport peer address is the only source; see
+	// internal/httpapi/clientip.go for why that is the default.
+	TrustedProxyHeader string
 }
 
 // buildHandler assembles the production HTTP handler: session store, auth
@@ -77,6 +81,13 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 		Mailer:               cfg.Mailer,
 		BaseURL:              cfg.BaseURL,
 		AllowInsecureCookies: cfg.AllowInsecureCookies,
+		// The client-address hash key is derived from the password pepper
+		// rather than from a secret of its own; the reasoning is recorded in
+		// internal/httpapi/clientip.go.
+		ClientIP: httpapi.ClientIPConfig{
+			TrustedProxyHeader: cfg.TrustedProxyHeader,
+			HashKey:            cfg.Pepper,
+		},
 	})
 	httpapi.RegisterAll(api, httpapi.Deps{
 		DB:               database,

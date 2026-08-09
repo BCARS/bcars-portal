@@ -45,7 +45,9 @@ Environment:
                             bytes. Changing it after accounts exist makes
                             every existing password unverifiable — the server
                             refuses to start rather than rejecting everyone's
-                            sign-in as a bad password.
+                            sign-in as a bad password. It also keys the client
+                            address hashes stored on sessions and email links;
+                            without it those are recorded as unknown.
 `)
 	}
 
@@ -65,6 +67,10 @@ Environment:
 	smtpPort := fs.Int("smtp-port", 587, "SMTP relay port")
 	smtpUser := fs.String("smtp-user", "", "SMTP username; empty means no authentication")
 	smtpFrom := fs.String("smtp-from", "", "From address for outbound mail (required when -mail-transport=smtp)")
+	trustedProxyHeader := fs.String("trusted-proxy-header", "",
+		"`header` carrying the real client address (e.g. X-Forwarded-For); leftmost entry is used. "+
+			"Set this ONLY when a reverse proxy you control overwrites the header — otherwise any "+
+			"client can forge its own recorded source address")
 	allowEmptyPepper := fs.Bool("allow-empty-pepper", false,
 		"start without "+authn.PepperEnvVar+" (DEVELOPMENT ONLY; passwords are hashed without a pepper)")
 	allowInsecureCookies := fs.Bool("allow-insecure-cookies", false,
@@ -153,6 +159,7 @@ Environment:
 		AllowEmptyPepper: *allowEmptyPepper,
 
 		AllowInsecureCookies: *allowInsecureCookies,
+		TrustedProxyHeader:   *trustedProxyHeader,
 		Logger:               logger,
 		Version:              version.Get().Short(),
 		CookieName:           "bcars_session",
