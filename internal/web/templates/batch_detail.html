@@ -1,0 +1,235 @@
+{{template "layout.html" .}}
+
+{{define "title"}}{{.Batch.Label}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">{{.Batch.Label}}</h2>
+<p style="margin: 0 0 16px; color: #555;">
+    {{if eq .Batch.State "open"}}Open for entry.{{end}}
+    {{if eq .Batch.State "posted"}}Posted {{.Batch.PostedAt}}.{{end}}
+    {{if eq .Batch.State "abandoned"}}Abandoned. Nothing here was recorded as money.{{end}}
+</p>
+
+{{if .Error}}
+<div class="card" role="alert" style="border-left: 4px solid #c62828;">
+    <p style="margin: 0;">{{.Error}}</p>
+</div>
+{{end}}
+
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">What this batch adds up to</h3>
+    <table>
+        <thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead>
+        <tbody>
+            <tr><td>Cash</td><td>{{.Totals.CashCount}}</td><td>${{.Totals.CashTotal}}</td></tr>
+            <tr><td>Checks</td><td>{{.Totals.CheckCount}}</td><td>${{.Totals.CheckTotal}}</td></tr>
+            <tr><td>Other</td><td>{{.Totals.OtherCount}}</td><td>${{.Totals.OtherTotal}}</td></tr>
+            <tr><th scope="row">All rows</th><th>{{.Totals.Entries}}</th><th>${{.Totals.NetTotal}}</th></tr>
+        </tbody>
+    </table>
+    <p style="margin: 8px 0 0; color: #555;">
+        These totals are calculated by the server. Count the cash and the checks against them before posting.
+    </p>
+</div>
+
+{{if eq .Batch.State "open"}}
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Rows</h3>
+    {{if .Entries}}
+    <table>
+        <thead>
+            <tr><th>#</th><th>Member</th><th>Amount</th><th>Method</th><th>Reference</th>
+                <th>Received</th><th>Dues paid through</th><th></th></tr>
+        </thead>
+        <tbody>
+            {{range .Entries}}
+            <tr>
+                <td>{{.Sequence}}</td>
+                <td>{{if .MemberName}}{{.MemberName}}{{else}}Membership {{.MembershipID}}{{end}}</td>
+                <td>${{.Amount}}</td>
+                <td>{{.Method}}</td>
+                <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
+                <td>{{.ReceivedOn}}</td>
+                <td>{{.PaidThrough}}</td>
+                <td>
+                    <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries/{{.ID}}/delete" method="post">
+                        <input type="hidden" name="version" value="{{.Version}}">
+                        <button type="submit" class="btn btn-secondary btn-sm">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>No rows yet.</p>
+    {{end}}
+</div>
+
+<div class="card" id="add-row">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Add a row</h3>
+
+    <form action="/admin/treasury/batches/{{.Batch.ID}}" method="get">
+        <div class="search-bar">
+            <input type="text" id="member-search" name="member" value="{{.Search}}"
+                   placeholder="Find a member by name or call sign" aria-label="Find a member">
+            <button type="submit" class="btn btn-secondary">Find</button>
+        </div>
+    </form>
+
+    {{if .Candidates}}
+    <table>
+        <thead><tr><th>Member</th><th>Call sign</th><th>Dues standing</th><th>Dues paid through</th><th></th></tr></thead>
+        <tbody>
+            {{range .Candidates}}
+            <tr>
+                <td>{{.DisplayName}}</td>
+                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                <td>{{.Status}}</td>
+                <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
+                <td>
+                    <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries" method="post" class="add-row-form">
+                        <input type="hidden" name="membership_id" value="{{.MembershipID}}">
+                        <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
+                        <input type="text" name="amount" value="{{$.Defaults.Amount}}"
+                               inputmode="decimal" placeholder="40.00" aria-label="Amount" required>
+                        <select name="method" aria-label="Method">
+                            <option value="cash">Cash</option>
+                            <option value="check">Check</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <input type="text" name="reference" placeholder="Check no." aria-label="Reference">
+                        <input type="date" name="received_on" value="{{$.Today}}"
+                               aria-label="Date received" required>
+                        <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}"
+                               aria-label="Dues paid through" required>
+                        <button type="submit" class="btn btn-primary btn-sm">Add row</button>
+                    </form>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else if .Search}}
+    <p>No members match that search.</p>
+    {{end}}
+</div>
+
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Defaults for new rows</h3>
+    <p style="margin: 0 0 8px; color: #555;">
+        These prefill each new row. Every row still records its own amount and its own
+        Dues paid through date.
+    </p>
+    <form action="/admin/treasury/batches/{{.Batch.ID}}/defaults" method="post">
+        <input type="hidden" name="version" value="{{.Version}}">
+        <label for="label">Batch name</label>
+        <input type="text" id="label" name="label" value="{{.Batch.Label}}" required>
+        <label for="default_amount">Default amount</label>
+        <input type="text" id="default_amount" name="default_amount" value="{{.Defaults.Amount}}" inputmode="decimal">
+        <label for="default_paid_through">Default dues paid through</label>
+        <input type="date" id="default_paid_through" name="default_paid_through" value="{{.Defaults.PaidThrough}}">
+        <button type="submit" class="btn btn-secondary">Save defaults</button>
+    </form>
+</div>
+
+{{if .CanPost}}
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Post this batch</h3>
+    <p style="margin: 0 0 8px;">
+        Posting records {{.Totals.Entries}} payments totalling ${{.Totals.NetTotal}} and updates
+        Dues paid through for each member. It cannot be undone, only corrected.
+    </p>
+    <form action="/admin/treasury/batches/{{.Batch.ID}}/post" method="post">
+        <input type="hidden" name="version" value="{{.Version}}">
+        <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
+        <label for="confirm">
+            <input type="checkbox" id="confirm" name="confirm" value="yes">
+            I have counted the cash and checks against the totals above.
+        </label>
+        <button type="submit" class="btn btn-primary">Post batch</button>
+    </form>
+</div>
+{{end}}
+
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Abandon this batch</h3>
+    <form action="/admin/treasury/batches/{{.Batch.ID}}/abandon" method="post">
+        <input type="hidden" name="version" value="{{.Version}}">
+        <label for="reason">Why are you abandoning it?</label>
+        <input type="text" id="reason" name="reason" required>
+        <button type="submit" class="btn btn-secondary">Abandon batch</button>
+    </form>
+</div>
+{{end}}
+
+{{if ne .Batch.State "open"}}
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">What was recorded</h3>
+    {{if .Payments}}
+    <table>
+        <thead>
+            <tr><th>Member</th><th>Amount</th><th>Method</th><th>Reference</th>
+                <th>Received</th><th>Receipt</th><th></th></tr>
+        </thead>
+        <tbody>
+            {{range .Payments}}
+            <tr>
+                <td>{{.MemberName}}</td>
+                <td>
+                    {{if .Superseded}}<s>${{.Amount}}</s> <span style="color:#555;">(corrected)</span>
+                    {{else}}${{.Amount}}{{end}}
+                </td>
+                <td>{{.Method}}</td>
+                <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
+                <td>{{.ReceivedOn}}</td>
+                <td><a href="/admin/treasury/payments/{{.PaymentID}}/receipt">{{.ReceiptCode}}</a></td>
+                <td>
+                    {{if .CanCorrect}}
+                    <a href="/admin/treasury/payments/{{.PaymentID}}/correct">Fix this</a>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>Nothing was recorded from this batch.</p>
+    {{end}}
+</div>
+
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">What happened to this batch</h3>
+    {{if .Activity}}
+    <ol style="margin: 0; padding-left: 20px;">
+        {{range .Activity}}
+        <li style="margin-bottom: 6px;">
+            {{.Summary}}
+            <br><span style="color: #555;">{{.At}}{{if .Reason}} &mdash; {{.Reason}}{{end}}</span>
+        </li>
+        {{end}}
+    </ol>
+    {{else}}
+    <p>No history to show.</p>
+    {{end}}
+</div>
+{{end}}
+
+<script>
+// Progressive enhancement only. Every action above is an ordinary form submit;
+// this adds Enter-to-add and returns focus to the member search so a treasurer
+// working from a paper sheet does not have to reach for the mouse each row.
+document.querySelectorAll('.add-row-form').forEach(function (form) {
+    form.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' && event.target.tagName !== 'BUTTON') {
+            event.preventDefault();
+            form.requestSubmit();
+        }
+    });
+});
+if (window.location.hash === '#add-row') {
+    var search = document.getElementById('member-search');
+    if (search) { search.focus(); }
+}
+</script>
+{{end}}

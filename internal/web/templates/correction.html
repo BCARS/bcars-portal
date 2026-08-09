@@ -1,0 +1,88 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Fix an entry - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="card" role="dialog" aria-modal="true" aria-labelledby="fix-title" id="fix-dialog">
+    <h2 id="fix-title" style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Fix this entry</h2>
+    <p style="margin: 0 0 16px; color: #555;">
+        {{.Payment.MemberName}} &mdash; receipt {{.Payment.ReceiptCode}}
+    </p>
+
+    {{if .Error}}
+    <div role="alert" style="border-left: 4px solid #c62828; padding-left: 12px; margin-bottom: 16px;">
+        <p style="margin: 0;">{{.Error}}</p>
+    </div>
+    {{end}}
+
+    <p style="margin: 0 0 16px;">{{.Consequence}}</p>
+
+    <form action="/admin/treasury/payments/{{.Payment.PaymentID}}/correct" method="post">
+        <input type="hidden" name="revision" value="{{.Revision}}">
+        <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
+
+        <label for="amount">What the amount should have been</label>
+        <input type="text" id="amount" name="amount" value="{{.Amount}}" inputmode="decimal" required autofocus>
+
+        <label for="method">Method</label>
+        <select id="method" name="method">
+            <option value="cash" {{if eq .Method "cash"}}selected{{end}}>Cash</option>
+            <option value="check" {{if eq .Method "check"}}selected{{end}}>Check</option>
+            <option value="other" {{if eq .Method "other"}}selected{{end}}>Other</option>
+        </select>
+
+        <label for="reference">Check number or reference</label>
+        <input type="text" id="reference" name="reference" value="{{.Reference}}">
+
+        <label for="received_on">Date received</label>
+        <input type="date" id="received_on" name="received_on" value="{{.ReceivedOn}}" required>
+
+        <label for="paid_through">Dues paid through</label>
+        <input type="date" id="paid_through" name="paid_through" value="{{.PaidThrough}}" required>
+        <p style="margin: 4px 0 12px; color: #555;">
+            Leave this as it is unless the coverage was wrong too. Changing the amount on its own
+            does not change how long the member is covered.
+        </p>
+
+        <label for="reason">Why are you fixing it?</label>
+        <input type="text" id="reason" name="reason" value="{{.Reason}}" required
+               placeholder="Typed 400 instead of 40">
+
+        <button type="submit" class="btn btn-primary">Save the fix</button>
+        <a href="{{if .BatchID}}/admin/treasury/batches/{{.BatchID}}{{else}}/admin/treasury/batches{{end}}"
+           class="btn btn-secondary" id="fix-cancel">Cancel</a>
+    </form>
+</div>
+
+<script>
+// Progressive enhancement only: the page works as an ordinary form without it.
+// Keyboard focus is kept inside the dialog and Escape returns to the batch, so
+// a keyboard or screen-reader user is not dropped behind the dialog.
+(function () {
+    var dialog = document.getElementById('fix-dialog');
+    if (!dialog) { return; }
+    var focusable = dialog.querySelectorAll('input, select, button, a[href]');
+    if (!focusable.length) { return; }
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+
+    first.focus();
+
+    dialog.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            var cancel = document.getElementById('fix-cancel');
+            if (cancel) { window.location.href = cancel.getAttribute('href'); }
+            return;
+        }
+        if (event.key !== 'Tab') { return; }
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+}());
+</script>
+{{end}}

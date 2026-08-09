@@ -1,0 +1,48 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Payment batches - BCARS Portal{{end}}
+
+{{define "content"}}
+<h2 style="margin: 0 0 16px; font-size: 1.25rem; font-weight: 600;">Payment batches</h2>
+
+{{if .CanPost}}
+<div class="card">
+    <form action="/admin/treasury/batches" method="post">
+        <label for="label">Start a new batch</label>
+        <input type="text" id="label" name="label" placeholder="Meeting night, 5 July">
+        <button type="submit" class="btn btn-primary">Open batch</button>
+    </form>
+</div>
+{{end}}
+
+<nav aria-label="Batch state" style="margin-bottom: 16px;">
+    <a href="/admin/treasury/batches">All</a> &middot;
+    <a href="/admin/treasury/batches?state=open">Open</a> &middot;
+    <a href="/admin/treasury/batches?state=posted">Posted</a> &middot;
+    <a href="/admin/treasury/batches?state=abandoned">Abandoned</a>
+</nav>
+
+<div class="card">
+    {{if .Batches}}
+    <table>
+        <thead>
+            <tr><th>Batch</th><th>State</th><th>Rows</th><th>Total</th><th>Opened</th><th></th></tr>
+        </thead>
+        <tbody>
+            {{range .Batches}}
+            <tr>
+                <td>{{.Label}}</td>
+                <td>{{.State}}</td>
+                <td>{{.Entries}}</td>
+                <td>${{.Total}}</td>
+                <td>{{.OpenedAt}}</td>
+                <td><a href="/admin/treasury/batches/{{.ID}}">Open</a></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>No batches yet.</p>
+    {{end}}
+</div>
+{{end}}
