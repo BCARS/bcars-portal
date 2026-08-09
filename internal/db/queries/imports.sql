@@ -89,3 +89,11 @@ SELECT * FROM external_ids WHERE system = ? AND external_id = ?;
 
 -- name: ListExternalIDsForEntity :many
 SELECT * FROM external_ids WHERE entity_kind = ? AND entity_id = ?;
+
+-- name: FindImportCoverageEvent :one
+-- Guards the import cutover against re-importing the same paid-through value:
+-- a second import of unchanged data must not append a duplicate decision.
+SELECT * FROM coverage_events
+WHERE membership_id = ? AND paid_through = ? AND reason_kind = 'import'
+ORDER BY id DESC
+LIMIT 1;

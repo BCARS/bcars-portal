@@ -295,6 +295,40 @@ func (q *Queries) FindExternalID(ctx context.Context, arg FindExternalIDParams) 
 	return i, err
 }
 
+const findImportCoverageEvent = `-- name: FindImportCoverageEvent :one
+SELECT id, membership_id, paid_through, reason_kind, reason, payment_id, import_run_id, supersedes_event_id, source_note, decided_by, decided_at, created_at FROM coverage_events
+WHERE membership_id = ? AND paid_through = ? AND reason_kind = 'import'
+ORDER BY id DESC
+LIMIT 1
+`
+
+type FindImportCoverageEventParams struct {
+	MembershipID int64
+	PaidThrough  string
+}
+
+// Guards the import cutover against re-importing the same paid-through value:
+// a second import of unchanged data must not append a duplicate decision.
+func (q *Queries) FindImportCoverageEvent(ctx context.Context, arg FindImportCoverageEventParams) (CoverageEvent, error) {
+	row := q.db.QueryRowContext(ctx, findImportCoverageEvent, arg.MembershipID, arg.PaidThrough)
+	var i CoverageEvent
+	err := row.Scan(
+		&i.ID,
+		&i.MembershipID,
+		&i.PaidThrough,
+		&i.ReasonKind,
+		&i.Reason,
+		&i.PaymentID,
+		&i.ImportRunID,
+		&i.SupersedesEventID,
+		&i.SourceNote,
+		&i.DecidedBy,
+		&i.DecidedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getImportRun = `-- name: GetImportRun :one
 SELECT id, source_kind, source_filename, source_sha256, uploaded_by, uploaded_at, status, idempotency_key, committed_by, committed_at, result_summary_json, created_at, updated_at, version FROM import_runs WHERE id = ?
 `

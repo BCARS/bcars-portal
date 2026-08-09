@@ -69,6 +69,9 @@ type Querier interface {
 	ExpireHonoraryGrant(ctx context.Context, arg ExpireHonoraryGrantParams) (HonoraryGrant, error)
 	FindContactMethodByNorm(ctx context.Context, arg FindContactMethodByNormParams) ([]ContactMethod, error)
 	FindExternalID(ctx context.Context, arg FindExternalIDParams) (ExternalID, error)
+	// Guards the import cutover against re-importing the same paid-through value:
+	// a second import of unchanged data must not append a duplicate decision.
+	FindImportCoverageEvent(ctx context.Context, arg FindImportCoverageEventParams) (CoverageEvent, error)
 	// Posted-payment corrections.
 	//
 	// Nothing here updates or deletes a payment. A correction appends a signed
