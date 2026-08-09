@@ -681,3 +681,76 @@ func TestArchiveContactMethodDetectsStaleVersion(t *testing.T) {
 	assert.False(t, after.ArchivedAt.Valid, "a stale archive must not archive")
 	assert.Equal(t, cm.Version, after.Version)
 }
+
+// --- ACS/ARES sharing preference read-back (bcars-portal-fmc.24) ---
+
+func TestAcsAresSharingRoundTrip(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "Sharing Member", SortName: "Member, Sharing", BaseType: "full",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, true, "asked at a meeting")
+	require.NoError(t, err)
+
+	got, err := svc.GetAcsAresSharing(ctx, p, person.ID)
+	require.NoError(t, err)
+	assert.Equal(t, person.ID, got.PersonID)
+	assert.Equal(t, int64(1), got.Participates)
+	assert.Equal(t, "asked at a meeting", got.Reason.String)
+}
+
+// TestAcsAresSharingReturnsMostRecent is the whole point of the immutable
+// preference-history pattern: the current value is the newest event, not the
+// first one.
+func TestAcsAresSharingReturnsMostRecent(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "Changed Mind", SortName: "Mind, Changed", BaseType: "full",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, true, "opted in")
+	require.NoError(t, err)
+	time.Sleep(2 * time.Millisecond) // effective_at has millisecond resolution
+	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, false, "opted out later")
+	require.NoError(t, err)
+
+	got, err := svc.GetAcsAresSharing(ctx, p, person.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), got.Participates, "the latest preference must win")
+	assert.Equal(t, "opted out later", got.Reason.String)
+
+	// The earlier event is retained — the history is immutable.
+	history, err := svc.Q.ListAcsAresSharingHistory(ctx, person.ID)
+	require.NoError(t, err)
+	assert.Len(t, history, 2, "setting a preference must not overwrite the previous one")
+}
+
+// TestAcsAresSharingUnsetIsNotFound keeps "no preference on file" distinct from
+// "declined to participate" — an officer acting on the difference needs the
+// real answer, not a fabricated default.
+func TestAcsAresSharingUnsetIsNotFound(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	person, err := svc.CreatePerson(ctx, p, CreatePersonParams{
+		DisplayName: "No Preference", SortName: "Preference, No", BaseType: "full",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.GetAcsAresSharing(ctx, p, person.ID)
+	assert.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+func TestAcsAresSharingMissingPersonIsNotFound(t *testing.T) {
+	svc, p := setupTest(t)
+
+	_, err := svc.GetAcsAresSharing(context.Background(), p, 999999)
+	assert.ErrorIs(t, err, sql.ErrNoRows)
+}

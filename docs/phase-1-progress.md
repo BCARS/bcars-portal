@@ -42,19 +42,20 @@ so the next reader does not repeat the inference.
 | Gate | Bead | Status |
 | --- | --- | --- |
 | Phase 1 member operations | `bcars-portal-5eg` | Met — re-evaluated 2026-08-09 |
-| Phase 1 administrative MVP | `bcars-portal-dz0` | Met **with one exception**, below |
+| Phase 1 administrative MVP | `bcars-portal-dz0` | Met — re-evaluated 2026-08-09 |
 | Production-assembly smoke test | `bcars-portal-fmc.12`, `.23` | Met — `make smoke` in CI |
 
 Re-evaluation was withheld until every P0/P1 child of `bcars-portal-fmc` was
 closed. That condition was met on 2026-08-09.
 
-**The exception, recorded rather than rounded off.** `dz0` requires that "the
-API has no Phase 1 501 stubs". One remains: `GET /members/{id}/acs-ares-sharing`
-(`member-acs-ares-get`) is an unconditional 501, tracked as
-`bcars-portal-fmc.24`. The write side works, so an ACS/ARES sharing preference
-can be set and never read back through the API. Every other `ErrNotImplemented`
-in the tree is a nil-dependency guard that resolves once its service is wired,
-which the production assembly does.
+**On "no Phase 1 501 stubs".** Re-evaluating `dz0` on 2026-08-09 found one:
+`GET /members/{id}/acs-ares-sharing` was an unconditional 501, so a sharing
+preference could be set and never read back. It was fixed as
+`bcars-portal-fmc.24` rather than recorded as an exception, at the owner's
+direction, on the grounds that it is a functional gap rather than hardening.
+No unconditional 501 remains; every other `ErrNotImplemented` in the tree is a
+nil-dependency guard that resolves once its service is wired, which the
+production assembly does.
 
 `dz0` also requires "documented backup/restore and deployment procedures".
 Backup and restore are implemented, encrypted, and have a runbook. Deployment
@@ -62,8 +63,8 @@ is documented but has no checked-in packaging — deferred to
 `bcars-portal-fmc.8` at the owner's direction, on the basis that deployability
 was never intended to be part of Phase 1.
 
-Both are stated here so the gate's status is legible rather than inferred. That
-inference is what produced the 2026-08-08 failure.
+The deployment caveat is stated here so the gate's status is legible rather
+than inferred. That inference is what produced the 2026-08-08 failure.
 
 ### The gate that was missing
 
@@ -107,6 +108,7 @@ Every finding and its follow-ups, 2026-08-08/09, PRs #32-#48:
 | `fmc.18` | #41 | Invitation role rule relaxed to `role.grant` |
 | `fmc.19` | #47 | Version-conflict detection across five more mutations |
 | `fmc.23` | #48 | Smoke test runs the binaries outside the source tree |
+| `fmc.24` | #50 | ACS/ARES sharing preference readable through the API |
 
 Ten of those were found while fixing something else, not by the original
 review. The recurring shapes were worth more than the individual fixes:
