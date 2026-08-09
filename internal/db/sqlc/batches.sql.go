@@ -99,7 +99,7 @@ func (q *Queries) GetPaymentBatchTotals(ctx context.Context, batchID int64) (Get
 
 const listPaymentBatches = `-- name: ListPaymentBatches :many
 
-SELECT id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version FROM payment_batches
+SELECT id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version, worksheet_run_id FROM payment_batches
 WHERE (CAST(?1 AS TEXT) = ''
        OR state = CAST(?1 AS TEXT))
 ORDER BY opened_at DESC, id DESC
@@ -141,6 +141,7 @@ func (q *Queries) ListPaymentBatches(ctx context.Context, arg ListPaymentBatches
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.WorksheetRunID,
 		); err != nil {
 			return nil, err
 		}
@@ -174,7 +175,7 @@ UPDATE payment_batches
 SET version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND state = 'open'
-RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version
+RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version, worksheet_run_id
 `
 
 // Bumps the batch version after an entry mutation, so a browser holding a
@@ -198,6 +199,7 @@ func (q *Queries) TouchPaymentBatch(ctx context.Context, id int64) (PaymentBatch
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.WorksheetRunID,
 	)
 	return i, err
 }
@@ -208,7 +210,7 @@ SET label = ?, default_amount_cents = ?, default_paid_through = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ? AND state = 'open'
-RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version
+RETURNING id, label, state, default_amount_cents, default_paid_through, opened_by, opened_at, posted_by, posted_at, abandoned_by, abandoned_at, abandon_reason, created_at, updated_at, version, worksheet_run_id
 `
 
 type UpdatePaymentBatchDefaultsParams struct {
@@ -246,6 +248,7 @@ func (q *Queries) UpdatePaymentBatchDefaults(ctx context.Context, arg UpdatePaym
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.WorksheetRunID,
 	)
 	return i, err
 }
