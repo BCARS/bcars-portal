@@ -30,10 +30,57 @@ const maxGuestRows = 20
 const duesYearEndRule = "The club dues year ends 31 December. Dues paid through is normally a 31 December date, " +
 	"but the treasurer may record any date that reflects what was actually agreed."
 
+// worksheetOptionsData drives the options form for both the initial render and
+// a validation failure. One view model means the fields a rejected submission
+// preserves cannot drift from the fields the form offers.
 type worksheetOptionsData struct {
 	Runs  []worksheetRunView
 	Error string
 	Today string
+
+	// Submitted values, echoed back so a rejected form does not discard the
+	// treasurer's choices.
+	Label        string
+	AsOf         string
+	FilterKind   string
+	SourceRunID  int64
+	SortOrder    string
+	IncludeEmail bool
+	IncludePhone bool
+	GuestRows    string
+}
+
+// defaults fills the choices a fresh form starts from.
+func (d worksheetOptionsData) defaults() worksheetOptionsData {
+	if d.FilterKind == "" {
+		d.FilterKind = worksheets.FilterOwes
+	}
+	if d.SortOrder == "" {
+		d.SortOrder = worksheets.SortLastName
+	}
+	if d.AsOf == "" {
+		d.AsOf = d.Today
+	}
+	if d.GuestRows == "" {
+		d.GuestRows = "3"
+	}
+	return d
+}
+
+// optionsFromForm reads the submitted options back into the view model.
+func optionsFromForm(r *http.Request, today string) worksheetOptionsData {
+	sourceRunID, _ := strconv.ParseInt(r.FormValue("source_run_id"), 10, 64)
+	return worksheetOptionsData{
+		Today:        today,
+		Label:        strings.TrimSpace(r.FormValue("label")),
+		AsOf:         strings.TrimSpace(r.FormValue("as_of")),
+		FilterKind:   r.FormValue("filter_kind"),
+		SourceRunID:  sourceRunID,
+		SortOrder:    r.FormValue("sort_order"),
+		IncludeEmail: r.FormValue("include_email") == "yes",
+		IncludePhone: r.FormValue("include_phone") == "yes",
+		GuestRows:    strings.TrimSpace(r.FormValue("guest_rows")),
+	}
 }
 
 type worksheetRunView struct {
@@ -66,7 +113,7 @@ func (h *Handler) worksheetOptions(w http.ResponseWriter, r *http.Request) {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	data := worksheetOptionsData{Today: time.Now().UTC().Format(dues.ISODate)}
+	data := worksheetOptionsData{Today: time.Now().UTC().Format(dues.ISODate)}.defaults()
 	for _, run := range runs {
 		data.Runs = append(data.Runs, worksheetRunToView(run))
 	}
@@ -81,29 +128,40 @@ func (h *Handler) worksheetCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asOf, err := time.Parse(dues.ISODate, strings.TrimSpace(r.FormValue("as_of")))
-	if err != nil {
-		asOf = time.Now().UTC()
+	submitted := optionsFromForm(r, time.Now().UTC().Format(dues.ISODate))
+
+	// A durable report parameter is never silently repaired. An omitted date
+	// means today, which is the documented default the API shares; anything
+	// else that will not parse is a validation failure, because a worksheet
+	// judged against a date nobody submitted looks perfectly valid afterwards.
+	var asOf time.Time
+	if submitted.AsOf != "" {
+		parsed, err := time.Parse(dues.ISODate, submitted.AsOf)
+		if err != nil {
+			h.renderWorksheetOptionsError(w, r, p, submitted,
+				"Enter the as-of date as YYYY-MM-DD, for example 2026-07-01.")
+			return
+		}
+		asOf = parsed
 	}
-	sourceRunID, _ := strconv.ParseInt(r.FormValue("source_run_id"), 10, 64)
 
 	run, _, err := h.worksheets.Create(r.Context(), p, worksheets.CreateParams{
-		Label:        strings.TrimSpace(r.FormValue("label")),
+		Label:        submitted.Label,
 		AsOf:         asOf,
-		FilterKind:   r.FormValue("filter_kind"),
-		SourceRunID:  sourceRunID,
-		SortOrder:    r.FormValue("sort_order"),
-		IncludeEmail: r.FormValue("include_email") == "yes",
-		IncludePhone: r.FormValue("include_phone") == "yes",
+		FilterKind:   submitted.FilterKind,
+		SourceRunID:  submitted.SourceRunID,
+		SortOrder:    submitted.SortOrder,
+		IncludeEmail: submitted.IncludeEmail,
+		IncludePhone: submitted.IncludePhone,
 	}, time.Now())
 	if err != nil {
-		h.renderWorksheetOptionsError(w, r, p, worksheetErrorMessage(err))
+		h.renderWorksheetOptionsError(w, r, p, submitted, worksheetErrorMessage(err))
 		return
 	}
 
 	target := fmt.Sprintf("/admin/treasury/worksheets/%d", run.ID)
-	if guests := strings.TrimSpace(r.FormValue("guest_rows")); guests != "" {
-		target += "?guests=" + guests
+	if submitted.GuestRows != "" {
+		target += "?guests=" + submitted.GuestRows
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
@@ -263,13 +321,14 @@ func (h *Handler) worksheetBatch(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/admin/treasury/batches/%d", batchID), http.StatusSeeOther)
 }
 
-func (h *Handler) renderWorksheetOptionsError(w http.ResponseWriter, r *http.Request, p *authz.Principal, msg string) {
+func (h *Handler) renderWorksheetOptionsError(w http.ResponseWriter, r *http.Request, p *authz.Principal, submitted worksheetOptionsData, msg string) {
 	runs, err := h.worksheets.List(r.Context(), p, 50, 0)
 	if err != nil {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	data := worksheetOptionsData{Error: msg, Today: time.Now().UTC().Format(dues.ISODate)}
+	data := submitted.defaults()
+	data.Error = msg
 	for _, run := range runs {
 		data.Runs = append(data.Runs, worksheetRunToView(run))
 	}

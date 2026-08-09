@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -224,4 +225,42 @@ func TestWebSuccessIsAudited(t *testing.T) {
 func testMailer(t *testing.T) *mail.FilelogSender {
 	t.Helper()
 	return mail.NewFilelogSender(t.TempDir())
+}
+
+// TestAdminRoutePatternsAreWellFormed guards against a mangled route pattern.
+//
+// An editing slip once turned "GET /admin/treasury/worksheets" into a pattern
+// containing a raw tab. The route still registered, but the real path then fell
+// through to the "GET /admin/" dashboard pattern and its far weaker
+// session.self.read requirement, so a page guarded by dues.worksheet.manage
+// silently became readable by any signed-in member. Nothing failed to compile.
+func TestAdminRoutePatternsAreWellFormed(t *testing.T) {
+	e := setupHandlerWithRoles(t)
+
+	seen := map[string]bool{}
+	for _, rt := range e.h.AdminRoutes() {
+		t.Run(rt.Pattern, func(t *testing.T) {
+			method, path, ok := strings.Cut(rt.Pattern, " ")
+			require.True(t, ok, "a pattern must be \"METHOD /path\"")
+			assert.Contains(t, []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, method)
+
+			assert.True(t, strings.HasPrefix(path, "/admin/"),
+				"an admin route must live under /admin/")
+			assert.NotContains(t, path, "//", "no empty path segment")
+			for _, r := range rt.Pattern {
+				assert.False(t, unicode.IsControl(r) || r == '\t',
+					"pattern %q contains a control character", rt.Pattern)
+			}
+			// A trailing segment that is neither a word nor a {placeholder}
+			// is how the tab slipped through unnoticed.
+			for _, seg := range strings.Split(strings.Trim(path, "/"), "/") {
+				assert.NotEmpty(t, strings.TrimSpace(seg), "empty segment in %q", path)
+			}
+
+			assert.False(t, seen[rt.Pattern], "duplicate pattern %q", rt.Pattern)
+			seen[rt.Pattern] = true
+
+			assert.NotEmpty(t, rt.Capability, "every admin route declares a capability")
+		})
+	}
 }
