@@ -175,12 +175,26 @@ func (s *Service) PostSinglePayment(ctx context.Context, p *authz.Principal, par
 	if now.IsZero() {
 		now = time.Now()
 	}
+	// Default the label before hashing and reuse that same value to create the
+	// batch, so the fingerprint and the row can never describe different
+	// requests.
 	label := params.Label
 	if label == "" {
 		label = fmt.Sprintf("Single payment %s", now.UTC().Format(ISODate))
 	}
 
-	requestHash := params.Entry.hash(0)
+	// The fingerprint covers the effective request, not merely the ledger row.
+	// Hashing only the entry meant the same key with a different label read as
+	// an exact replay, when the label names the batch this payment is traceable
+	// to in every later report.
+	//
+	// The operation name is deliberately unchanged across this fix. Records
+	// written by the old hash still match on actor, operation, and key, so a
+	// retry that spans the upgrade sees a hash mismatch and is refused. Renaming
+	// the operation would hide those records instead, and the retry would post a
+	// second payment. A refused retry is recoverable; a duplicated one is the
+	// failure this whole mechanism exists to prevent.
+	requestHash := idem.Hash(params.Entry.hash(0), label)
 
 	var out Posted
 	err := s.inTx(ctx, func(q *sqlcgen.Queries) error {
