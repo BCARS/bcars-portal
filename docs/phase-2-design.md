@@ -265,9 +265,9 @@ The implementation plan uses these safe defaults unless the owner changes them:
   designed.
 - Phase 2 provides a member-safe summary DTO but not member authentication or a
   member-facing route.
-- The newer design handoff says BCARS is Bedford County, while the checked-in
-  README and synthetic addresses say Butler County. Branding/county copy must be
-  resolved and corrected in one scoped task; Phase 2 APIs must not hard-code it.
+- The owner confirmed BCARS is the Bedford County Amateur Radio Society. Current
+  synthetic locality data uses Bedford, PA 15522; Phase 2 APIs must not hard-code
+  organization branding or locality.
 
 ## Required gate set
 

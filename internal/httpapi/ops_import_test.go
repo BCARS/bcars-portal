@@ -207,7 +207,7 @@ func TestImportPreviewAndCommit(t *testing.T) {
 	cookie := signIn(t, ts)
 
 	// Upload a simple CSV with no manual rows.
-	csvData := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1AAA,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Butler,16001,PA,false\n"
+	csvData := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nAlice Test,KA1AAA,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Bedford,15522,PA,false\n"
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -278,7 +278,7 @@ func TestImportDiscard(t *testing.T) {
 	ts := setupImportTest(t)
 	cookie := signIn(t, ts)
 
-	csvData := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nDiscard Test,KA1DIS,12/31/2026,,Full,General,555-555-5555,dis@example.invalid,5 Main,Butler,16001,PA,false\n"
+	csvData := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\nDiscard Test,KA1DIS,12/31/2026,,Full,General,555-555-5555,dis@example.invalid,5 Main,Bedford,15522,PA,false\n"
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
