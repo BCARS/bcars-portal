@@ -12,6 +12,7 @@ import (
 
 	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/db"
+	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 )
 
 // testEnv bundles the handler, mux, and a session cookie for authenticated requests.
@@ -39,7 +40,7 @@ func setupHandler(t *testing.T) *testEnv {
 		VALUES (1, 'administrator', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'test setup')`)
 	require.NoError(t, err)
 
-	h, err := NewHandler(d, nil)
+	h, err := NewHandler(d, HandlerConfig{Mailer: testMailer(t)})
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
@@ -84,7 +85,7 @@ func TestLoginRequired(t *testing.T) {
 	defer d.Close()
 	require.NoError(t, db.Migrate(d))
 
-	h, err := NewHandler(d, nil)
+	h, err := NewHandler(d, HandlerConfig{Mailer: testMailer(t)})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -103,7 +104,7 @@ func TestLoginPage(t *testing.T) {
 	defer d.Close()
 	require.NoError(t, db.Migrate(d))
 
-	h, err := NewHandler(d, nil)
+	h, err := NewHandler(d, HandlerConfig{Mailer: testMailer(t)})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -126,7 +127,7 @@ func TestLoginBadPassword(t *testing.T) {
 	_, err = d.Exec(`INSERT INTO users (email, password_hash, password_algo_params, is_active) VALUES ('u@test.local', ?, 'argon2id', 1)`, hash)
 	require.NoError(t, err)
 
-	h, err := NewHandler(d, nil)
+	h, err := NewHandler(d, HandlerConfig{Mailer: testMailer(t)})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -371,8 +372,28 @@ func TestTemplateRendering(t *testing.T) {
 		{"dashboard.html", dashboardData{}},
 		{"members.html", memberListData{}},
 		{"member_form.html", memberFormData{}},
-		{"imports.html", struct{ Runs []interface{} }{}},
+		{"imports.html", struct {
+			Runs    []sqlcgen.ImportRun
+			Error   string
+			Success string
+		}{}},
 		{"login.html", loginData{}},
+		// Recovery and invitation pages: embedded but never registered before
+		// bcars-portal-fmc.4, so every one of these failed at runtime.
+		{"forgot_password.html", struct {
+			Error   string
+			Success bool
+		}{}},
+		{"reset_password.html", struct {
+			Token   string
+			Error   string
+			Success bool
+		}{}},
+		{"accept_invitation.html", struct {
+			Token string
+			Error string
+		}{}},
+		{"error.html", errorPageData{}},
 	}
 	for _, tt := range tests {
 		w := httptest.NewRecorder()

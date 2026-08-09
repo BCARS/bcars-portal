@@ -5,18 +5,53 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/bcars/bcars-portal/internal/mail"
 )
 
-const (
-	PurposeRecovery    = "password_recovery"
-	PurposeInvitation  = "invitation"
-	PurposeVerifyEmail = "verify_email"
+// Purpose identifies what an email link authorizes.
+//
+// It is a struct rather than a string alias so a raw literal cannot be
+// compared against it: `link.Purpose != "recovery"` fails to compile. That
+// exact typo — comparing against "recovery" when the stored value is
+// "password_recovery" — silently disabled password recovery on both the API
+// and the web UI, and a named string type would not have caught it because an
+// untyped constant converts implicitly.
+type Purpose struct{ code string }
+
+func (p Purpose) String() string { return p.code }
+
+// Value implements driver.Valuer so a Purpose can be written to SQL directly.
+func (p Purpose) Value() (driver.Value, error) { return p.code, nil }
+
+// Scan implements sql.Scanner so a Purpose can be read from SQL directly.
+// An unrecognised code scans into a zero Purpose, which matches no known
+// purpose and therefore fails every comparison closed.
+func (p *Purpose) Scan(src any) error {
+	switch v := src.(type) {
+	case nil:
+		p.code = ""
+	case string:
+		p.code = v
+	case []byte:
+		p.code = string(v)
+	default:
+		return fmt.Errorf("authn: cannot scan %T into Purpose", src)
+	}
+	return nil
+}
+
+var (
+	PurposeRecovery    = Purpose{"password_recovery"}
+	PurposeInvitation  = Purpose{"invitation"}
+	PurposeVerifyEmail = Purpose{"verify_email"}
 )
 
 var (
@@ -28,6 +63,35 @@ var (
 type EmailLinkConfig struct {
 	BaseURL string        // e.g. "https://portal.bcars.org"
 	TTL     time.Duration // e.g. 24h
+
+	// RecoveryPath and InvitationPath are the paths the emailed links point
+	// at. They are configured rather than hardcoded here because authn must
+	// not know the web UI's routing table, and because hardcoding them is how
+	// the recovery link came to point at /auth/recovery/consume — a path no
+	// router ever served. The assembly wires these from the constants the web
+	// package exports, and a test asserts they resolve to real routes.
+	RecoveryPath   string
+	InvitationPath string
+}
+
+// Defaults used when a path is not configured.
+const (
+	defaultRecoveryPath   = "/reset-password"
+	defaultInvitationPath = "/auth/invitations/consume"
+)
+
+func (c EmailLinkConfig) recoveryPath() string {
+	if c.RecoveryPath == "" {
+		return defaultRecoveryPath
+	}
+	return c.RecoveryPath
+}
+
+func (c EmailLinkConfig) invitationPath() string {
+	if c.InvitationPath == "" {
+		return defaultInvitationPath
+	}
+	return c.InvitationPath
 }
 
 // EmailLinkService manages one-time email tokens for recovery and invitations.
@@ -74,11 +138,15 @@ func (s *EmailLinkService) RequestRecovery(ctx context.Context, email, ipHash st
 		return fmt.Errorf("authn: create recovery link: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/auth/recovery/consume?token=%s", s.cfg.BaseURL, token)
+	if s.mailer == nil {
+		return fmt.Errorf("authn: no mail sender configured; recovery mail cannot be delivered")
+	}
+
+	linkURL := s.linkURL(s.cfg.recoveryPath(), token)
 	return s.mailer.Send(ctx, mail.Message{
 		To:         email,
 		TemplateID: "password_recovery",
-		Payload:    map[string]string{"url": url, "token": token},
+		Payload:    map[string]string{"url": linkURL, "token": token},
 	})
 }
 
@@ -116,11 +184,14 @@ func (s *EmailLinkService) CreateInvitation(ctx context.Context, email, roleCode
 	}
 
 	if sendEmail {
-		url := fmt.Sprintf("%s/auth/invitations/consume?token=%s", s.cfg.BaseURL, token)
+		if s.mailer == nil {
+			return token, fmt.Errorf("authn: no mail sender configured; invitation mail cannot be delivered")
+		}
+		linkURL := s.linkURL(s.cfg.invitationPath(), token)
 		if err := s.mailer.Send(ctx, mail.Message{
 			To:         email,
 			TemplateID: "invitation",
-			Payload:    map[string]string{"url": url, "token": token},
+			Payload:    map[string]string{"url": linkURL, "token": token},
 		}); err != nil {
 			return token, fmt.Errorf("authn: send invitation email: %w", err)
 		}
@@ -129,12 +200,23 @@ func (s *EmailLinkService) CreateInvitation(ctx context.Context, email, roleCode
 	return token, nil
 }
 
+// linkURL builds the absolute URL for an emailed link.
+func (s *EmailLinkService) linkURL(path, token string) string {
+	return fmt.Sprintf("%s%s?token=%s", strings.TrimRight(s.cfg.BaseURL, "/"), path, url.QueryEscape(token))
+}
+
+// InvitationURL returns the URL an invitation token resolves to. portalctl
+// prints it, so it must be built the same way the emailed link is.
+func (s *EmailLinkService) InvitationURL(token string) string {
+	return s.linkURL(s.cfg.invitationPath(), token)
+}
+
 // ConsumeLink validates and consumes a token. Returns the email_links row data.
 // The caller is responsible for setting the password and creating the user
 // (for invitations) or resetting the password (for recovery).
 type ConsumedLink struct {
 	ID      int64
-	Purpose string
+	Purpose Purpose
 	UserID  *int64
 	Email   string
 	// IntendedRoleCode is the role this invitation confers, or "" for none.

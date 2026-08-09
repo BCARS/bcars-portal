@@ -11,6 +11,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/httpapi"
 	"github.com/bcars/bcars-portal/internal/mail"
+	"github.com/bcars/bcars-portal/internal/web"
 )
 
 // assemblyConfig holds everything the production HTTP assembly needs beyond
@@ -47,12 +48,18 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 	emailLinks := authn.NewEmailLinkService(database, cfg.Mailer, authn.EmailLinkConfig{
 		BaseURL: cfg.BaseURL,
 		TTL:     cfg.EmailLinkTTL,
+		// Wired from the web package's own route constants so an emailed
+		// link cannot point at a path the router does not serve.
+		RecoveryPath:   web.RouteResetPassword,
+		InvitationPath: web.RouteInvitationConsume,
 	})
 
 	handler, api := httpapi.NewRouter(httpapi.Config{
 		Logger:  cfg.Logger,
 		Version: cfg.Version,
 		DB:      database,
+		Mailer:  cfg.Mailer,
+		BaseURL: cfg.BaseURL,
 	})
 	httpapi.RegisterAll(api, httpapi.Deps{
 		DB:               database,
