@@ -24,6 +24,11 @@ type assemblyConfig struct {
 	BaseURL      string
 	EmailLinkTTL time.Duration
 	Mailer       mail.Sender
+
+	// Pepper is the secret mixed into every password hash. AllowEmptyPepper
+	// must be set explicitly to run without one.
+	Pepper           []byte
+	AllowEmptyPepper bool
 }
 
 // buildHandler assembles the production HTTP handler: session store, auth
@@ -42,8 +47,15 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 		CookieName: cfg.CookieName,
 		TTL:        cfg.SessionTTL,
 	})
-	// TODO: load pepper from environment/config in production.
-	authService := authn.NewAuthService(database, sessionStore, nil)
+	if err := authn.ValidatePepper(cfg.Pepper, cfg.AllowEmptyPepper); err != nil {
+		return nil, err
+	}
+	// Refuses to start if this database's hashes were made with a different
+	// pepper, rather than rejecting every sign-in as a bad password.
+	if err := authn.BindPepper(database, cfg.Pepper); err != nil {
+		return nil, err
+	}
+	authService := authn.NewAuthService(database, sessionStore, cfg.Pepper)
 
 	emailLinks := authn.NewEmailLinkService(database, cfg.Mailer, authn.EmailLinkConfig{
 		BaseURL: cfg.BaseURL,

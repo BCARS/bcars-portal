@@ -22,6 +22,10 @@ import (
 
 const testPassword = "correcthorsebatterystaple"
 
+// testPepper is used by both the assembly under test and the fixtures that
+// seed accounts into it. They must agree or every sign-in fails.
+var testPepper = []byte("test-pepper-at-least-16-bytes")
+
 // prodEnv is the server the binary actually serves: buildHandler is the only
 // wiring under test, so a regression in main's assembly (a missing
 // authn.Middleware, an unsupplied EmailLinkService) fails here.
@@ -50,6 +54,7 @@ func setupProdEnv(t *testing.T) *prodEnv {
 		BaseURL:      "https://portal.example.org",
 		EmailLinkTTL: time.Hour,
 		Mailer:       mailer,
+		Pepper:       testPepper,
 	})
 	require.NoError(t, err)
 
@@ -63,7 +68,9 @@ func setupProdEnv(t *testing.T) *prodEnv {
 // (empty roleCode means an authenticated user with no capabilities at all).
 func (e *prodEnv) seedUser(t *testing.T, email, roleCode string) int64 {
 	t.Helper()
-	hash, err := authn.HashPassword(testPassword, nil, authn.DefaultParams())
+	// Must use the same pepper the assembly verifies with; hashing a fixture
+	// without it produces an account that can never sign in.
+	hash, err := authn.HashPassword(testPassword, testPepper, authn.DefaultParams())
 	require.NoError(t, err)
 
 	res, err := e.db.Exec(
@@ -225,4 +232,84 @@ func TestNewMailSender(t *testing.T) {
 
 	_, err = newMailSender(mailConfig{Transport: "carrier-pigeon"})
 	assert.Error(t, err)
+}
+
+// TestAssemblyRefusesWithoutPepper is the fail-closed guarantee: forgetting to
+// configure a pepper must stop the server, not silently produce unpeppered
+// hashes that are indistinguishable from peppered ones.
+func TestAssemblyRefusesWithoutPepper(t *testing.T) {
+	d := newAssemblyDB(t)
+
+	_, err := buildHandler(d, assemblyConfig{
+		Version:    "test",
+		CookieName: "bcars_session",
+		SessionTTL: time.Hour,
+		BaseURL:    "https://portal.example.org",
+		Mailer:     mail.NewFilelogSender(t.TempDir()),
+	})
+	require.ErrorIs(t, err, authn.ErrPepperMissing)
+}
+
+func TestAssemblyRefusesShortPepper(t *testing.T) {
+	d := newAssemblyDB(t)
+
+	_, err := buildHandler(d, assemblyConfig{
+		Version:          "test",
+		CookieName:       "bcars_session",
+		SessionTTL:       time.Hour,
+		BaseURL:          "https://portal.example.org",
+		Mailer:           mail.NewFilelogSender(t.TempDir()),
+		Pepper:           []byte("short"),
+		AllowEmptyPepper: true,
+	})
+	require.ErrorIs(t, err, authn.ErrPepperTooShort)
+}
+
+// TestAssemblyRefusesChangedPepper covers the outage this guard exists to
+// prevent: a pepper swapped after accounts exist would otherwise reject every
+// sign-in as a bad password.
+func TestAssemblyRefusesChangedPepper(t *testing.T) {
+	d := newAssemblyDB(t)
+	cfg := func(p string) assemblyConfig {
+		return assemblyConfig{
+			Version:    "test",
+			CookieName: "bcars_session",
+			SessionTTL: time.Hour,
+			BaseURL:    "https://portal.example.org",
+			Mailer:     mail.NewFilelogSender(t.TempDir()),
+			Pepper:     []byte(p),
+		}
+	}
+
+	_, err := buildHandler(d, cfg("first-pepper-long-enough-ok"))
+	require.NoError(t, err)
+
+	_, err = buildHandler(d, cfg("second-pepper-long-enough-ok"))
+	require.ErrorIs(t, err, authn.ErrPepperChanged)
+}
+
+// TestAssemblyAllowsEmptyPepperWhenOptedIn keeps local development workable.
+func TestAssemblyAllowsEmptyPepperWhenOptedIn(t *testing.T) {
+	d := newAssemblyDB(t)
+
+	_, err := buildHandler(d, assemblyConfig{
+		Version:          "test",
+		CookieName:       "bcars_session",
+		SessionTTL:       time.Hour,
+		BaseURL:          "https://portal.example.org",
+		Mailer:           mail.NewFilelogSender(t.TempDir()),
+		AllowEmptyPepper: true,
+	})
+	require.NoError(t, err)
+}
+
+// newAssemblyDB is a migrated in-memory database for tests that exercise
+// buildHandler's configuration checks rather than its HTTP surface.
+func newAssemblyDB(t *testing.T) *sql.DB {
+	t.Helper()
+	d, err := db.Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+	require.NoError(t, db.Migrate(d))
+	return d
 }

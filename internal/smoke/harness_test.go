@@ -20,6 +20,11 @@ import (
 	"github.com/bcars/bcars-portal/internal/mail"
 )
 
+// smokePepperEnv configures the same pepper for every process the smoke test
+// starts. A mismatch between them would make sign-in fail everywhere, which is
+// itself worth catching.
+var smokePepperEnv = "PORTAL_PASSWORD_PEPPER=smoke-test-pepper-value-32-bytes!"
+
 var (
 	buildOnce sync.Once
 	binDir    string
@@ -102,6 +107,10 @@ func start(t *testing.T) *env {
 		"-mail-dir", e.mailDir,
 		"-log-level", "warn",
 	)
+	// The smoke test runs the production configuration, pepper included: a
+	// server started with -allow-empty-pepper would not be the artifact that
+	// deploys.
+	cmd.Env = append(os.Environ(), smokePepperEnv)
 	var logBuf syncBuffer
 	cmd.Stdout = &logBuf
 	cmd.Stderr = &logBuf
@@ -209,6 +218,7 @@ func (b *replayBody) Close() error { b.pos = 0; return nil }
 func (e *env) run(name string, args ...string) string {
 	e.t.Helper()
 	cmd := exec.Command(name, args...)
+	cmd.Env = append(os.Environ(), smokePepperEnv)
 	out, err := cmd.CombinedOutput()
 	require.NoError(e.t, err, "%s %s failed:\n%s", filepath.Base(name), strings.Join(args, " "), out)
 	return string(out)
