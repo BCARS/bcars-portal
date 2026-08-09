@@ -10,9 +10,9 @@ and AI transcripts are never committed. See `.gitignore` and
 
 ## Status
 
-Phase 1 (Administrative Membership MVP) is in progress. Beads is the source of
-truth for remaining work; `docs/phase-1-progress.md` is the human-readable
-overview. See:
+Phase 1 (Administrative Membership MVP) is complete. Beads is the source of
+truth for deferred and remaining work; `docs/phase-1-progress.md` is the
+human-readable completion record. See:
 
 - `PLANNING.md` — product plan and decisions.
 - `docs/phase-1-design.md` — technical design.
@@ -39,7 +39,6 @@ cd bcars-portal
 bd bootstrap --yes          # hydrate the Beads database from refs/dolt/data
 bd prime
 bd ready
-cp .env.sample .env         # then edit; do NOT commit .env
 make install-hooks          # ONE-TIME: blocks direct pushes to main
 make build
 make test
@@ -47,6 +46,7 @@ make lint
 make migration-updown       # verify migration round-trip
 make sqlc-diff
 make openapi-diff
+make smoke                  # exercise the shipped binaries outside the repo
 ./bin/portal --version
 ./bin/portalctl --help
 ```
@@ -67,9 +67,9 @@ containing member data.
 install-hooks`). All work goes through a pull request:
 
 ```sh
-git switch -c ws2/short-topic-name
+git switch -c codex/<bead-id>-short-topic
 # ... edits ...
-make build && make test && make lint && make migration-updown && make sqlc-diff && make openapi-diff && ./scripts/check-no-secrets.sh
+make build && make test && make lint && make migration-updown && make sqlc-diff && make openapi-diff && make smoke
 git push -u origin HEAD
 gh pr create --fill
 gh run watch                 # wait for CI green
@@ -88,15 +88,17 @@ push`. Every use of the bypass should be justifiable in the commit message.
 
 ## Running the server
 
-Phase 1 is still under construction. `cmd/portal --help` prints the current
-flag set. Actual endpoints are added by later workstreams.
+For local development, `make run` builds and starts the portal on
+`http://localhost:8080`, migrates `bcars.db`, allows an empty password pepper,
+and issues non-Secure cookies. Those relaxations are intentionally local-only;
+see `docs/deployment.md` before configuring a production process.
 
 ## Bootstrapping the first administrator
 
-Once WS4 lands, a fresh install requires a one-time bootstrap:
+A fresh install requires a one-time bootstrap:
 
 ```sh
-./bin/portalctl bootstrap-admin --email you@bcars.org
+./bin/portalctl bootstrap-admin --email you@bcars.org --db bcars.db
 ```
 
 There is no default password. The command prints a single-use invitation URL
@@ -104,8 +106,8 @@ to be opened in a browser.
 
 ## Backups
 
-Backups are owned by the appointed webmaster. See
-`docs/runbooks/backup-restore.md` (added in WS8).
+Backups are owned by the appointed webmaster. See the tested procedure in
+`docs/runbooks/backup-restore.md`.
 
 ## License
 

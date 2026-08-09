@@ -20,6 +20,8 @@ LDFLAGS      := -s -w -X $(VERSION_PKG).version=$(VERSION)
 GOLANGCI     := $(BIN_DIR)/golangci-lint
 STATICCHECK  := $(BIN_DIR)/staticcheck
 SQLC         := $(BIN_DIR)/sqlc
+RUN_DB       ?= bcars.db
+RUN_MAIL_DIR ?= mail-outbox
 
 .PHONY: all build test test-demoseed smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets install-hooks migration-updown
 
@@ -94,7 +96,8 @@ migrate: build
 	$(BIN_DIR)/portal --migrate-only --db bcars.db
 
 run: build
-	$(BIN_DIR)/portal --migrate --db bcars.db
+	# Development only: production must supply a pepper and use Secure cookies.
+	$(BIN_DIR)/portal --allow-empty-pepper --allow-insecure-cookies --migrate --db $(RUN_DB) --mail-dir $(RUN_MAIL_DIR)
 
 # Migration up/down/up round-trip. Used in CI to verify every migration
 # has a matching Down that leaves the schema consistent for a second Up.

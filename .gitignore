@@ -27,6 +27,7 @@
 .DS_Store
 .idea/
 .vscode/
+.claude/worktrees/
 *.swp
 
 # Coverage

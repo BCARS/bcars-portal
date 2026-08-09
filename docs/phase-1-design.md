@@ -828,34 +828,26 @@ Phase 2's first migration:
 - **Backup/restore** — a script that copies the WAL-checkpointed DB to a
   target, then restores into an isolated dir and re-runs a smoke test.
 
-## 12. Configuration Surface (env)
+## 12. Configuration Surface
 
 ```
-PORTAL_LISTEN_ADDR=:8080
-PORTAL_DB_PATH=/var/lib/bcars-portal/portal.db
-PORTAL_SESSION_COOKIE_NAME=bcars_portal
-PORTAL_SESSION_TTL=168h
-PORTAL_SESSION_RECENT_AUTH_TTL=5m
 PORTAL_PASSWORD_PEPPER=<32 random bytes base64>       # required
-PORTAL_MAIL_MODE=smtp|filelog
-PORTAL_MAIL_SMTP_HOST=
-PORTAL_MAIL_SMTP_PORT=587
-PORTAL_MAIL_SMTP_USER=
-PORTAL_MAIL_SMTP_PASSWORD=
-PORTAL_MAIL_FROM=portal@bcars.org
-PORTAL_MAIL_REPLY_TO=qsl@bcars.org
-PORTAL_LOG_LEVEL=info
-PORTAL_TRUST_PROXY_HEADER=false
+PORTAL_SMTP_PASSWORD=                                 # required for SMTP auth
+PORTAL_BACKUP_PASSPHRASE=                            # required by backup/restore
 ```
 
-No secret is ever readable back through the API.
+These are the environment variables implemented in Phase 1, and all are
+secrets. Non-secret runtime configuration uses command-line flags; see
+`portal --help` and [deployment.md](deployment.md). Packaging and environment
+variable equivalents for non-secret flags are deferred to
+`bcars-portal-fmc.8`. No secret is ever readable back through the API.
 
 ## 13. Deployment Notes
 
 - Single binary. Migrations run at startup only when `--migrate` flag is
   set (default: refuse to start on a mismatched schema version).
-- SQLite file lives on a persistent volume; backup script uses
-  `sqlite3 .backup` (safe with WAL).
+- SQLite file lives on persistent storage; `portalctl backup` uses a
+  WAL-safe snapshot and age encryption, with a separate integrity manifest.
 - Health: `/healthz` returns 200 iff process is up. `/readyz` returns 200
   iff DB is reachable and schema version matches build.
 - No default admin user. Bootstrap requires operator on the host.

@@ -10,8 +10,9 @@ truth: run `bd bootstrap --yes` on a fresh clone, then `bd ready` and
 
 An authorized officer can sign in, manage canonical member records, stage and
 reconcile a Groups.io CSV/JSON export, commit it atomically, inspect audit
-history, and operate a documented single-instance deployment with tested
-backup/restore. Phase 1 is local and API-first.
+history, and perform tested encrypted backup/restore. Phase 1 is local and
+API-first. Production packaging and deployment automation are explicitly
+deferred to `bcars-portal-fmc.8`.
 
 ## Status: COMPLETE, after reconciliation
 
@@ -19,8 +20,8 @@ backup/restore. Phase 1 is local and API-first.
 
 On 2026-08-08 this document read "COMPLETE" because every Phase 1 bead was
 closed. A review of `main` at `f743d08` found that closure did not mean the
-acceptance criteria were met. All seven mechanical gates passed against a tree
-where:
+acceptance criteria were met. All then-existing mechanical gates passed against
+a tree where:
 
 - the production API could not resolve a signed-in principal at all — nothing
   wrapped the router in `authn.Middleware`, so every authenticated call 401'd

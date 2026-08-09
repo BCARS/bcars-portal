@@ -81,6 +81,9 @@ make test         # go test -race -count=1 ./...
 make lint         # fmt + vet + staticcheck + golangci-lint + secrets scan
 make migration-updown  # migration up/down/up round-trip
 make sqlc         # Regenerate SQL query code from sqlc.yaml
+make sqlc-diff    # Regenerate and fail on committed sqlc drift
+make openapi-diff # Regenerate and fail on OpenAPI/catalog drift
+make smoke        # Exercise the shipped binaries outside the source tree
 make install-hooks  # Install pre-push git hook (blocks direct pushes to main)
 ```
 
@@ -103,7 +106,7 @@ API-first Go application targeting SQLite + Goose migrations + sqlc for type-saf
 - `internal/domain/authz/` — Capability catalog, policy layer (default-deny)
 - `internal/domain/members/` — Member operations domain service
 - `internal/domain/importd/` — Groups.io import pipeline (parse, normalize, match, stage, commit)
-- `internal/httpapi/` — Huma API handlers (registered but mostly stubbed 501s — see phase-1-progress.md)
+- `internal/httpapi/` — Huma API handlers and capability-enforced registration
 - `internal/web/` — Server-rendered admin UI (HTMX, templates)
 - `internal/db/` — Database layer (Goose migrations + sqlc-generated queries)
 - `internal/mail/` — Mail sender interface (filelog + SMTP implementations)
@@ -133,8 +136,10 @@ When picking up work:
 5. Implement only the bead acceptance criteria. Create follow-up beads for
    discovered work. Do not start deferred external/interactive tasks without
    the repository owner.
-6. Run `make build`, `make test`, `make lint`, `make sqlc-diff`, and
-   `make openapi-diff` before opening the PR.
+6. Run all seven repository gates before opening the PR: `make build`, `make
+   test`, `make lint`, `make migration-updown`, `make sqlc-diff`, `make
+   openapi-diff`, and `make smoke`. Generic `bd preflight` output does not
+   replace these repository-specific gates.
 7. Review the diff and secret/PII scan, commit, push, and open a PR.
 8. Wait for every required CI check, fix failures, and never merge red CI.
 9. Squash-merge, delete the branch, update local `main`, close the bead with the
@@ -146,7 +151,8 @@ interactive UI-design bead.
 
 ### Key patterns
 
-- **API handlers** in `internal/httpapi/ops_*.go` — most return `ErrNotImplemented()` and need wiring to domain services
+- **API handlers** in `internal/httpapi/ops_*.go` — production dependencies are
+  wired; remaining `ErrNotImplemented()` returns are nil-dependency guards
 - **Domain services** in `internal/domain/` — these are the real implementations, well-tested
-- **Web handlers** in `internal/web/handler.go` — admin UI, partially wired
+- **Web handlers** in `internal/web/handler.go` — server-rendered administrative UI
 - All API operations must be registered via `httpapi.Register` (not raw `huma.Register`) to enforce capability checks
