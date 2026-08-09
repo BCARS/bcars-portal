@@ -33,6 +33,10 @@ type Handler struct {
 	emailLinks *authn.EmailLinkService
 	audit      audit.Recorder
 
+	// cookies is the shared source of session-cookie attributes, so login,
+	// logout and the recovery/invitation flows cannot disagree about them.
+	cookies authn.SessionCookieConfig
+
 	// testMailer is set by tests that need to read what was sent. Nil in
 	// production; the handler never reads it.
 	testMailer *mail.FilelogSender
@@ -63,6 +67,11 @@ type HandlerConfig struct {
 	BaseURL      string
 	SessionTTL   time.Duration
 	EmailLinkTTL time.Duration
+
+	// AllowInsecureCookies drops the Secure attribute from the session
+	// cookie so the admin UI works over plaintext http://localhost.
+	// Development only; the zero value keeps Secure on.
+	AllowInsecureCookies bool
 }
 
 func (c HandlerConfig) withDefaults() HandlerConfig {
@@ -115,6 +124,10 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 		sess:       sessStore,
 		emailLinks: emailLinks,
 		audit:      audit.NewSQLRecorder(database, logger),
+		cookies: authn.SessionCookieConfig{
+			Name:          sessionCookieName,
+			AllowInsecure: cfg.AllowInsecureCookies,
+		},
 	}, nil
 }
 
@@ -390,13 +403,7 @@ func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	h.setSessionCookie(w, sessionID)
 
 	h.log.Info("login succeeded", slog.String("email", email))
 	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
@@ -408,14 +415,7 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 		_ = h.auth.SignOut(cookie.Value)
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    "",
-		MaxAge:   -1,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, h.cookies.Clear())
 
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
@@ -1047,14 +1047,11 @@ func friendlyError(err error) string {
 
 // --- Recovery/invitation handlers ---
 
+// setSessionCookie writes the session cookie from the handler's shared
+// configuration. Every place the admin UI hands out a session goes through
+// here so none of them can drop an attribute.
 func (h *Handler) setSessionCookie(w http.ResponseWriter, sessionID string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, h.cookies.Set(sessionID, time.Time{}))
 }
 
 func (h *Handler) forgotPasswordPage(w http.ResponseWriter, r *http.Request) {

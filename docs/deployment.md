@@ -133,6 +133,7 @@ See the backup manifest JSON for schema version, file size, and SHA-256 checksum
 | `--db` | `PORTAL_DB` | `portal.db` | Path to SQLite database |
 | — | `PORTAL_PASSWORD_PEPPER` | *(none)* | **Required.** Secret mixed into every password hash. Minimum 16 bytes. |
 | `--allow-empty-pepper` | — | `false` | Development only. Start without a pepper. |
+| `--allow-insecure-cookies` | — | `false` | Development only. Issue session cookies without `Secure`. |
 | `--addr` | `PORTAL_ADDR` | `:8080` | Listen address |
 | `--log-level` | `PORTAL_LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `--base-url` | — | `http://localhost:8080` | Public base URL used to build recovery/invitation links |
@@ -171,9 +172,32 @@ to disk instead of delivering them.
 - Run as a dedicated non-root user
 - SQLite database file should be readable only by the portal user
 - Use a reverse proxy (nginx/caddy) for TLS termination
-- Session cookies are HttpOnly + SameSite=Lax
+- Session cookies are HttpOnly + SameSite=Lax + Secure (see below)
 - PII is redacted in structured logs (see `docs/log-retention.md`)
 
+
+## Session cookie security
+
+Both surfaces — the JSON API and the server-rendered admin UI — issue their
+session cookie from one shared configuration, so no set or clear point can
+drift from the others. The attributes are `HttpOnly`, `SameSite=Lax`, `Path=/`
+and `Secure`.
+
+`Secure` is on by default. Because TLS is terminated at the reverse proxy, the
+server cannot tell from the request alone whether the browser is on HTTPS, so
+the safe attribute is the default and turning it off is an explicit decision.
+
+`--allow-insecure-cookies` drops `Secure`. It exists for local development,
+where the portal is reached over plaintext `http://localhost` and a `Secure`
+cookie is never sent back — which presents as being unable to stay signed in
+after a successful sign-in. Run the development server as:
+
+```bash
+./bin/portal -db data/portal.db -allow-insecure-cookies
+```
+
+Never set this in production: without `Secure` the session cookie is eligible
+to travel over plaintext HTTP, where anyone on the path can take the session.
 
 ## Password pepper
 

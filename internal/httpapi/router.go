@@ -37,6 +37,11 @@ type Config struct {
 	// resolve. Leaving Mailer nil disables outbound mail from the UI.
 	Mailer  mail.Sender
 	BaseURL string
+
+	// AllowInsecureCookies drops the Secure attribute from the admin UI's
+	// session cookie. Development only, for serving the portal over
+	// plaintext http://localhost; the zero value keeps Secure on.
+	AllowInsecureCookies bool
 }
 
 // NewRouter assembles the HTTP handler and Huma API.
@@ -69,9 +74,10 @@ func NewRouter(cfg Config) (http.Handler, huma.API) {
 	// Admin UI routes (server-rendered HTML).
 	if cfg.DB != nil {
 		webHandler, err := web.NewHandler(cfg.DB, web.HandlerConfig{
-			Logger:  cfg.Logger,
-			Mailer:  cfg.Mailer,
-			BaseURL: cfg.BaseURL,
+			Logger:               cfg.Logger,
+			Mailer:               cfg.Mailer,
+			BaseURL:              cfg.BaseURL,
+			AllowInsecureCookies: cfg.AllowInsecureCookies,
 		})
 		if err != nil {
 			cfg.Logger.Error("failed to initialize admin UI", slog.String("error", err.Error()))

@@ -19,6 +19,11 @@ type Deps struct {
 	EmailLinkService *authn.EmailLinkService
 	CookieName       string
 
+	// AllowInsecureCookies drops the Secure attribute from the session
+	// cookie. Development only, for serving the portal over plaintext
+	// http://localhost; the zero value keeps Secure on.
+	AllowInsecureCookies bool
+
 	// EmailLinkTTL mirrors the lifetime configured on EmailLinkService so
 	// responses can report when an invitation expires.
 	EmailLinkTTL time.Duration

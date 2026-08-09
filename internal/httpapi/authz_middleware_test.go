@@ -48,7 +48,7 @@ func setupAuthzTest(t *testing.T, roleCodes ...string) *authzEnv {
 
 	handler, api := httpapi.NewRouter(httpapi.Config{Version: "test", DB: d})
 	capLoader := &authn.SQLCapabilityLoader{DB: d}
-	wrapped := authn.Middleware(store, capLoader, cookieName)(handler)
+	wrapped := authn.Middleware(store, capLoader, authn.SessionCookieConfig{Name: cookieName})(handler)
 
 	httpapi.RegisterAll(api, httpapi.Deps{
 		DB:               d,

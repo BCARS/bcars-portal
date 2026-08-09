@@ -31,7 +31,7 @@ func setupSessionTest(t *testing.T) (*httptest.Server, *authn.SessionStore) {
 
 	// Wire the authn middleware so principal is available.
 	capLoader := &authn.SQLCapabilityLoader{DB: d}
-	wrappedHandler := authn.Middleware(store, capLoader, cookieName)(handler)
+	wrappedHandler := authn.Middleware(store, capLoader, authn.SessionCookieConfig{Name: cookieName})(handler)
 
 	httpapi.RegisterAll(api, httpapi.Deps{
 		DB:           d,
