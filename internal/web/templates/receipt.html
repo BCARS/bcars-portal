@@ -1,0 +1,32 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Receipt {{.Receipt.ReceiptCode}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="card">
+    <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Receipt {{.Receipt.ReceiptCode}}</h2>
+    {{if .Receipt.Superseded}}
+    <p role="status" style="margin: 0 0 12px; color: #8a4b00;">
+        This entry was later corrected. It is kept for the record and is not the current amount.
+    </p>
+    {{end}}
+
+    <div class="detail-row"><span class="detail-label">Member</span>
+        <span class="detail-value">{{.Receipt.DisplayName}}{{if .Receipt.CallSign}} ({{.Receipt.CallSign}}){{end}}</span></div>
+    <div class="detail-row"><span class="detail-label">Membership</span>
+        <span class="detail-value">{{.Receipt.BaseType}}</span></div>
+    <div class="detail-row"><span class="detail-label">Amount</span>
+        <span class="detail-value">${{.Amount}}</span></div>
+    <div class="detail-row"><span class="detail-label">Method</span>
+        <span class="detail-value">{{.Receipt.Method}}{{if .Receipt.Reference}} ({{.Receipt.Reference}}){{end}}</span></div>
+    <div class="detail-row"><span class="detail-label">Received</span>
+        <span class="detail-value">{{.Receipt.ReceivedOn}}{{if .Receipt.ReceivedByOfficer}} by {{.Receipt.ReceivedByOfficer}}{{end}}</span></div>
+    <div class="detail-row"><span class="detail-label">Dues paid through</span>
+        <span class="detail-value">{{if .Receipt.PaidThrough}}{{.Receipt.PaidThrough}}{{else}}not changed by this payment{{end}}</span></div>
+
+    <p style="margin-top: 16px;">
+        <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
+        {{if .Receipt.BatchID}}<a href="/admin/treasury/batches/{{.Receipt.BatchID}}" class="btn btn-secondary">Back to batch</a>{{end}}
+    </p>
+</div>
+{{end}}

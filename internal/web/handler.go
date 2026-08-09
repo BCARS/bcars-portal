@@ -190,6 +190,18 @@ func (h *Handler) AdminRoutes() []AdminRoute {
 		{Pattern: "GET /admin/treasury/memberships/{id}/payment", Capability: "payment.post", ResourceKind: "payment", handler: h.treasuryPaymentForm},
 		{Pattern: "POST /admin/treasury/memberships/{id}/payment", Capability: "payment.post", AuditAction: "payment.create", ResourceKind: "payment", handler: h.treasuryPaymentSubmit},
 
+		{Pattern: "GET /admin/treasury/batches", Capability: "payment.read", ResourceKind: "payment_batch", handler: h.batchList},
+		{Pattern: "POST /admin/treasury/batches", Capability: "payment.batch.manage", AuditAction: "payment.batch.open", ResourceKind: "payment_batch", handler: h.batchOpen},
+		{Pattern: "GET /admin/treasury/batches/{id}", Capability: "payment.read", ResourceKind: "payment_batch", handler: h.batchDetail},
+		{Pattern: "POST /admin/treasury/batches/{id}/defaults", Capability: "payment.batch.manage", AuditAction: "payment.batch.update", ResourceKind: "payment_batch", handler: h.batchUpdateDefaults},
+		{Pattern: "POST /admin/treasury/batches/{id}/entries", Capability: "payment.batch.manage", AuditAction: "payment.batch.entry.create", ResourceKind: "payment_batch_entry", handler: h.batchAddEntry},
+		{Pattern: "POST /admin/treasury/batches/{id}/entries/{entry_id}/delete", Capability: "payment.batch.manage", AuditAction: "payment.batch.entry.delete", ResourceKind: "payment_batch_entry", handler: h.batchDeleteEntry},
+		{Pattern: "POST /admin/treasury/batches/{id}/post", Capability: "payment.post", AuditAction: "payment.batch.post", ResourceKind: "payment_batch", handler: h.batchPost},
+		{Pattern: "POST /admin/treasury/batches/{id}/abandon", Capability: "payment.batch.manage", AuditAction: "payment.batch.abandon", ResourceKind: "payment_batch", handler: h.batchAbandon},
+		{Pattern: "GET /admin/treasury/payments/{id}/receipt", Capability: "payment.read", ResourceKind: "payment", handler: h.receiptPage},
+		{Pattern: "GET /admin/treasury/payments/{id}/correct", Capability: "payment.correct", ResourceKind: "payment", handler: h.correctionForm},
+		{Pattern: "POST /admin/treasury/payments/{id}/correct", Capability: "payment.correct", AuditAction: "payment.correct", ResourceKind: "payment", handler: h.correctionSubmit},
+
 		{Pattern: "GET /admin/members", Capability: "member.read", ResourceKind: "person", handler: h.memberList},
 		{Pattern: "GET /admin/members/new", Capability: "member.create", ResourceKind: "person", handler: h.memberNew},
 		{Pattern: "POST /admin/members/new", Capability: "member.create", AuditAction: "member.create", ResourceKind: "person", handler: h.memberCreate},
