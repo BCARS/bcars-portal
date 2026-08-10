@@ -566,6 +566,280 @@
         ],
         "type": "object"
       },
+      "ChangeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ChangeRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeRequestItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pending_items_count": {
+            "description": "The request resolves only when this reaches zero.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "received_by_user_id": {
+            "description": "The officer who recorded it.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "requester_user_id": {
+            "description": "Set only for an authenticated member's own request.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "resolved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "officer_phone",
+              "officer_email",
+              "officer_mail",
+              "officer_meeting",
+              "member",
+              "public"
+            ],
+            "type": "string"
+          },
+          "stated_relationship": {
+            "description": "How the submitter says they know the member. Informational; it confers nothing.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "submitted",
+              "in_review",
+              "resolved",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "supplied_call_sign": {
+            "type": "string"
+          },
+          "supplied_contact": {
+            "type": "string"
+          },
+          "supplied_name": {
+            "description": "What the submitter said, never rewritten by triage.",
+            "type": "string"
+          },
+          "target_display_name": {
+            "type": "string"
+          },
+          "target_person_id": {
+            "description": "Empty until an officer links an unresolved submission to a person.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "triaged_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "triaged_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "withdrawn_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "status",
+          "summary",
+          "submitted_at",
+          "pending_items_count",
+          "items",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ChangeRequestItem": {
+        "additionalProperties": false,
+        "properties": {
+          "applied_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "applied_resource_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "applied_resource_kind": {
+            "type": "string"
+          },
+          "applied_resource_version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "decision_reason": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "operation": {
+            "description": "One of the allowlisted operations. 'other' is a reviewable note that can never be approved.",
+            "type": "string"
+          },
+          "ordinal": {
+            "description": "Position as submitted. Stable, so a reviewer and a submitter refer to the same item.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "proposed_value": {
+            "type": "string"
+          },
+          "reviewed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reviewed_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sensitivity": {
+            "enum": [
+              "ordinary",
+              "sensitive"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "needs_verification"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "target_kind": {
+            "enum": [
+              "person",
+              "contact_method",
+              "membership",
+              "relationship"
+            ],
+            "type": "string"
+          },
+          "target_version": {
+            "description": "Version the submitter saw, when known. Review uses it to detect a change made since.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "verification_note": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ordinal",
+          "operation",
+          "sensitivity",
+          "status",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ChangeRequestItemBody": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "description": "Must be an allowlisted operation. There is no arbitrary field path.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "proposed_value": {
+            "description": "Required for every operation except 'other'.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "sensitivity": {
+            "description": "Defaults to ordinary. A sensitive approval later requires a verification note.",
+            "enum": [
+              "ordinary",
+              "sensitive"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "target_kind": {
+            "enum": [
+              "person",
+              "contact_method",
+              "membership",
+              "relationship"
+            ],
+            "type": "string"
+          },
+          "target_version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "type": "object"
+      },
       "ContactMethod": {
         "additionalProperties": false,
         "properties": {
@@ -755,6 +1029,74 @@
           "paid_through",
           "reason_kind",
           "decided_at"
+        ],
+        "type": "object"
+      },
+      "CreateChangeRequestBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateChangeRequestBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeRequestItemBody"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "source": {
+            "description": "How the correction reached the officer. Member and public intake use their own endpoints.",
+            "enum": [
+              "officer_phone",
+              "officer_email",
+              "officer_mail",
+              "officer_meeting"
+            ],
+            "type": "string"
+          },
+          "stated_relationship": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "summary": {
+            "description": "What was reported, in plain language.",
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "supplied_call_sign": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "supplied_contact": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "supplied_name": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "target_person_id": {
+            "description": "The member this concerns, when known. Otherwise supply a hint.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "summary",
+          "items"
         ],
         "type": "object"
       },
@@ -3948,6 +4290,30 @@
         ],
         "type": "object"
       },
+      "TriageChangeRequestBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TriageChangeRequestBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "target_person_id": {
+            "description": "The member this submission turned out to concern.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_person_id"
+        ],
+        "type": "object"
+      },
       "UpdateBatchBody": {
         "additionalProperties": false,
         "properties": {
@@ -4531,6 +4897,290 @@
         "summary": "List all capabilities in the catalog",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/change-requests": {
+      "get": {
+        "description": "Ordered by submission time, newest first, with an id tie-breaker so paging is deterministic.",
+        "operationId": "change-request-list",
+        "parameters": [
+          {
+            "description": "Optional exact filter.",
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "Optional exact filter.",
+              "enum": [
+                "draft",
+                "submitted",
+                "in_review",
+                "resolved",
+                "withdrawn"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional exact filter.",
+            "explode": false,
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "description": "Optional exact filter.",
+              "enum": [
+                "officer_phone",
+                "officer_email",
+                "officer_mail",
+                "officer_meeting",
+                "member",
+                "public"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only submissions with no linked person and no terminal status: the triage queue.",
+            "explode": false,
+            "in": "query",
+            "name": "unresolved_target_only",
+            "schema": {
+              "description": "Only submissions with no linked person and no terminal status: the triage queue.",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Defaults to 50.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Defaults to 50.",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChangeRequest"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List change requests",
+        "tags": [
+          "change-requests"
+        ]
+      },
+      "post": {
+        "description": "Captures a proposal only. No canonical member data changes until an officer reviews the individual items.",
+        "operationId": "change-request-create",
+        "parameters": [
+          {
+            "description": "Required. A retry with the same key returns the original request rather than recording a second one.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Required. A retry with the same key returns the original request rather than recording a second one.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChangeRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record a member correction reported to an officer",
+        "tags": [
+          "change-requests"
+        ]
+      }
+    },
+    "/change-requests/{id}": {
+      "get": {
+        "operationId": "change-request-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read one change request and its items",
+        "tags": [
+          "change-requests"
+        ]
+      }
+    },
+    "/change-requests/{id}/target": {
+      "post": {
+        "description": "Records the officer's conclusion. What the submitter supplied is kept unchanged beside it.",
+        "operationId": "change-request-triage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Request version you last read. Required: a missing header is a 428. Two officers triaging one public submission must not silently overwrite each other.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Request version you last read. Required: a missing header is a 428. Two officers triaging one public submission must not silently overwrite each other.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriageChangeRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Link a submission to the member it concerns",
+        "tags": [
+          "change-requests"
         ]
       }
     },

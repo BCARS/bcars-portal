@@ -207,8 +207,14 @@ type Querier interface {
 	ListCapabilities(ctx context.Context) ([]Capability, error)
 	ListChangeRequestItems(ctx context.Context, requestID int64) ([]MemberChangeRequestItem, error)
 	//
-	// The officer queue. Pass a NULL status or source to ignore that filter.
-	ListChangeRequests(ctx context.Context, arg ListChangeRequestsParams) ([]MemberChangeRequest, error)
+	// The officer queue. Every filter is optional: pass NULL for status, source, or
+	// requester to ignore it, and 0 for untargeted_only to include linked requests.
+	//
+	// Ordering is submitted_at DESC with an id tie-breaker so a page boundary is
+	// deterministic. Without the tie-breaker two requests recorded in the same
+	// millisecond could swap places between calls and hide a row from a caller
+	// paging through the queue.
+	ListChangeRequests(ctx context.Context, arg ListChangeRequestsParams) ([]ListChangeRequestsRow, error)
 	//
 	// A member's own request history. Scoped by requester, never by target, so it
 	// cannot become a read of someone else's record.

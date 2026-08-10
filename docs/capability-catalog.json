@@ -217,7 +217,12 @@
     "description": "Capture, list, and triage member change requests from any channel.",
     "category": "membership",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "change-request-create",
+      "change-request-get",
+      "change-request-list",
+      "change-request-triage"
+    ]
   },
   {
     "code": "change_request.review",
