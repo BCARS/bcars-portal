@@ -20,7 +20,9 @@ type OperationMeta struct {
 	// on every call (e.g. "member.list"). Required for write operations;
 	// read operations may leave it empty.
 	AuditAction string
-	// ConfirmationLevel is one of "none", "recent-auth", or "explicit-confirm".
+	// ConfirmationLevel is ConfirmNone or ConfirmExplicit. It is enforced
+	// generically by AuthzMiddleware, so the declaration IS the enforcement,
+	// exactly as it is for RequiredCapability.
 	ConfirmationLevel string
 	// AIToolEligibility is one of "never", "read-only", or "curated".
 	AIToolEligibility string
@@ -29,6 +31,28 @@ type OperationMeta struct {
 // PublicCapability is the sentinel value for operations that need no
 // authentication (sign-in, recovery, invitation consumption).
 const PublicCapability = "*public*"
+
+// Confirmation levels an operation may declare.
+//
+// There were three. "recent-auth" was removed by bcars-portal-6q6.1: it was
+// declared on three operations, described in docs/adr/0011, and implemented
+// nowhere. A level that cannot be enforced is worse than an absent one,
+// because the catalog advertises a control that does not exist. Genuine
+// step-up re-authentication is tracked separately; the operations that
+// declared it now declare ConfirmExplicit, which is enforced.
+const (
+	// ConfirmNone is the default: no confirmation beyond the capability.
+	ConfirmNone = "none"
+	// ConfirmExplicit requires the caller to state intent with the
+	// ConfirmHeader. See confirmation.go for what that does and does not mean.
+	ConfirmExplicit = "explicit-confirm"
+)
+
+// validConfirmationLevels is the closed set Register accepts.
+var validConfirmationLevels = map[string]struct{}{
+	ConfirmNone:     {},
+	ConfirmExplicit: {},
+}
 
 var (
 	metaMu  sync.Mutex
@@ -54,6 +78,16 @@ func Register[I, O any](api huma.API, op huma.Operation, meta OperationMeta, han
 				op.OperationID, meta.RequiredCapability,
 			))
 		}
+	}
+	// A confirmation level the middleware does not know how to enforce is the
+	// defect this check exists to prevent: it would read as a guarantee and
+	// silently do nothing. Panicking at startup matches how a missing
+	// capability is treated.
+	if _, ok := validConfirmationLevels[meta.ConfirmationLevel]; !ok {
+		panic(fmt.Sprintf(
+			"httpapi.Register: operation %q declares ConfirmationLevel %q; want %q or %q",
+			op.OperationID, meta.ConfirmationLevel, ConfirmNone, ConfirmExplicit,
+		))
 	}
 	metaMu.Lock()
 	opsMeta[op.OperationID] = meta

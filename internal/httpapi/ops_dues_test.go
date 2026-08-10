@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bcars/bcars-portal/internal/httpapi"
 )
 
 // seedMemberWithCoverage creates a person, an approved membership, and one
@@ -52,6 +54,7 @@ func doWithHeaders(t *testing.T, env *authzEnv, method, path string, cookie *htt
 		r, err = http.NewRequest(method, env.ts.URL+path, nil)
 		require.NoError(t, err)
 	}
+	r.Header.Set(httpapi.ConfirmHeader, "true")
 	for k, v := range headers {
 		r.Header.Set(k, v)
 	}

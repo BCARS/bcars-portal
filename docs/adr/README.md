@@ -19,3 +19,4 @@ Rationale for a decision belongs here; day-to-day design detail belongs in
 | 0008 | Accepted | Import staging model |
 | 0009 | Accepted | Version stamping via ldflags + runtime/debug |
 | 0010 | Accepted | Member record access is an explicit grant |
+| 0011 | Accepted | One generic confirmation control; recent-auth removed |

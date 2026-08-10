@@ -198,7 +198,7 @@ func RegisterImports(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
 		AuditAction:        "import.upload",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *UploadImportInput) (*UploadImportOutput, error) {
 		if importSvc == nil {
@@ -260,7 +260,7 @@ func RegisterImports(api huma.API, deps Deps) {
 		Tags:        []string{"imports"},
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *ImportsListInput) (*ImportsListOutput, error) {
 		if importSvc == nil {
@@ -319,7 +319,7 @@ func RegisterImports(api huma.API, deps Deps) {
 		Tags:        []string{"imports"},
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *ImportGetInput) (*ImportGetOutput, error) {
 		if importSvc == nil {
@@ -347,7 +347,7 @@ func RegisterImports(api huma.API, deps Deps) {
 		Tags:        []string{"imports"},
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportRowsListInput) (*ImportRowsListOutput, error) {
 		if importSvc == nil {
@@ -441,7 +441,7 @@ func RegisterImports(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
 		AuditAction:        "import.row.decision",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportRowDecisionInput) (*ImportRowDecisionOutput, error) {
 		if importSvc == nil {
@@ -482,7 +482,7 @@ func RegisterImports(api huma.API, deps Deps) {
 		Tags:        []string{"imports"},
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportPreviewInput) (*ImportPreviewOutput, error) {
 		if importSvc == nil {
@@ -522,7 +522,7 @@ func RegisterImports(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "import.commit",
 		AuditAction:        "import.commit",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportCommitInput) (*ImportCommitOutput, error) {
 		if importSvc == nil {
@@ -558,7 +558,7 @@ func RegisterImports(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "import.upload",
 		AuditAction:        "import.discard",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ImportDiscardInput) (*ImportDiscardOutput, error) {
 		if importSvc == nil {

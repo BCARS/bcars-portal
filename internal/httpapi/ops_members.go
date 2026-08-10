@@ -144,7 +144,7 @@ func RegisterMembers(api huma.API, deps Deps) {
 		Tags:        []string{"members"},
 	}, OperationMeta{
 		RequiredCapability: "member.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *MembersListInput) (*MembersListOutput, error) {
 		if memberSvc == nil {
@@ -217,7 +217,7 @@ func RegisterMembers(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "member.create",
 		AuditAction:        "member.create",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *CreateMemberInput) (*CreateMemberOutput, error) {
 		if memberSvc == nil {
@@ -252,7 +252,7 @@ func RegisterMembers(api huma.API, deps Deps) {
 		Tags:        []string{"members"},
 	}, OperationMeta{
 		RequiredCapability: "member.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *MemberGetInput) (*MemberGetOutput, error) {
 		if memberSvc == nil {
@@ -283,7 +283,7 @@ func RegisterMembers(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "member.update",
 		AuditAction:        "member.update",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *MemberUpdateInput) (*MemberUpdateOutput, error) {
 		if memberSvc == nil {
@@ -321,7 +321,7 @@ func RegisterMembers(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "member.deactivate",
 		AuditAction:        "member.deactivate",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *MemberDeactivateInput) (*MemberDeactivateOutput, error) {
 		if memberSvc == nil {
@@ -350,7 +350,7 @@ func RegisterMembers(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "member.deactivate",
 		AuditAction:        "member.reactivate",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *MemberReactivateInput) (*MemberReactivateOutput, error) {
 		if memberSvc == nil {
@@ -377,7 +377,7 @@ func RegisterMembers(api huma.API, deps Deps) {
 		Tags:        []string{"members"},
 	}, OperationMeta{
 		RequiredCapability: "member.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *MemberTimelineInput) (*MemberTimelineOutput, error) {
 		if memberSvc == nil {

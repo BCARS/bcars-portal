@@ -211,6 +211,10 @@ func (e *env) do(method, path string, cookie *http.Cookie, body string) *http.Re
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	// Operations declaring ConfirmExplicit are refused without this. The
+	// smoke test states intent by default so each scenario exercises its own
+	// subject; the confirmation contract itself is asserted separately.
+	req.Header.Set("X-Confirm", "true")
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}

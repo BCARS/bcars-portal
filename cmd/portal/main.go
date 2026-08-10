@@ -229,12 +229,26 @@ func dumpArtifacts(api huma.API, openapiPath, catalogPath string) error {
 			AIToolEligibility string `json:"ai_tool_eligibility"`
 			// OperationIDs that require this capability.
 			OperationIDs []string `json:"operation_ids"`
+			// ConfirmOperationIDs are the subset that additionally require
+			// explicit confirmation. Published because ADR-0011 made the
+			// declared level enforceable: a control the catalog describes but
+			// the server does not apply is exactly the defect that ADR fixed,
+			// and one it never describes is invisible to an operator reading
+			// what the API guards.
+			ConfirmOperationIDs []string `json:"confirm_operation_ids,omitempty"`
 		}
 		// Build a map from capability code to operation IDs.
 		opIDsByCode := map[string][]string{}
+		confirmByCode := map[string][]string{}
 		for opID, meta := range httpapi.AllMeta() {
 			code := meta.RequiredCapability
 			opIDsByCode[code] = append(opIDsByCode[code], opID)
+			if meta.ConfirmationLevel == httpapi.ConfirmExplicit {
+				confirmByCode[code] = append(confirmByCode[code], opID)
+			}
+		}
+		for k := range confirmByCode {
+			sort.Strings(confirmByCode[k])
 		}
 		for k := range opIDsByCode {
 			sort.Strings(opIDsByCode[k])
@@ -242,11 +256,12 @@ func dumpArtifacts(api huma.API, openapiPath, catalogPath string) error {
 		var entries []entry
 		for _, cap := range authz.All {
 			entries = append(entries, entry{
-				Code:              cap.Code,
-				Description:       cap.Description,
-				Category:          cap.Category,
-				AIToolEligibility: cap.AIToolEligibility,
-				OperationIDs:      opIDsByCode[cap.Code],
+				Code:                cap.Code,
+				Description:         cap.Description,
+				Category:            cap.Category,
+				AIToolEligibility:   cap.AIToolEligibility,
+				OperationIDs:        opIDsByCode[cap.Code],
+				ConfirmOperationIDs: confirmByCode[cap.Code],
 			})
 		}
 		b, err := json.MarshalIndent(entries, "", "  ")

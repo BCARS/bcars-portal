@@ -252,6 +252,7 @@ func TestImportPreviewAndCommit(t *testing.T) {
 	// Commit.
 	req, _ = http.NewRequest(http.MethodPost,
 		fmt.Sprintf("%s/api/v1/imports/%d/commit", ts.URL, runID), nil)
+	req.Header.Set(httpapi.ConfirmHeader, "true")
 	req.AddCookie(cookie)
 	resp, err = ts.Client().Do(req)
 	require.NoError(t, err)
@@ -267,6 +268,7 @@ func TestImportPreviewAndCommit(t *testing.T) {
 	// Idempotent retry — should return same result.
 	req, _ = http.NewRequest(http.MethodPost,
 		fmt.Sprintf("%s/api/v1/imports/%d/commit", ts.URL, runID), nil)
+	req.Header.Set(httpapi.ConfirmHeader, "true")
 	req.AddCookie(cookie)
 	resp, err = ts.Client().Do(req)
 	require.NoError(t, err)
@@ -353,6 +355,7 @@ func TestImportCommitRefusesUnresolved(t *testing.T) {
 	// Commit should fail.
 	req, _ = http.NewRequest(http.MethodPost,
 		fmt.Sprintf("%s/api/v1/imports/%d/commit", ts.URL, runID), nil)
+	req.Header.Set(httpapi.ConfirmHeader, "true")
 	req.AddCookie(cookie)
 	resp, err = ts.Client().Do(req)
 	require.NoError(t, err)

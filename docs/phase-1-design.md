@@ -697,9 +697,14 @@ Seed role → capability mapping (Phase 1):
 4. Consume: `POST /auth/recovery/consume` with `token` + new password.
    Verifies unexpired unused token, invalidates all sessions for the user,
    rotates cookie.
-5. Recent-auth gate: any capability marked `confirmation: recent-auth`
-   requires `session.last_seen_at` within 5 minutes of an explicit password
-   re-entry (a `POST /sessions/current/reauth`).
+5. Confirmation gate: any operation marked `confirmation: explicit-confirm`
+   requires the caller to state intent with an `X-Confirm` header, enforced
+   generically by the authz middleware. The `recent-auth` level described in
+   earlier drafts of this document was removed by ADR-0011: it was declared on
+   three operations and implemented nowhere, and those operations now use the
+   enforced `explicit-confirm` level. Genuine step-up re-authentication
+   (a `POST /sessions/current/reauth` and a re-auth window) is separate,
+   unimplemented work.
 6. Self-protection: a user cannot `role.revoke` their own last
    `administrator` grant, delete their own account, or approve their own
    change request (Phase 3).

@@ -58,9 +58,11 @@ type PostResult struct {
 
 // --- Inputs and outputs ---
 
-type PostBatchBody struct {
-	Confirm bool `json:"confirm" doc:"Must be true. Posting is irreversible except by correction, so it is never the accidental result of a stray request."`
-}
+// PostBatchBody is empty: posting is fully described by the batch, the
+// If-Match version, and the Idempotency-Key. Intent is stated with the
+// X-Confirm header, which AuthzMiddleware enforces from the declared
+// ConfirmationLevel (bcars-portal-6q6.1).
+type PostBatchBody struct{}
 type PostBatchInput struct {
 	ID             int64  `path:"id"`
 	IfMatch        string `header:"If-Match" doc:"Batch version you last read. Required: a missing header is a 428. Because every entry mutation moves it, a stale value means a row changed since you looked."`
@@ -82,7 +84,6 @@ type CreatePaymentBody struct {
 	PaidThrough       string `json:"paid_through" format:"date" doc:"Stated explicitly. The server never derives coverage from the amount."`
 	TreasurerNote     string `json:"treasurer_note,omitempty"`
 	Label             string `json:"label,omitempty" doc:"Names the one-row batch created for this payment. Defaults to a dated label."`
-	Confirm           bool   `json:"confirm" doc:"Must be true."`
 }
 type CreatePaymentInput struct {
 	IdempotencyKey string `header:"Idempotency-Key" doc:"Required."`
@@ -146,7 +147,10 @@ func mapPostError(err error) error {
 	case errors.Is(err, batches.ErrEmptyBatch):
 		return huma.Error422UnprocessableEntity("this batch has no entries, so there is nothing to post")
 	case errors.Is(err, batches.ErrConfirmationRequired):
-		return huma.Error422UnprocessableEntity("posting requires \"confirm\": true")
+		// Unreachable while the middleware enforces the declared level; kept
+		// so the domain guard still reports honestly if it ever is not.
+		return huma.NewError(confirmationStatus,
+			"posting requires explicit confirmation; resend with "+ConfirmHeader+": true")
 	case errors.Is(err, batches.ErrIdempotencyKeyRequired):
 		return huma.Error422UnprocessableEntity("posting requires an Idempotency-Key header")
 	}
@@ -172,7 +176,7 @@ func RegisterPayments(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.post",
 		AuditAction:        "payment.batch.post",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *PostBatchInput) (*PostBatchOutput, error) {
 		if svc == nil {
@@ -189,7 +193,7 @@ func RegisterPayments(api huma.API, deps Deps) {
 		result, err := svc.Post(ctx, principal, input.ID, batches.PostParams{
 			ExpectedVersion: version,
 			IdempotencyKey:  input.IdempotencyKey,
-			Confirm:         input.Body.Confirm,
+			Confirm:         ConfirmedFrom(ctx),
 		}, time.Now())
 		if err != nil {
 			return nil, mapPostError(err)
@@ -212,7 +216,7 @@ func RegisterPayments(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.post",
 		AuditAction:        "payment.create",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreatePaymentInput) (*CreatePaymentOutput, error) {
 		if svc == nil {
@@ -235,7 +239,7 @@ func RegisterPayments(api huma.API, deps Deps) {
 			},
 			Label:          input.Body.Label,
 			IdempotencyKey: input.IdempotencyKey,
-			Confirm:        input.Body.Confirm,
+			Confirm:        ConfirmedFrom(ctx),
 		}, time.Now())
 		if err != nil {
 			return nil, mapPostError(err)

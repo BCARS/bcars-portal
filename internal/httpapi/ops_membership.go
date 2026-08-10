@@ -253,7 +253,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "member.create",
 		AuditAction:        "membership.apply",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *ApplyMembershipInput) (*ApplyMembershipOutput, error) {
 		if memberSvc == nil {
@@ -292,7 +292,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "membership.approve",
 		AuditAction:        "membership.approve",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ApproveMembershipInput) (*ApproveMembershipOutput, error) {
 		if memberSvc == nil {
@@ -322,7 +322,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "membership.approve",
 		AuditAction:        "membership.reject",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RejectMembershipInput) (*RejectMembershipOutput, error) {
 		if memberSvc == nil {
@@ -352,7 +352,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "membership.lifecycle",
 		AuditAction:        "membership.lifecycle",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *LifecycleMembershipInput) (*LifecycleMembershipOutput, error) {
 		if memberSvc == nil {
@@ -385,7 +385,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "fcc.verify",
 		AuditAction:        "fcc.verification.create",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *CreateFCCInput) (*CreateFCCOutput, error) {
 		if memberSvc == nil {
@@ -417,7 +417,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "fcc.verify",
 		AuditAction:        "fcc.verification.revoke",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RevokeFCCInput) (*RevokeFCCOutput, error) {
 		if memberSvc == nil {
@@ -445,7 +445,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "honorary.grant",
 		AuditAction:        "honorary.grant.create",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreateHonoraryInput) (*CreateHonoraryOutput, error) {
 		if memberSvc == nil {
@@ -476,7 +476,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "honorary.grant",
 		AuditAction:        "honorary.grant.update",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *UpdateHonoraryInput) (*UpdateHonoraryOutput, error) {
 		if memberSvc == nil {
@@ -508,7 +508,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "honorary.grant",
 		AuditAction:        "honorary.grant.expire",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ExpireHonoraryInput) (*ExpireHonoraryOutput, error) {
 		if memberSvc == nil {
@@ -534,7 +534,7 @@ func RegisterMemberships(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "honorary.grant",
 		AuditAction:        "honorary.grant.revoke",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RevokeHonoraryInput) (*RevokeHonoraryOutput, error) {
 		if memberSvc == nil {

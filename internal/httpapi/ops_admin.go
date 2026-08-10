@@ -95,7 +95,7 @@ func RegisterAdmin(api huma.API, deps Deps) {
 		Tags:        []string{"admin"},
 	}, OperationMeta{
 		RequiredCapability: "session.self.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *CapabilitiesListInput) (*CapabilitiesListOutput, error) {
 		_, err := requirePrincipal(ctx)
@@ -124,7 +124,7 @@ func RegisterAdmin(api huma.API, deps Deps) {
 		Tags:        []string{"admin"},
 	}, OperationMeta{
 		RequiredCapability: "session.self.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *RolesListInput) (*RolesListOutput, error) {
 		if q == nil {
@@ -175,7 +175,7 @@ func RegisterAdmin(api huma.API, deps Deps) {
 		Tags:        []string{"admin"},
 	}, OperationMeta{
 		RequiredCapability: "role.grant",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *UsersListInput) (*UsersListOutput, error) {
 		if q == nil {
@@ -225,7 +225,7 @@ func RegisterAdmin(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "role.grant",
 		AuditAction:        "role.grant.create",
-		ConfirmationLevel:  "recent-auth",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreateRoleGrantInput) (*CreateRoleGrantOutput, error) {
 		if q == nil {
@@ -269,7 +269,7 @@ func RegisterAdmin(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "role.grant",
 		AuditAction:        "role.grant.revoke",
-		ConfirmationLevel:  "recent-auth",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RevokeRoleGrantInput) (*RevokeRoleGrantOutput, error) {
 		if q == nil {

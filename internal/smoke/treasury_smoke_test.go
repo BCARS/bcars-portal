@@ -70,9 +70,10 @@ func TestTreasurySmoke(t *testing.T) {
 	assert.Equal(t, "unknown", e.standingStatus(treasurer, alpha),
 		"a refused post must leave standing untouched")
 
-	// An unconfirmed post is refused too.
+	// An unconfirmed post is refused too, now by the generic confirmation
+	// control rather than a hand-rolled body field (bcars-portal-6q6.1).
 	resp = e.postBatch(treasurer, batchID, batchVersion, "unconfirmed-key", false)
-	require.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode,
+	require.Equal(t, http.StatusPreconditionRequired, resp.StatusCode,
 		"posting without confirmation must be refused")
 
 	// --- 3. Posting moves every intended standing exactly once ---
@@ -124,7 +125,7 @@ func TestTreasurySmoke(t *testing.T) {
 	resp = e.doWithHeaders(http.MethodPost,
 		fmt.Sprintf("/api/v1/payments/%d/corrections", originalID), treasurer,
 		`{"amount_cents":4000,"method":"check","received_on":"2026-07-05",
-		  "paid_through":"2026-12-31","reason":"Typed 400 instead of 40","confirm":true}`,
+		  "paid_through":"2026-12-31","reason":"Typed 400 instead of 40"}`,
 		map[string]string{"If-Match": `"0"`, "Idempotency-Key": "correct-key"})
 
 	var corrected struct {
@@ -412,10 +413,11 @@ func (e *env) postBatch(cookie *http.Cookie, batchID, version int64, key string,
 	e.t.Helper()
 	return e.doWithHeaders(http.MethodPost,
 		fmt.Sprintf("/api/v1/payment-batches/%d/post", batchID), cookie,
-		fmt.Sprintf(`{"confirm":%t}`, confirm),
+		`{}`,
 		map[string]string{
 			"If-Match":        fmt.Sprintf(`"%d"`, version),
 			"Idempotency-Key": key,
+			"X-Confirm":       fmt.Sprintf("%t", confirm),
 		})
 }
 
@@ -467,6 +469,7 @@ func (e *env) doWithHeaders(method, path string, cookie *http.Cookie, body strin
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("X-Confirm", "true")
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

@@ -100,7 +100,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: PublicCapability,
 		AuditAction:        "session.signin",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *SignInInput) (*SignInOutput, error) {
 		if deps.AuthService == nil {
@@ -159,7 +159,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "session.self.read",
 		AuditAction:        "session.signout",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *SignOutInput) (*SignOutOutput, error) {
 		if deps.AuthService == nil {
@@ -191,7 +191,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 		Tags:        []string{"session"},
 	}, OperationMeta{
 		RequiredCapability: "session.self.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *CurrentSessionInput) (*CurrentSessionOutput, error) {
 		if deps.SessionStore == nil {
@@ -232,7 +232,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: PublicCapability,
 		AuditAction:        "auth.recovery.request",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RecoveryRequestInput) (*RecoveryRequestOutput, error) {
 		if deps.EmailLinkService == nil {
@@ -261,7 +261,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: PublicCapability,
 		AuditAction:        "auth.recovery.consume",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *RecoveryConsumeInput) (*RecoveryConsumeOutput, error) {
 		if deps.EmailLinkService == nil || deps.AuthService == nil || deps.SessionStore == nil {
@@ -310,7 +310,7 @@ func RegisterSessions(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: PublicCapability,
 		AuditAction:        "auth.invitation.consume",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *InvitationConsumeInput) (*InvitationConsumeOutput, error) {
 		if deps.EmailLinkService == nil || deps.AuthService == nil || deps.SessionStore == nil {

@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bcars/bcars-portal/internal/httpapi"
 )
 
 type paymentChainResponse struct {
@@ -89,7 +91,7 @@ func TestCorrect400To40OverHTTP(t *testing.T) {
 
 	resp = correctPayment(t, env, cookie, original.ID, 0,
 		`{"amount_cents":4000,"method":"check","received_on":"2026-01-15",
-		  "paid_through":"2026-12-31","reason":"Typed 400 instead of 40","confirm":true}`,
+		  "paid_through":"2026-12-31","reason":"Typed 400 instead of 40"}`,
 		"correct-1")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -140,7 +142,7 @@ func TestCorrectAmountOnlyLeavesCoverageAlone(t *testing.T) {
 
 	resp := correctPayment(t, env, cookie, payment, 0,
 		`{"amount_cents":4000,"method":"check","received_on":"2026-01-15",
-		  "paid_through":"2026-12-31","reason":"Amount only","confirm":true}`,
+		  "paid_through":"2026-12-31","reason":"Amount only"}`,
 		"correct-1")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -166,7 +168,7 @@ func TestCorrectPaidThroughAppendsCoverage(t *testing.T) {
 
 	resp := correctPayment(t, env, cookie, payment, 0,
 		`{"amount_cents":8000,"method":"check","received_on":"2026-01-15",
-		  "paid_through":"2027-12-31","reason":"Paid for two years","confirm":true}`,
+		  "paid_through":"2027-12-31","reason":"Paid for two years"}`,
 		"correct-1")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -198,7 +200,7 @@ func TestCorrectPreconditions(t *testing.T) {
 	payment := singlePaymentViaAPI(t, env, cookie, m, 40000, "2026-12-31", "single-1")
 
 	valid := `{"amount_cents":4000,"method":"check","received_on":"2026-01-15",
-		"paid_through":"2026-12-31","reason":"Fix","confirm":true}`
+		"paid_through":"2026-12-31","reason":"Fix"}`
 	path := fmt.Sprintf("/api/v1/payments/%d/corrections", payment)
 
 	t.Run("If-Match is required", func(t *testing.T) {
@@ -219,15 +221,20 @@ func TestCorrectPreconditions(t *testing.T) {
 	})
 
 	t.Run("confirmation is required", func(t *testing.T) {
-		unconfirmed := `{"amount_cents":4000,"method":"check","received_on":"2026-01-15",
-			"paid_through":"2026-12-31","reason":"Fix","confirm":false}`
-		resp := correctPayment(t, env, cookie, payment, 0, unconfirmed, "k3")
-		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+		// Stated with the header now, and enforced generically from the
+		// declared ConfirmationLevel rather than by this handler.
+		resp := doWithHeaders(t, env, http.MethodPost, path, cookie, valid,
+			map[string]string{
+				"If-Match":            `"0"`,
+				"Idempotency-Key":     "k3",
+				httpapi.ConfirmHeader: "false",
+			})
+		assert.Equal(t, http.StatusPreconditionRequired, resp.StatusCode)
 	})
 
 	t.Run("a reason is required", func(t *testing.T) {
 		reasonless := `{"amount_cents":4000,"method":"check","received_on":"2026-01-15",
-			"paid_through":"2026-12-31","reason":"","confirm":true}`
+			"paid_through":"2026-12-31","reason":""}`
 		resp := correctPayment(t, env, cookie, payment, 0, reasonless, "k4")
 		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
 	})
@@ -258,7 +265,7 @@ func TestCorrectIsIdempotentOverHTTP(t *testing.T) {
 	payment := singlePaymentViaAPI(t, env, cookie, m, 40000, "2026-12-31", "single-1")
 
 	body := `{"amount_cents":4000,"method":"check","received_on":"2026-01-15",
-		"paid_through":"2026-12-31","reason":"Typed 400 instead of 40","confirm":true}`
+		"paid_through":"2026-12-31","reason":"Typed 400 instead of 40"}`
 
 	resp := correctPayment(t, env, cookie, payment, 0, body, "correct-1")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -329,7 +336,7 @@ func TestCorrectionDeniedWithoutCapability(t *testing.T) {
 
 	resp = correctPayment(t, env, cookie, 1, 0,
 		`{"amount_cents":4000,"method":"check","received_on":"2026-01-15",
-		  "paid_through":"2026-12-31","reason":"Not allowed","confirm":true}`, "k1")
+		  "paid_through":"2026-12-31","reason":"Not allowed"}`, "k1")
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 
 	var corrections int
@@ -342,7 +349,7 @@ func singlePaymentViaAPI(t *testing.T, env *authzEnv, cookie *http.Cookie, membe
 	t.Helper()
 	resp := doWithHeaders(t, env, http.MethodPost, "/api/v1/payments", cookie,
 		fmt.Sprintf(`{"membership_id":%d,"amount_cents":%d,"method":"check",
-			"received_on":"2026-01-15","paid_through":%q,"confirm":true}`,
+			"received_on":"2026-01-15","paid_through":%q}`,
 			membershipID, cents, paidThrough),
 		map[string]string{"Idempotency-Key": key})
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
