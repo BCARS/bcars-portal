@@ -36,6 +36,32 @@ type Querier interface {
 	// The single-record authorization probe: does this user hold access to this
 	// person right now. Returns 0 or 1 because of ux_member_access_active.
 	CountActiveAccessGrant(ctx context.Context, arg CountActiveAccessGrantParams) (int64, error)
+	// The member directory (bcars-portal-4ux.7).
+	//
+	// Contact values are filtered HERE, in SQL, not in a service or a template. A
+	// value the caller may not see is never selected, so it cannot be leaked by a
+	// DTO field someone forgets to strip, a template that renders the wrong
+	// variable, or a debug log. The Phase 2 audit found a treasury page reachable
+	// only because nothing consumed the link it stored; the same class of mistake
+	// with a hidden phone number would be a privacy breach rather than an
+	// inconvenience.
+	//
+	// Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
+	// offset, so a multi-byte character above a query corrupts the SQL it parses.
+	//
+	// The caller's eligibility probe: does this user hold an active grant to a
+	// person whose membership is an active approved FULL membership.
+	//
+	// Associates may hold grants and use their own profile, but may not browse the
+	// directory. Eligibility is deliberately a separate question from holding the
+	// directory.read capability, which is why the capability alone never answers
+	// it.
+	CountDirectoryEligibleGrants(ctx context.Context, userID int64) (int64, error)
+	//
+	// The same population as ListDirectoryEntries, for pagination. It deliberately
+	// shares the eligibility predicate and NOT the contact filtering, because a
+	// total must not depend on what the caller may see.
+	CountDirectoryEntries(ctx context.Context, search interface{}) (int64, error)
 	//
 	// A request resolves only when this reaches zero.
 	CountPendingChangeRequestItems(ctx context.Context, requestID int64) (int64, error)
@@ -225,6 +251,25 @@ type Querier interface {
 	ListCoverageEventsByMembership(ctx context.Context, membershipID int64) ([]CoverageEvent, error)
 	ListCoverageEventsPage(ctx context.Context, arg ListCoverageEventsPageParams) ([]CoverageEvent, error)
 	ListDecisionsForRow(ctx context.Context, stagedImportRowID int64) ([]ReconciliationDecision, error)
+	//
+	// Rows are active approved Full and Associate members.
+	//
+	// An email or phone survives only when the latest visibility decision for that
+	// contact permits full_members. With no decision on file the row falls back to
+	// the Phase 1 domain default: a Full member's contact is shareable with Full
+	// members, an Associate's is not. An imported `import_default` event is a
+	// recorded decision like any other, so it keeps its result until an officer
+	// supersedes it.
+	//
+	// A withheld value and an absent one both come back as the empty string. That
+	// is deliberate: one representation means a caller cannot distinguish "this
+	// member hid their number" from "this member has no number on file", which is
+	// exactly the non-disclosure the design asks for.
+	//
+	// Ordering is by sort_name then person id. The id tie-breaker is what keeps a
+	// page boundary from shifting between calls when two members sort equally, so
+	// paging cannot silently skip someone.
+	ListDirectoryEntries(ctx context.Context, arg ListDirectoryEntriesParams) ([]ListDirectoryEntriesRow, error)
 	ListDuesRates(ctx context.Context) ([]DuesRate, error)
 	// Derived dues standing and coverage reads.
 	//

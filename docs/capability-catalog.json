@@ -269,7 +269,9 @@
     "description": "Attempt the member directory; eligibility is checked separately.",
     "category": "member",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "directory-list"
+    ]
   },
   {
     "code": "notes.write.treasurer",
