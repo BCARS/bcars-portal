@@ -21,12 +21,30 @@ SELECT * FROM member_change_requests WHERE id = ?;
 
 -- name: ListChangeRequests :many
 --
--- The officer queue. Pass a NULL status or source to ignore that filter.
-SELECT * FROM member_change_requests
- WHERE (sqlc.narg(status) IS NULL OR status = sqlc.narg(status))
-   AND (sqlc.narg(source) IS NULL OR source = sqlc.narg(source))
- ORDER BY submitted_at DESC, id DESC
- LIMIT ? OFFSET ?;
+-- The officer queue. Every filter is optional: pass NULL for status, source, or
+-- requester to ignore it, and 0 for untargeted_only to include linked requests.
+--
+-- Ordering is submitted_at DESC with an id tie-breaker so a page boundary is
+-- deterministic. Without the tie-breaker two requests recorded in the same
+-- millisecond could swap places between calls and hide a row from a caller
+-- paging through the queue.
+SELECT r.*,
+       p.display_name AS target_display_name
+  FROM member_change_requests r
+  LEFT JOIN persons p ON p.id = r.target_person_id
+ WHERE (sqlc.narg(status) IS NULL OR r.status = sqlc.narg(status))
+   AND (sqlc.narg(source) IS NULL OR r.source = sqlc.narg(source))
+   AND (sqlc.narg(requester_user_id) IS NULL
+        OR r.requester_user_id = sqlc.narg(requester_user_id))
+   AND (sqlc.arg(untargeted_only) = 0
+        OR (r.target_person_id IS NULL
+            AND r.status NOT IN ('resolved', 'withdrawn')))
+ ORDER BY r.submitted_at DESC, r.id DESC
+ -- Named, not bare `?`. sqlc numbers named parameters (?3, ?4, ...) and leaves
+ -- a bare `?` positional, so mixing the two in one query makes SQLite expect
+ -- arguments at indices the generated call never binds. That fails at runtime
+ -- with "missing argument with index N", not at generation time.
+ LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: ListUntargetedChangeRequests :many
 --

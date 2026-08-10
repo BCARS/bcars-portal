@@ -337,35 +337,81 @@ func (q *Queries) ListChangeRequestItems(ctx context.Context, requestID int64) (
 }
 
 const listChangeRequests = `-- name: ListChangeRequests :many
-SELECT id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version FROM member_change_requests
- WHERE (?3 IS NULL OR status = ?3)
-   AND (?4 IS NULL OR source = ?4)
- ORDER BY submitted_at DESC, id DESC
- LIMIT ? OFFSET ?
+SELECT r.id, r.source, r.status, r.requester_user_id, r.target_person_id, r.supplied_name, r.supplied_call_sign, r.supplied_contact, r.stated_relationship, r.summary, r.received_by, r.submitted_at, r.triaged_by, r.triaged_at, r.resolved_at, r.withdrawn_at, r.source_ip_hash, r.created_at, r.updated_at, r.version,
+       p.display_name AS target_display_name
+  FROM member_change_requests r
+  LEFT JOIN persons p ON p.id = r.target_person_id
+ WHERE (?1 IS NULL OR r.status = ?1)
+   AND (?2 IS NULL OR r.source = ?2)
+   AND (?3 IS NULL
+        OR r.requester_user_id = ?3)
+   AND (?4 = 0
+        OR (r.target_person_id IS NULL
+            AND r.status NOT IN ('resolved', 'withdrawn')))
+ ORDER BY r.submitted_at DESC, r.id DESC
+ -- Named, not bare ` + "`" + `?` + "`" + `. sqlc numbers named parameters (?3, ?4, ...) and leaves
+ -- a bare ` + "`" + `?` + "`" + ` positional, so mixing the two in one query makes SQLite expect
+ -- arguments at indices the generated call never binds. That fails at runtime
+ -- with "missing argument with index N", not at generation time.
+ LIMIT ?6 OFFSET ?5
 `
 
 type ListChangeRequestsParams struct {
-	Status interface{}
-	Source interface{}
-	Limit  int64
-	Offset int64
+	Status          interface{}
+	Source          interface{}
+	RequesterUserID interface{}
+	UntargetedOnly  interface{}
+	PageOffset      int64
+	PageLimit       int64
 }
 
-// The officer queue. Pass a NULL status or source to ignore that filter.
-func (q *Queries) ListChangeRequests(ctx context.Context, arg ListChangeRequestsParams) ([]MemberChangeRequest, error) {
+type ListChangeRequestsRow struct {
+	ID                 int64
+	Source             string
+	Status             string
+	RequesterUserID    sql.NullInt64
+	TargetPersonID     sql.NullInt64
+	SuppliedName       sql.NullString
+	SuppliedCallSign   sql.NullString
+	SuppliedContact    sql.NullString
+	StatedRelationship sql.NullString
+	Summary            string
+	ReceivedBy         sql.NullInt64
+	SubmittedAt        string
+	TriagedBy          sql.NullInt64
+	TriagedAt          sql.NullString
+	ResolvedAt         sql.NullString
+	WithdrawnAt        sql.NullString
+	SourceIpHash       sql.NullString
+	CreatedAt          string
+	UpdatedAt          string
+	Version            int64
+	TargetDisplayName  sql.NullString
+}
+
+// The officer queue. Every filter is optional: pass NULL for status, source, or
+// requester to ignore it, and 0 for untargeted_only to include linked requests.
+//
+// Ordering is submitted_at DESC with an id tie-breaker so a page boundary is
+// deterministic. Without the tie-breaker two requests recorded in the same
+// millisecond could swap places between calls and hide a row from a caller
+// paging through the queue.
+func (q *Queries) ListChangeRequests(ctx context.Context, arg ListChangeRequestsParams) ([]ListChangeRequestsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listChangeRequests,
 		arg.Status,
 		arg.Source,
-		arg.Limit,
-		arg.Offset,
+		arg.RequesterUserID,
+		arg.UntargetedOnly,
+		arg.PageOffset,
+		arg.PageLimit,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MemberChangeRequest{}
+	items := []ListChangeRequestsRow{}
 	for rows.Next() {
-		var i MemberChangeRequest
+		var i ListChangeRequestsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Source,
@@ -387,6 +433,7 @@ func (q *Queries) ListChangeRequests(ctx context.Context, arg ListChangeRequests
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.TargetDisplayName,
 		); err != nil {
 			return nil, err
 		}
