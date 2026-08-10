@@ -241,7 +241,18 @@
     "description": "Grant or revoke a member user access to person records.",
     "category": "membership",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "member-access-grant",
+      "member-access-list",
+      "member-access-revoke",
+      "member-account-provision",
+      "person-access-list"
+    ],
+    "confirm_operation_ids": [
+      "member-access-grant",
+      "member-access-revoke",
+      "member-account-provision"
+    ]
   },
   {
     "code": "relationship.manage",

@@ -65,3 +65,17 @@ UPDATE member_access_grants
    AND version = sqlc.arg(version)
    AND revoked_at IS NULL
 RETURNING *;
+
+-- name: ListAccessGrantsForUser :many
+--
+-- The officer view of one account: every grant it has ever held, revoked ones
+-- included, so "who could reach this record, and when" stays answerable.
+--
+-- Distinct from ListActiveAccessGrantsForUser, which is the authorization read
+-- and must return only what currently confers access. Keeping them separate
+-- means a history view can never accidentally become an authorization answer.
+SELECT g.*, p.display_name AS display_name
+  FROM member_access_grants g
+  JOIN persons p ON p.id = g.person_id
+ WHERE g.user_id = ?
+ ORDER BY g.revoked_at IS NOT NULL, p.sort_name, g.id;
