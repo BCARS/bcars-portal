@@ -60,4 +60,5 @@ func RegisterAll(api huma.API, deps Deps) {
 	RegisterAdmin(api, deps)
 	RegisterInvitations(api, deps)
 	RegisterChangeRequests(api, deps)
+	RegisterDirectory(api, deps)
 }
