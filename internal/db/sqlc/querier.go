@@ -36,15 +36,12 @@ type Querier interface {
 	// The single-record authorization probe: does this user hold access to this
 	// person right now. Returns 0 or 1 because of ux_member_access_active.
 	CountActiveAccessGrant(ctx context.Context, arg CountActiveAccessGrantParams) (int64, error)
-	// The member directory (bcars-portal-4ux.7).
+	// The member directory (bcars-portal-4ux.7, extended by 4ux.14).
 	//
 	// Contact values are filtered HERE, in SQL, not in a service or a template. A
 	// value the caller may not see is never selected, so it cannot be leaked by a
 	// DTO field someone forgets to strip, a template that renders the wrong
-	// variable, or a debug log. The Phase 2 audit found a treasury page reachable
-	// only because nothing consumed the link it stored; the same class of mistake
-	// with a hidden phone number would be a privacy breach rather than an
-	// inconvenience.
+	// variable, or a debug log.
 	//
 	// Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
 	// offset, so a multi-byte character above a query corrupts the SQL it parses.
@@ -58,10 +55,11 @@ type Querier interface {
 	// it.
 	CountDirectoryEligibleGrants(ctx context.Context, userID int64) (int64, error)
 	//
-	// The same population as ListDirectoryEntries, for pagination. It deliberately
-	// shares the eligibility predicate and NOT the contact filtering, because a
-	// total must not depend on what the caller may see.
-	CountDirectoryEntries(ctx context.Context, search interface{}) (int64, error)
+	// The same population as ListDirectoryEntries, for pagination. It shares the
+	// membership filter so a total always matches what is being listed, and does
+	// NOT share the contact filtering, because a total must not depend on what the
+	// caller may see.
+	CountDirectoryEntries(ctx context.Context, arg CountDirectoryEntriesParams) (int64, error)
 	//
 	// A request resolves only when this reaches zero.
 	CountPendingChangeRequestItems(ctx context.Context, requestID int64) (int64, error)
@@ -252,23 +250,32 @@ type Querier interface {
 	ListCoverageEventsPage(ctx context.Context, arg ListCoverageEventsPageParams) ([]CoverageEvent, error)
 	ListDecisionsForRow(ctx context.Context, stagedImportRowID int64) ([]ReconciliationDecision, error)
 	//
-	// Rows are active approved Full and Associate members.
+	// EVERY shared contact for the members on one page.
 	//
-	// An email or phone survives only when the latest visibility decision for that
-	// contact permits full_members. With no decision on file the row falls back to
-	// the Phase 1 domain default: a Full member's contact is shareable with Full
-	// members, an Associate's is not. An imported `import_default` event is a
-	// recorded decision like any other, so it keeps its result until an officer
-	// supersedes it.
+	// A member may share more than one number, and both can matter: a member whose
+	// mobile has no signal at home needs the landline listed too. Returning one
+	// contact per kind silently dropped the rest (bcars-portal-4ux.14).
 	//
-	// A withheld value and an absent one both come back as the empty string. That
-	// is deliberate: one representation means a caller cannot distinguish "this
-	// member hid their number" from "this member has no number on file", which is
-	// exactly the non-disclosure the design asks for.
+	// The page CTE repeats the listing's population, filter, ordering, and bounds,
+	// so this returns contacts for exactly the members on that page and no others.
+	// That is why there is no per-member query and no N+1.
 	//
-	// Ordering is by sort_name then person id. The id tie-breaker is what keeps a
-	// page boundary from shifting between calls when two members sort equally, so
-	// paging cannot silently skip someone.
+	// A contact survives only when the latest visibility decision for it permits
+	// full_members. With no decision on file it falls back to the Phase 1 domain
+	// default: a Full member's contact is shareable with Full members, an
+	// Associate's is not. An imported import_default event is a recorded decision
+	// like any other, so it keeps its result until an officer supersedes it.
+	//
+	// Primary first, then by id, so a member's main number leads.
+	ListDirectoryContacts(ctx context.Context, arg ListDirectoryContactsParams) ([]ListDirectoryContactsRow, error)
+	//
+	// Rows are active approved members, optionally narrowed to one membership type.
+	// Contact values are NOT here; see ListDirectoryContacts, which returns every
+	// shared contact rather than one per kind.
+	//
+	// Ordering is by sort_name then person id. The id tie-breaker keeps a page
+	// boundary from shifting between calls when two members sort equally, so paging
+	// cannot silently skip someone.
 	ListDirectoryEntries(ctx context.Context, arg ListDirectoryEntriesParams) ([]ListDirectoryEntriesRow, error)
 	ListDuesRates(ctx context.Context) ([]DuesRate, error)
 	// Derived dues standing and coverage reads.

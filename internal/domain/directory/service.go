@@ -49,25 +49,39 @@ const (
 // know.
 var ErrNotEligible = errors.New("directory: caller is not an active Full member")
 
+// Contact is one shared contact value.
+type Contact struct {
+	Value string
+	// Label distinguishes a member's numbers from each other, e.g. "home" and
+	// "mobile". It matters here: a member whose mobile has no signal at home
+	// needs the reader to know which number is which.
+	Label string
+	// Primary marks the member's main contact of that kind. Primary values are
+	// listed first.
+	Primary bool
+}
+
 // Entry is one directory row.
 //
-// Email and Phone are empty when the value is withheld OR absent. The two are
-// deliberately indistinguishable; see NotShared.
+// Emails and Phones carry EVERY value this member shares, because a member may
+// share more than one and both can matter. An empty list means the member
+// shares none of that kind — withheld and absent are deliberately
+// indistinguishable.
 type Entry struct {
 	PersonID    int64
 	DisplayName string
 	CallSign    string
 	BaseType    string
-	Email       string
-	Phone       string
+	Emails      []Contact
+	Phones      []Contact
 }
 
-// EmailShared reports whether an email may be displayed. A UI renders
+// EmailShared reports whether any email may be displayed. A UI renders
 // "Not shared" when this is false, without knowing which reason applies.
-func (e Entry) EmailShared() bool { return e.Email != "" }
+func (e Entry) EmailShared() bool { return len(e.Emails) > 0 }
 
-// PhoneShared reports whether a phone may be displayed.
-func (e Entry) PhoneShared() bool { return e.Phone != "" }
+// PhoneShared reports whether any phone may be displayed.
+func (e Entry) PhoneShared() bool { return len(e.Phones) > 0 }
 
 // Page is one screen or sheet of the directory.
 type Page struct {
@@ -80,12 +94,31 @@ type Page struct {
 	Offset int64
 }
 
+// Membership-type filters. More query options are expected; each one belongs
+// in the SQL population predicate so the total always matches what is listed.
+const (
+	FilterAll       = ""
+	FilterFull      = "full"
+	FilterAssociate = "associate"
+)
+
+// ValidFilter reports whether a membership-type filter is known.
+func ValidFilter(f string) bool {
+	switch f {
+	case FilterAll, FilterFull, FilterAssociate:
+		return true
+	}
+	return false
+}
+
 // Query selects a page.
 type Query struct {
 	// Search matches display name or call sign, case-insensitively.
 	Search string
-	Limit  int64
-	Offset int64
+	// BaseType narrows to one membership type. Empty lists both.
+	BaseType string
+	Limit    int64
+	Offset   int64
 	// Print raises the page bound so a whole club-sized roster prints as one
 	// sheet. Screen and print consume the identical filtered result; print is
 	// not a second, laxer path.
@@ -149,19 +182,48 @@ func (s *Service) List(ctx context.Context, p *authz.Principal, q Query) (Page, 
 	}
 
 	search := searchFilter(q.Search)
+	baseType := searchFilter(q.BaseType)
 
-	total, err := s.Q.CountDirectoryEntries(ctx, search)
+	total, err := s.Q.CountDirectoryEntries(ctx, sqlcgen.CountDirectoryEntriesParams{
+		BaseType: baseType,
+		Search:   search,
+	})
 	if err != nil {
 		return Page{}, err
 	}
 
 	rows, err := s.Q.ListDirectoryEntries(ctx, sqlcgen.ListDirectoryEntriesParams{
+		BaseType:   baseType,
 		Search:     search,
 		PageLimit:  limit,
 		PageOffset: offset,
 	})
 	if err != nil {
 		return Page{}, err
+	}
+
+	// One query for the same page, returning every shared contact. Scoped by
+	// the same predicate and bounds, so it covers exactly these members.
+	contacts, err := s.Q.ListDirectoryContacts(ctx, sqlcgen.ListDirectoryContactsParams{
+		BaseType:   baseType,
+		Search:     search,
+		PageLimit:  limit,
+		PageOffset: offset,
+	})
+	if err != nil {
+		return Page{}, err
+	}
+
+	emails := map[int64][]Contact{}
+	phones := map[int64][]Contact{}
+	for _, c := range contacts {
+		entry := Contact{Value: c.Value, Label: c.Label.String, Primary: c.IsPrimary != 0}
+		switch c.Kind {
+		case "email":
+			emails[c.PersonID] = append(emails[c.PersonID], entry)
+		case "phone":
+			phones[c.PersonID] = append(phones[c.PersonID], entry)
+		}
 	}
 
 	entries := make([]Entry, 0, len(rows))
@@ -171,8 +233,8 @@ func (s *Service) List(ctx context.Context, p *authz.Principal, q Query) (Page, 
 			DisplayName: r.DisplayName,
 			CallSign:    r.CallSign.String,
 			BaseType:    r.BaseType,
-			Email:       r.Email,
-			Phone:       r.Phone,
+			Emails:      emails[r.PersonID],
+			Phones:      phones[r.PersonID],
 		})
 	}
 

@@ -1593,6 +1593,26 @@
         ],
         "type": "object"
       },
+      "DirectoryContact": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "description": "Distinguishes a member's numbers, e.g. home or mobile.",
+            "type": "string"
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "primary"
+        ],
+        "type": "object"
+      },
       "DirectoryEntry": {
         "additionalProperties": false,
         "properties": {
@@ -1609,29 +1629,41 @@
           "display_name": {
             "type": "string"
           },
-          "email": {
-            "description": "Present only when this member shares it with Full members.",
-            "type": "string"
-          },
           "email_shared": {
             "type": "boolean"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryContact"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "person_id": {
             "format": "int64",
             "type": "integer"
           },
-          "phone": {
-            "description": "Present only when this member shares it with Full members.",
-            "type": "string"
-          },
           "phone_shared": {
             "type": "boolean"
+          },
+          "phones": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryContact"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           }
         },
         "required": [
           "person_id",
           "display_name",
           "base_type",
+          "emails",
+          "phones",
           "email_shared",
           "phone_shared"
         ],
@@ -5556,6 +5588,20 @@
             "schema": {
               "description": "Matches display name or call sign.",
               "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Narrow to one membership type. Omit for both.",
+            "explode": false,
+            "in": "query",
+            "name": "base_type",
+            "schema": {
+              "description": "Narrow to one membership type. Omit for both.",
+              "enum": [
+                "full",
+                "associate"
+              ],
               "type": "string"
             }
           },

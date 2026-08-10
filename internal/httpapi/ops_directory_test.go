@@ -22,10 +22,18 @@ type apiDirectory struct {
 		DisplayName string `json:"display_name"`
 		CallSign    string `json:"call_sign"`
 		BaseType    string `json:"base_type"`
-		Email       string `json:"email"`
-		Phone       string `json:"phone"`
-		EmailShared bool   `json:"email_shared"`
-		PhoneShared bool   `json:"phone_shared"`
+		Emails      []struct {
+			Value   string `json:"value"`
+			Label   string `json:"label"`
+			Primary bool   `json:"primary"`
+		} `json:"emails"`
+		Phones []struct {
+			Value   string `json:"value"`
+			Label   string `json:"label"`
+			Primary bool   `json:"primary"`
+		} `json:"phones"`
+		EmailShared bool `json:"email_shared"`
+		PhoneShared bool `json:"phone_shared"`
 	} `json:"entries"`
 	Total  int64 `json:"total"`
 	Limit  int64 `json:"limit"`
@@ -61,9 +69,18 @@ func nullIfEmpty(s string) any {
 // audience to leave the contact with no decision on file.
 func dirContact(t *testing.T, env *authzEnv, personID int64, kind, value, audience string) int64 {
 	t.Helper()
+	return dirContactLabeled(t, env, personID, kind, value, audience, "", false)
+}
+
+func dirContactLabeled(t *testing.T, env *authzEnv, personID int64, kind, value, audience, label string, primary bool) int64 {
+	t.Helper()
+	var isPrimary int64
+	if primary {
+		isPrimary = 1
+	}
 	res, err := env.db.Exec(`
-		INSERT INTO contact_methods (person_id, kind, value_raw, value_norm)
-		VALUES (?, ?, ?, ?)`, personID, kind, value, value)
+		INSERT INTO contact_methods (person_id, kind, value_raw, value_norm, label, is_primary)
+		VALUES (?, ?, ?, ?, ?, ?)`, personID, kind, value, value, nullIfEmpty(label), isPrimary)
 	require.NoError(t, err)
 	id, err := res.LastInsertId()
 	require.NoError(t, err)
@@ -220,48 +237,53 @@ func TestContactVisibilityFiltering(t *testing.T) {
 	resp, body := readDirectory(t, env, cookie, "?limit=100")
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	byID := map[int64]struct {
-		email, phone             string
+	type seen struct {
+		emails, phones           []string
 		emailShared, phoneShared bool
-	}{}
+	}
+	byID := map[int64]seen{}
 	for _, e := range body.Entries {
-		byID[e.PersonID] = struct {
-			email, phone             string
-			emailShared, phoneShared bool
-		}{e.Email, e.Phone, e.EmailShared, e.PhoneShared}
+		var es, ps []string
+		for _, c := range e.Emails {
+			es = append(es, c.Value)
+		}
+		for _, c := range e.Phones {
+			ps = append(ps, c.Value)
+		}
+		byID[e.PersonID] = seen{es, ps, e.EmailShared, e.PhoneShared}
 	}
 
 	t.Run("a shared contact appears", func(t *testing.T) {
 		got := byID[shares]
-		assert.Equal(t, "shares@example.test", got.email)
-		assert.Equal(t, "814-555-0101", got.phone)
+		assert.Equal(t, []string{"shares@example.test"}, got.emails)
+		assert.Equal(t, []string{"814-555-0101"}, got.phones)
 		assert.True(t, got.emailShared)
 		assert.True(t, got.phoneShared)
 	})
 
 	t.Run("a hidden contact never appears", func(t *testing.T) {
 		got := byID[hides]
-		assert.Empty(t, got.email)
-		assert.Empty(t, got.phone)
+		assert.Empty(t, got.emails)
+		assert.Empty(t, got.phones)
 		assert.False(t, got.emailShared)
 	})
 
 	t.Run("officers_only is not full_members", func(t *testing.T) {
-		assert.Empty(t, byID[officers].email,
+		assert.Empty(t, byID[officers].emails,
 			"a contact restricted to officers must not reach the member directory")
 	})
 
 	t.Run("a Full member with no decision defaults to shared", func(t *testing.T) {
-		assert.Equal(t, "default@example.test", byID[defaulted].email)
+		assert.Equal(t, []string{"default@example.test"}, byID[defaulted].emails)
 	})
 
 	t.Run("an Associate with no decision defaults to restricted", func(t *testing.T) {
-		assert.Empty(t, byID[assoc].email,
+		assert.Empty(t, byID[assoc].emails,
 			"an Associate's contact default must stay restricted")
 	})
 
 	t.Run("hidden and absent are indistinguishable", func(t *testing.T) {
-		assert.Equal(t, byID[hides].email, byID[none].email)
+		assert.Equal(t, byID[hides].emails, byID[none].emails)
 		assert.Equal(t, byID[hides].emailShared, byID[none].emailShared)
 	})
 
@@ -437,4 +459,153 @@ func marshal(t *testing.T, v any) string {
 	b, err := json.Marshal(v)
 	require.NoError(t, err)
 	return string(b)
+}
+
+// TestMemberWithTwoSharedNumbersGetsBoth is the owner's requirement from
+// bcars-portal-4ux.14: some members live where their mobile has no signal, so
+// the landline and the mobile both matter. Returning one number per kind
+// silently dropped the one that might be the only one that works.
+func TestMemberWithTwoSharedNumbersGetsBoth(t *testing.T) {
+	env, cookie := eligibleEnv(t)
+	person := dirMember(t, env, "Bbb Two Numbers", "W3TWO", "full", "approved")
+
+	dirContactLabeled(t, env, person, "phone", "814-555-0110", "full_members", "home", false)
+	dirContactLabeled(t, env, person, "phone", "814-555-0111", "full_members", "mobile", true)
+	dirContactLabeled(t, env, person, "email", "one@example.test", "full_members", "", true)
+	dirContactLabeled(t, env, person, "email", "two@example.test", "full_members", "club", false)
+
+	_, body := readDirectory(t, env, cookie, "?limit=100")
+
+	var entry *struct {
+		PersonID    int64  `json:"person_id"`
+		DisplayName string `json:"display_name"`
+		CallSign    string `json:"call_sign"`
+		BaseType    string `json:"base_type"`
+		Emails      []struct {
+			Value   string `json:"value"`
+			Label   string `json:"label"`
+			Primary bool   `json:"primary"`
+		} `json:"emails"`
+		Phones []struct {
+			Value   string `json:"value"`
+			Label   string `json:"label"`
+			Primary bool   `json:"primary"`
+		} `json:"phones"`
+		EmailShared bool `json:"email_shared"`
+		PhoneShared bool `json:"phone_shared"`
+	}
+	for i := range body.Entries {
+		if body.Entries[i].PersonID == person {
+			entry = &body.Entries[i]
+		}
+	}
+	require.NotNil(t, entry)
+
+	require.Len(t, entry.Phones, 2, "both numbers must be listed")
+	assert.Equal(t, "814-555-0111", entry.Phones[0].Value, "the primary number leads")
+	assert.Equal(t, "mobile", entry.Phones[0].Label)
+	assert.True(t, entry.Phones[0].Primary)
+	assert.Equal(t, "814-555-0110", entry.Phones[1].Value)
+	assert.Equal(t, "home", entry.Phones[1].Label,
+		"a label is what tells a reader which number is which")
+
+	require.Len(t, entry.Emails, 2, "both addresses must be listed")
+	assert.Equal(t, "one@example.test", entry.Emails[0].Value)
+}
+
+// TestHiddenNumberIsWithheldEvenWhenAnotherIsShared proves per-contact
+// filtering survives the change to lists. Sharing one number must not disclose
+// another the member hid.
+func TestHiddenNumberIsWithheldEvenWhenAnotherIsShared(t *testing.T) {
+	env, cookie := eligibleEnv(t)
+	person := dirMember(t, env, "Bbb Mixed Numbers", "W3MIX", "full", "approved")
+
+	dirContactLabeled(t, env, person, "phone", "814-555-0120", "full_members", "shared", false)
+	dirContactLabeled(t, env, person, "phone", "814-555-0121", "hidden", "private", false)
+
+	_, body := readDirectory(t, env, cookie, "?limit=100")
+	raw := marshal(t, body)
+
+	assert.Contains(t, raw, "814-555-0120")
+	assert.NotContains(t, raw, "814-555-0121",
+		"a hidden number must stay hidden even when the member shares another")
+}
+
+// TestMembershipTypeFilter covers the owner's second request: all, full only,
+// associates only.
+func TestMembershipTypeFilter(t *testing.T) {
+	env, cookie := eligibleEnv(t) // the caller is a Full member
+	full := dirMember(t, env, "Bbb Full Member", "W3FL", "full", "approved")
+	assoc := dirMember(t, env, "Ccc Assoc Member", "W3AS", "associate", "approved")
+
+	listed := func(t *testing.T, query string) map[int64]bool {
+		t.Helper()
+		resp, body := readDirectory(t, env, cookie, query)
+		require.Equal(t, http.StatusOK, resp.StatusCode, readAll(t, resp))
+		out := map[int64]bool{}
+		for _, e := range body.Entries {
+			out[e.PersonID] = true
+		}
+		return out
+	}
+
+	all := listed(t, "?limit=100")
+	assert.True(t, all[full])
+	assert.True(t, all[assoc], "no filter lists both types")
+
+	onlyFull := listed(t, "?limit=100&base_type=full")
+	assert.True(t, onlyFull[full])
+	assert.False(t, onlyFull[assoc], "full only must exclude Associates")
+
+	onlyAssoc := listed(t, "?limit=100&base_type=associate")
+	assert.True(t, onlyAssoc[assoc])
+	assert.False(t, onlyAssoc[full], "associates only must exclude Full members")
+}
+
+// TestFilteredTotalMatchesTheFilteredPopulation proves the count follows the
+// filter, so paging a filtered roster cannot run off the end.
+func TestFilteredTotalMatchesTheFilteredPopulation(t *testing.T) {
+	env, cookie := eligibleEnv(t)
+	dirMember(t, env, "Bbb One", "W3ONE", "full", "approved")
+	dirMember(t, env, "Ccc Two", "W3TWO2", "associate", "approved")
+	dirMember(t, env, "Ddd Three", "W3THR", "associate", "approved")
+
+	_, all := readDirectory(t, env, cookie, "?limit=100")
+	_, fullOnly := readDirectory(t, env, cookie, "?limit=100&base_type=full")
+	_, assocOnly := readDirectory(t, env, cookie, "?limit=100&base_type=associate")
+
+	assert.Equal(t, int64(4), all.Total, "caller plus three")
+	assert.Equal(t, int64(2), fullOnly.Total)
+	assert.Equal(t, int64(2), assocOnly.Total)
+	assert.Equal(t, len(fullOnly.Entries), int(fullOnly.Total),
+		"the total must match what the filter lists")
+}
+
+// TestUnknownFilterIsRefused keeps an unrecognised filter from silently
+// listing everyone.
+func TestUnknownFilterIsRefused(t *testing.T) {
+	env, cookie := eligibleEnv(t)
+	resp, _ := readDirectory(t, env, cookie, "?base_type=lifetime")
+	assert.GreaterOrEqual(t, resp.StatusCode, 400,
+		"an unknown membership filter must be refused, not ignored")
+}
+
+// TestContactsCoverExactlyThePagedMembers proves the second query is scoped to
+// the page: a member on page two must not have their contacts appear on page
+// one, and every listed member keeps their own.
+func TestContactsCoverExactlyThePagedMembers(t *testing.T) {
+	env, cookie := eligibleEnv(t)
+	first := dirMember(t, env, "Bbb Paged One", "W3PG1", "full", "approved")
+	dirContact(t, env, first, "phone", "814-555-0130", "full_members")
+	second := dirMember(t, env, "Ccc Paged Two", "W3PG2", "full", "approved")
+	dirContact(t, env, second, "phone", "814-555-0131", "full_members")
+
+	_, page1 := readDirectory(t, env, cookie, "?limit=2&offset=0")
+	raw1 := marshal(t, page1)
+	assert.Contains(t, raw1, "814-555-0130", "a listed member keeps their contacts")
+	assert.NotContains(t, raw1, "814-555-0131",
+		"a member on a later page must not have contacts leak onto this one")
+
+	_, page2 := readDirectory(t, env, cookie, "?limit=2&offset=2")
+	assert.Contains(t, marshal(t, page2), "814-555-0131")
 }
