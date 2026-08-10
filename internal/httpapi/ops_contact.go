@@ -261,7 +261,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 		if principal == nil {
 			return nil, huma.NewError(http.StatusUnauthorized, "not authenticated")
 		}
-		ev, err := memberSvc.SetDirectoryVisibility(ctx, toAuthzPrincipal(principal), input.ID, input.Body.Audience)
+		ev, err := memberSvc.SetDirectoryVisibility(ctx, toAuthzPrincipal(principal), input.ID, input.Body.Audience, members.PrefSourceOfficer)
 		if err != nil {
 			return nil, mapDomainError(err)
 		}
@@ -328,7 +328,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 		if principal == nil {
 			return nil, huma.NewError(http.StatusUnauthorized, "not authenticated")
 		}
-		ev, err := memberSvc.SetAcsAresSharing(ctx, toAuthzPrincipal(principal), input.MemberID, input.Body.Participates, input.Body.Reason)
+		ev, err := memberSvc.SetAcsAresSharing(ctx, toAuthzPrincipal(principal), input.MemberID, input.Body.Participates, input.Body.Reason, members.PrefSourceOfficer)
 		if err != nil {
 			return nil, mapDomainError(err)
 		}

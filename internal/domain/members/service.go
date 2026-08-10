@@ -24,6 +24,23 @@ type Service struct {
 	Q  *sqlcgen.Queries
 }
 
+// Preference event sources. A preference event records WHO decided, and these
+// distinguish an officer acting directly from an officer applying a member's
+// reviewed request. The distinction is durable: it stays readable in the
+// preference history long after the request itself is resolved.
+const (
+	PrefSourceOfficer       = "officer"
+	PrefSourceMemberRequest = "member_request"
+	PrefSourceImportDefault = "import_default"
+)
+
+// WithTx returns a Service bound to tx, so several adapters can be composed
+// into one atomic change. Applying a reviewed request needs this: a request
+// approving two items must not leave the first written and the second not.
+func (s *Service) WithTx(tx *sql.Tx) *Service {
+	return &Service{DB: s.DB, Q: s.Q.WithTx(tx)}
+}
+
 // NewService creates a member operations service.
 func NewService(database *sql.DB) *Service {
 	return &Service{
@@ -656,6 +673,77 @@ func (s *Service) MakePrimary(ctx context.Context, p *authz.Principal, contactMe
 	return nil
 }
 
+// UpdateContactMethodParams contains the editable fields of a contact method.
+type UpdateContactMethodParams struct {
+	ID      int64
+	Version int64
+	Label   string
+
+	ValueRaw  string
+	ValueNorm string
+
+	PostalLine1      string
+	PostalLine2      string
+	PostalCity       string
+	PostalState      string
+	PostalPostalCode string
+	PostalCountry    string
+}
+
+// UpdateContactMethod edits an existing contact method in place.
+//
+// The query for this existed from Phase 1 with no service method and no caller.
+// Correcting a number a member already has is the single most common member
+// correction there is, so the reviewed-request path needs a real adapter rather
+// than archive-then-add, which would lose the contact's identity and its
+// visibility history.
+func (s *Service) UpdateContactMethod(ctx context.Context, p *authz.Principal, params UpdateContactMethodParams) (sqlcgen.ContactMethod, error) {
+	if err := authz.Authorize(ctx, p, "contact_method.write", nil); err != nil {
+		return sqlcgen.ContactMethod{}, err
+	}
+
+	// Read first so a missing contact method is a 404 rather than a
+	// misreported conflict.
+	if _, err := s.Q.GetContactMethod(ctx, params.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sqlcgen.ContactMethod{}, err
+		}
+		return sqlcgen.ContactMethod{}, fmt.Errorf("members: update contact method: %w", err)
+	}
+
+	cm, err := s.Q.UpdateContactMethod(ctx, sqlcgen.UpdateContactMethodParams{
+		Label:            sqlNullString(params.Label),
+		ValueRaw:         params.ValueRaw,
+		ValueNorm:        params.ValueNorm,
+		PostalLine1:      sqlNullString(params.PostalLine1),
+		PostalLine2:      sqlNullString(params.PostalLine2),
+		PostalCity:       sqlNullString(params.PostalCity),
+		PostalState:      sqlNullString(params.PostalState),
+		PostalPostalCode: sqlNullString(params.PostalPostalCode),
+		PostalCountry:    sqlNullString(params.PostalCountry),
+		ID:               params.ID,
+		Version:          params.Version,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return sqlcgen.ContactMethod{}, db.ErrStale
+	}
+	if err != nil {
+		return sqlcgen.ContactMethod{}, fmt.Errorf("members: update contact: %w", err)
+	}
+
+	audit.StampResource(ctx, "contact_method", params.ID)
+	return cm, nil
+}
+
+// prefSourceOrDefault keeps an unset source meaning "officer", so an existing
+// caller that does not state one behaves exactly as before.
+func prefSourceOrDefault(source string) string {
+	if source == "" {
+		return PrefSourceOfficer
+	}
+	return source
+}
+
 // --- Notes ---
 
 // CreateNoteParams contains fields for creating a note.
@@ -758,7 +846,7 @@ func (s *Service) ListNotes(ctx context.Context, p *authz.Principal, subjectKind
 // --- Sharing Preferences ---
 
 // SetDirectoryVisibility records a visibility preference for a contact method.
-func (s *Service) SetDirectoryVisibility(ctx context.Context, p *authz.Principal, contactMethodID int64, audience string) (sqlcgen.ContactMethodVisibilityEvent, error) {
+func (s *Service) SetDirectoryVisibility(ctx context.Context, p *authz.Principal, contactMethodID int64, audience, source string) (sqlcgen.ContactMethodVisibilityEvent, error) {
 	if err := authz.Authorize(ctx, p, "sharing_pref.write.officer", nil); err != nil {
 		return sqlcgen.ContactMethodVisibilityEvent{}, err
 	}
@@ -767,7 +855,7 @@ func (s *Service) SetDirectoryVisibility(ctx context.Context, p *authz.Principal
 	ev, err := s.Q.CreateVisibilityEvent(ctx, sqlcgen.CreateVisibilityEventParams{
 		ContactMethodID: contactMethodID,
 		Audience:        audience,
-		Source:          "officer",
+		Source:          prefSourceOrDefault(source),
 		EffectiveAt:     now,
 		ActorUserID:     sql.NullInt64{Int64: p.UserID, Valid: true},
 	})
@@ -807,7 +895,7 @@ func (s *Service) GetAcsAresSharing(ctx context.Context, p *authz.Principal, per
 }
 
 // SetAcsAresSharing records an ACS/ARES sharing preference for a person.
-func (s *Service) SetAcsAresSharing(ctx context.Context, p *authz.Principal, personID int64, participates bool, reason string) (sqlcgen.AcsAresSharingEvent, error) {
+func (s *Service) SetAcsAresSharing(ctx context.Context, p *authz.Principal, personID int64, participates bool, reason, source string) (sqlcgen.AcsAresSharingEvent, error) {
 	if err := authz.Authorize(ctx, p, "sharing_pref.write.officer", nil); err != nil {
 		return sqlcgen.AcsAresSharingEvent{}, err
 	}
@@ -821,7 +909,7 @@ func (s *Service) SetAcsAresSharing(ctx context.Context, p *authz.Principal, per
 	ev, err := s.Q.CreateAcsAresSharingEvent(ctx, sqlcgen.CreateAcsAresSharingEventParams{
 		PersonID:     personID,
 		Participates: part,
-		Source:       "officer",
+		Source:       prefSourceOrDefault(source),
 		EffectiveAt:  now,
 		ActorUserID:  sql.NullInt64{Int64: p.UserID, Valid: true},
 		Reason:       sqlNullString(reason),

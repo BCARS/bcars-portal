@@ -481,12 +481,21 @@ func (s *Service) Triage(ctx context.Context, p *authz.Principal, id int64, para
 // --- internals ---
 
 func (s *Service) inTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error {
+	return s.inTxWith(ctx, func(q *sqlcgen.Queries, _ *sql.Tx) error { return fn(q) })
+}
+
+// inTxWith exposes the transaction itself, so a caller can bind ANOTHER
+// service to it. Applying a reviewed item needs that: the decision and the
+// canonical write must commit or roll back together, and a members.Service
+// built over the bare *sql.DB would write outside the transaction and survive
+// a rollback.
+func (s *Service) inTxWith(ctx context.Context, fn func(*sqlcgen.Queries, *sql.Tx) error) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := fn(s.Q.WithTx(tx)); err != nil {
+	if err := fn(s.Q.WithTx(tx), tx); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -562,9 +571,11 @@ func validateCreate(params CreateParams) error {
 		if len(in.ProposedValue) > MaxValueLen {
 			return fmt.Errorf("%w: proposed_value", ErrTooLong)
 		}
-		// Every supported operation names what it wants set. Only `other`,
-		// which can never be applied, may be pure prose.
-		if in.Operation != OpOther && strings.TrimSpace(in.ProposedValue) == "" {
+		// Which operations need a value is the policy table's answer, not a
+		// rule restated here. Archiving a contact and making one primary name
+		// a target and change nothing else, so demanding a value would force a
+		// submitter to invent a meaningless one.
+		if RequiresValue(in.Operation) && strings.TrimSpace(in.ProposedValue) == "" {
 			return fmt.Errorf("%w: %s", ErrValueRequired, in.Operation)
 		}
 		if (in.TargetKind == "") != (in.TargetID == 0) {

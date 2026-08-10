@@ -580,12 +580,12 @@ func TestSharingPreferences(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set directory visibility.
-	vis, err := svc.SetDirectoryVisibility(ctx, p, email.ID, "members_only")
+	vis, err := svc.SetDirectoryVisibility(ctx, p, email.ID, "members_only", PrefSourceOfficer)
 	require.NoError(t, err)
 	assert.Equal(t, "members_only", vis.Audience)
 
 	// Set ACS/ARES sharing.
-	sharing, err := svc.SetAcsAresSharing(ctx, p, person.ID, true, "Joined ARES team")
+	sharing, err := svc.SetAcsAresSharing(ctx, p, person.ID, true, "Joined ARES team", PrefSourceOfficer)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), sharing.Participates)
 }
@@ -693,7 +693,7 @@ func TestAcsAresSharingRoundTrip(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, true, "asked at a meeting")
+	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, true, "asked at a meeting", PrefSourceOfficer)
 	require.NoError(t, err)
 
 	got, err := svc.GetAcsAresSharing(ctx, p, person.ID)
@@ -715,10 +715,10 @@ func TestAcsAresSharingReturnsMostRecent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, true, "opted in")
+	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, true, "opted in", PrefSourceOfficer)
 	require.NoError(t, err)
 	time.Sleep(2 * time.Millisecond) // effective_at has millisecond resolution
-	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, false, "opted out later")
+	_, err = svc.SetAcsAresSharing(ctx, p, person.ID, false, "opted out later", PrefSourceOfficer)
 	require.NoError(t, err)
 
 	got, err := svc.GetAcsAresSharing(ctx, p, person.ID)
