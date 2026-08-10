@@ -66,9 +66,25 @@ func AuthzMiddleware(api huma.API, rec audit.Recorder) func(huma.Context, func(h
 			}
 		}
 
+		// Confirmation, enforced from the same declaration the catalog
+		// publishes. Checked after the capability so an unauthorized caller
+		// learns nothing from the difference between the two refusals.
+		confirmed := requestIsConfirmed(ctx)
+		if meta.ConfirmationLevel == ConfirmExplicit && !confirmed {
+			var actorID int64
+			if principal != nil {
+				actorID = principal.UserID
+			}
+			recordEvent(ctx, rec, meta, denialAction(meta, opID), audit.OutcomeDenied,
+				audit.ReasonMissingConfirmation, actorID, confirmationStatus)
+			_ = huma.WriteErr(api, ctx, confirmationStatus,
+				"this operation requires explicit confirmation; resend with "+ConfirmHeader+": true")
+			return
+		}
+
 		// Give the handler a slot to name the resource it acts on, for
 		// creates where no {id} path parameter exists.
-		ctx = huma.WithContext(ctx, audit.WithResourceSlot(ctx.Context()))
+		ctx = huma.WithContext(ctx, withConfirmed(audit.WithResourceSlot(ctx.Context()), confirmed))
 
 		next(ctx)
 

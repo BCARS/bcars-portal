@@ -136,7 +136,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 		Tags:        []string{"contact-methods"},
 	}, OperationMeta{
 		RequiredCapability: "member.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *ContactMethodsListInput) (*ContactMethodsListOutput, error) {
 		if memberSvc == nil {
@@ -167,7 +167,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "contact_method.write",
 		AuditAction:        "contact_method.create",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *CreateContactMethodInput) (*CreateContactMethodOutput, error) {
 		if memberSvc == nil {
@@ -199,7 +199,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "contact_method.write",
 		AuditAction:        "contact_method.archive",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ArchiveContactMethodInput) (*ArchiveContactMethodOutput, error) {
 		if memberSvc == nil {
@@ -225,7 +225,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "contact_method.write",
 		AuditAction:        "contact_method.make_primary",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *MakePrimaryInput) (*MakePrimaryOutput, error) {
 		if memberSvc == nil {
@@ -251,7 +251,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "sharing_pref.write.officer",
 		AuditAction:        "contact_method.visibility.set",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *PostVisibilityInput) (*PostVisibilityOutput, error) {
 		if memberSvc == nil {
@@ -282,7 +282,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 		Tags:        []string{"sharing"},
 	}, OperationMeta{
 		RequiredCapability: "member.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *GetACSARESInput) (*GetACSARESOutput, error) {
 		if memberSvc == nil {
@@ -318,7 +318,7 @@ func RegisterContactMethods(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "sharing_pref.write.officer",
 		AuditAction:        "acs_ares.sharing.set",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *PostACSARESInput) (*PostACSARESOutput, error) {
 		if memberSvc == nil {

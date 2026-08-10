@@ -288,7 +288,7 @@ func RegisterDues(api huma.API, deps Deps) {
 		Tags: []string{"dues"},
 	}, OperationMeta{
 		RequiredCapability: "dues.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *DuesStandingListInput) (*DuesStandingListOutput, error) {
 		if svc == nil {
@@ -341,7 +341,7 @@ func RegisterDues(api huma.API, deps Deps) {
 		Tags:        []string{"dues"},
 	}, OperationMeta{
 		RequiredCapability: "dues.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *MembershipStandingInput) (*MembershipStandingOutput, error) {
 		if svc == nil {
@@ -372,7 +372,7 @@ func RegisterDues(api huma.API, deps Deps) {
 		Tags: []string{"dues"},
 	}, OperationMeta{
 		RequiredCapability: "dues.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *DuesSuggestionsInput) (*DuesSuggestionsOutput, error) {
 		if svc == nil {
@@ -412,7 +412,7 @@ func RegisterDues(api huma.API, deps Deps) {
 		Tags:        []string{"dues"},
 	}, OperationMeta{
 		RequiredCapability: "dues.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, _ *struct{}) (*DuesRatesListOutput, error) {
 		if svc == nil {
@@ -445,7 +445,7 @@ func RegisterDues(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "dues.rate.manage",
 		AuditAction:        "dues.rate.set",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *PutDuesRateInput) (*PutDuesRateOutput, error) {
 		if svc == nil {
@@ -480,7 +480,7 @@ func RegisterDues(api huma.API, deps Deps) {
 		Tags:        []string{"dues"},
 	}, OperationMeta{
 		RequiredCapability: "coverage.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *CoverageEventsListInput) (*CoverageEventsListOutput, error) {
 		if svc == nil {
@@ -523,7 +523,7 @@ func RegisterDues(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "coverage.adjust",
 		AuditAction:        "coverage.adjust",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreateCoverageEventInput) (*CreateCoverageEventOutput, error) {
 		if svc == nil {

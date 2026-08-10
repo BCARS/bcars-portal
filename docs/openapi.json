@@ -648,10 +648,6 @@
             "minimum": 1,
             "type": "integer"
           },
-          "confirm": {
-            "description": "Must be true.",
-            "type": "boolean"
-          },
           "method": {
             "enum": [
               "cash",
@@ -689,8 +685,7 @@
           "method",
           "received_on",
           "paid_through",
-          "reason",
-          "confirm"
+          "reason"
         ],
         "type": "object"
       },
@@ -1025,10 +1020,6 @@
             "minimum": 1,
             "type": "integer"
           },
-          "confirm": {
-            "description": "Must be true.",
-            "type": "boolean"
-          },
           "label": {
             "description": "Names the one-row batch created for this payment. Defaults to a dated label.",
             "type": "string"
@@ -1070,8 +1061,7 @@
           "amount_cents",
           "method",
           "received_on",
-          "paid_through",
-          "confirm"
+          "paid_through"
         ],
         "type": "object"
       },
@@ -3361,15 +3351,8 @@
             "format": "uri",
             "readOnly": true,
             "type": "string"
-          },
-          "confirm": {
-            "description": "Must be true. Posting is irreversible except by correction, so it is never the accidental result of a stray request.",
-            "type": "boolean"
           }
         },
-        "required": [
-          "confirm"
-        ],
         "type": "object"
       },
       "PostResult": {

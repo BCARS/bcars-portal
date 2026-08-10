@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bcars/bcars-portal/internal/httpapi"
 )
 
 type postResultResponse struct {
@@ -47,10 +49,11 @@ func postBatch(t *testing.T, env *authzEnv, cookie *http.Cookie, batchID, versio
 	t.Helper()
 	return doWithHeaders(t, env, http.MethodPost,
 		fmt.Sprintf("/api/v1/payment-batches/%d/post", batchID), cookie,
-		fmt.Sprintf(`{"confirm":%t}`, confirm),
+		`{}`,
 		map[string]string{
-			"If-Match":        fmt.Sprintf(`"%d"`, version),
-			"Idempotency-Key": key,
+			"If-Match":            fmt.Sprintf(`"%d"`, version),
+			"Idempotency-Key":     key,
+			httpapi.ConfirmHeader: fmt.Sprintf("%t", confirm),
 		})
 }
 
@@ -146,7 +149,7 @@ func TestPostBatchPreconditions(t *testing.T) {
 	path := fmt.Sprintf("/api/v1/payment-batches/%d/post", b.ID)
 
 	t.Run("If-Match is required", func(t *testing.T) {
-		resp := doWithHeaders(t, env, http.MethodPost, path, cookie, `{"confirm":true}`,
+		resp := doWithHeaders(t, env, http.MethodPost, path, cookie, `{}`,
 			map[string]string{"Idempotency-Key": "k1"})
 		assert.Equal(t, http.StatusPreconditionRequired, resp.StatusCode)
 	})
@@ -158,11 +161,11 @@ func TestPostBatchPreconditions(t *testing.T) {
 
 	t.Run("confirmation is required", func(t *testing.T) {
 		resp := postBatch(t, env, cookie, b.ID, e.Batch.Version, "k3", false)
-		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+		assert.Equal(t, http.StatusPreconditionRequired, resp.StatusCode)
 	})
 
 	t.Run("an idempotency key is required", func(t *testing.T) {
-		resp := doWithHeaders(t, env, http.MethodPost, path, cookie, `{"confirm":true}`,
+		resp := doWithHeaders(t, env, http.MethodPost, path, cookie, `{}`,
 			map[string]string{"If-Match": fmt.Sprintf(`"%d"`, e.Batch.Version)})
 		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
 	})
@@ -201,7 +204,7 @@ func TestSinglePaymentOverHTTP(t *testing.T) {
 	m := seedMemberWithCoverage(t, env, "Single Payer", "")
 
 	body := fmt.Sprintf(`{"membership_id":%d,"amount_cents":4000,"method":"check",
-		"reference":"1042","received_on":"2026-01-15","paid_through":"2026-12-31","confirm":true}`, m)
+		"reference":"1042","received_on":"2026-01-15","paid_through":"2026-12-31"}`, m)
 
 	resp := doWithHeaders(t, env, http.MethodPost, "/api/v1/payments", cookie, body,
 		map[string]string{"Idempotency-Key": "single-1"})
@@ -232,10 +235,13 @@ func TestSinglePaymentOverHTTP(t *testing.T) {
 
 	t.Run("confirmation is required", func(t *testing.T) {
 		unconfirmed := fmt.Sprintf(`{"membership_id":%d,"amount_cents":4000,"method":"cash",
-			"received_on":"2026-01-15","paid_through":"2026-12-31","confirm":false}`, m)
+			"received_on":"2026-01-15","paid_through":"2026-12-31"}`, m)
 		resp := doWithHeaders(t, env, http.MethodPost, "/api/v1/payments", cookie, unconfirmed,
-			map[string]string{"Idempotency-Key": "single-2"})
-		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+			map[string]string{
+				"Idempotency-Key":     "single-2",
+				httpapi.ConfirmHeader: "false",
+			})
+		assert.Equal(t, http.StatusPreconditionRequired, resp.StatusCode)
 	})
 
 	t.Run("the payment is audited", func(t *testing.T) {
@@ -267,7 +273,7 @@ func TestPostingDeniedToNonTreasurers(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 
 	resp = doWithHeaders(t, env, http.MethodPost, "/api/v1/payments", cookie,
-		fmt.Sprintf(`{"membership_id":%d,"amount_cents":4000,"method":"cash","received_on":"2026-01-15","paid_through":"2026-12-31","confirm":true}`, m),
+		fmt.Sprintf(`{"membership_id":%d,"amount_cents":4000,"method":"cash","received_on":"2026-01-15","paid_through":"2026-12-31"}`, m),
 		map[string]string{"Idempotency-Key": "k2"})
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 

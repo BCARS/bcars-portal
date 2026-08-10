@@ -113,6 +113,11 @@ func (e *authzEnv) do(t *testing.T, method, path string, cookie *http.Cookie, bo
 		r, err = http.NewRequest(method, e.ts.URL+path, nil)
 	}
 	require.NoError(t, err)
+	// A deliberate client. Operations declaring ConfirmExplicit are refused
+	// without this, so the default keeps every test that is not ABOUT
+	// confirmation exercising its actual subject. Tests that assert the
+	// refusal omit it explicitly.
+	r.Header.Set(httpapi.ConfirmHeader, "true")
 	if cookie != nil {
 		r.AddCookie(cookie)
 	}

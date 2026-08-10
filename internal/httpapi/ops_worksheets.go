@@ -152,7 +152,7 @@ func RegisterWorksheets(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "dues.worksheet.manage",
 		AuditAction:        "dues.worksheet.create",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreateWorksheetInput) (*CreateWorksheetOutput, error) {
 		if svc == nil {
@@ -202,7 +202,7 @@ func RegisterWorksheets(api huma.API, deps Deps) {
 		Tags:        []string{"worksheets"},
 	}, OperationMeta{
 		RequiredCapability: "dues.worksheet.manage",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *WorksheetListInput) (*WorksheetListOutput, error) {
 		if svc == nil {
@@ -241,7 +241,7 @@ func RegisterWorksheets(api huma.API, deps Deps) {
 		Tags:        []string{"worksheets"},
 	}, OperationMeta{
 		RequiredCapability: "dues.worksheet.manage",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *WorksheetGetInput) (*WorksheetGetOutput, error) {
 		if svc == nil {
@@ -268,7 +268,7 @@ func RegisterWorksheets(api huma.API, deps Deps) {
 		Tags: []string{"worksheets"},
 	}, OperationMeta{
 		RequiredCapability: "dues.worksheet.manage",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *WorksheetRowsInput) (*WorksheetRowsOutput, error) {
 		if svc == nil {
@@ -315,7 +315,7 @@ func RegisterWorksheets(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.batch.manage",
 		AuditAction:        "dues.worksheet.batch.link",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *LinkWorksheetBatchInput) (*LinkWorksheetBatchOutput, error) {
 		if svc == nil {

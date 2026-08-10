@@ -92,7 +92,7 @@ func RegisterAudit(api huma.API, deps Deps) {
 		Tags:        []string{"audit"},
 	}, OperationMeta{
 		RequiredCapability: "audit.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *AuditEventsListInput) (*AuditEventsListOutput, error) {
 		if q == nil {

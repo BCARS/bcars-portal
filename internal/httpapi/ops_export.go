@@ -58,7 +58,7 @@ func RegisterExports(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "member.export",
 		AuditAction:        "member.export",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *ExportMembersInput) (*ExportMembersOutput, error) {
 		if q == nil {

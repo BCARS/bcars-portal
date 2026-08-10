@@ -25,10 +25,11 @@ const (
 
 // Reason codes recorded in audit_events.reason_code for denied outcomes.
 const (
-	ReasonUnauthenticated   = "unauthenticated"
-	ReasonMissingCapability = "missing_capability"
-	ReasonNoMetadata        = "no_operation_metadata"
-	ReasonRateLimited       = "rate_limited"
+	ReasonUnauthenticated     = "unauthenticated"
+	ReasonMissingCapability   = "missing_capability"
+	ReasonNoMetadata          = "no_operation_metadata"
+	ReasonRateLimited         = "rate_limited"
+	ReasonMissingConfirmation = "missing_confirmation"
 )
 
 // OutcomeForStatus maps a response status to an audit outcome.

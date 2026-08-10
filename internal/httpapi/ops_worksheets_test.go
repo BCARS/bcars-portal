@@ -73,7 +73,7 @@ func TestWorksheetLifecycleOverHTTP(t *testing.T) {
 
 	t.Run("a payment marks the line entered without rewriting the sheet", func(t *testing.T) {
 		body := fmt.Sprintf(`{"membership_id":%d,"amount_cents":4000,"method":"cash",
-			"received_on":"2026-07-05","paid_through":"2026-12-31","confirm":true}`, owing)
+			"received_on":"2026-07-05","paid_through":"2026-12-31"}`, owing)
 		resp := doWithHeaders(t, env, http.MethodPost, "/api/v1/payments", cookie, body,
 			map[string]string{"Idempotency-Key": "pay-1"})
 		require.Equal(t, http.StatusCreated, resp.StatusCode)

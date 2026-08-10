@@ -286,7 +286,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 		Tags:        []string{"payments"},
 	}, OperationMeta{
 		RequiredCapability: "payment.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *BatchListInput) (*BatchListOutput, error) {
 		if svc == nil {
@@ -326,7 +326,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 		Tags:        []string{"payments"},
 	}, OperationMeta{
 		RequiredCapability: "payment.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *BatchGetInput) (*BatchGetOutput, error) {
 		if svc == nil {
@@ -354,7 +354,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.batch.manage",
 		AuditAction:        "payment.batch.open",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *OpenBatchInput) (*OpenBatchOutput, error) {
 		if svc == nil {
@@ -386,7 +386,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.batch.manage",
 		AuditAction:        "payment.batch.update",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *UpdateBatchInput) (*UpdateBatchOutput, error) {
 		if svc == nil {
@@ -423,7 +423,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.batch.manage",
 		AuditAction:        "payment.batch.abandon",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *AbandonBatchInput) (*AbandonBatchOutput, error) {
 		if svc == nil {
@@ -456,7 +456,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.batch.manage",
 		AuditAction:        "payment.batch.entry.create",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreateBatchEntryInput) (*BatchEntryOutput, error) {
 		if svc == nil {
@@ -489,7 +489,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.batch.manage",
 		AuditAction:        "payment.batch.entry.update",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *UpdateBatchEntryInput) (*BatchEntryOutput, error) {
 		if svc == nil {
@@ -526,7 +526,7 @@ func RegisterBatches(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.batch.manage",
 		AuditAction:        "payment.batch.entry.delete",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *DeleteBatchEntryInput) (*DeleteBatchEntryOutput, error) {
 		if svc == nil {

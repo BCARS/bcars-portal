@@ -57,7 +57,7 @@ func RegisterInvitations(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "user.invite",
 		AuditAction:        "auth.invitation.create",
-		ConfirmationLevel:  "recent-auth",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CreateInvitationInput) (*CreateInvitationOutput, error) {
 		if q == nil || deps.EmailLinkService == nil {

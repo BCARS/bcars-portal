@@ -209,7 +209,7 @@ func RegisterTreasury(api huma.API, deps Deps) {
 		Tags: []string{"treasury"},
 	}, OperationMeta{
 		RequiredCapability: "payment.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *LedgerListInput) (*LedgerListOutput, error) {
 		if svc == nil {
@@ -253,7 +253,7 @@ func RegisterTreasury(api huma.API, deps Deps) {
 		Tags:        []string{"treasury"},
 	}, OperationMeta{
 		RequiredCapability: "payment.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ReceiptInput) (*ReceiptOutput, error) {
 		if svc == nil {
@@ -295,7 +295,7 @@ func RegisterTreasury(api huma.API, deps Deps) {
 		Tags:        []string{"treasury"},
 	}, OperationMeta{
 		RequiredCapability: "payment.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *BatchActivityInput) (*BatchActivityOutput, error) {
 		if svc == nil {
@@ -332,7 +332,7 @@ func RegisterTreasury(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.export",
 		AuditAction:        "payment.export",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ExportLedgerInput) (*ExportLedgerOutput, error) {
 		if svc == nil {
@@ -366,7 +366,7 @@ func RegisterTreasury(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.export",
 		AuditAction:        "payment.export",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *ExportBatchInput) (*ExportBatchOutput, error) {
 		if svc == nil {

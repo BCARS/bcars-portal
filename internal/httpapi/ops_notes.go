@@ -91,7 +91,7 @@ func RegisterNotes(api huma.API, deps Deps) {
 		Tags:        []string{"notes"},
 	}, OperationMeta{
 		RequiredCapability: "member.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "read-only",
 	}, func(ctx context.Context, input *NotesListInput) (*NotesListOutput, error) {
 		if memberSvc == nil {
@@ -134,7 +134,7 @@ func RegisterNotes(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "notes.write.officer",
 		AuditAction:        "note.create",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *CreateNoteInput) (*CreateNoteOutput, error) {
 		if memberSvc == nil {
@@ -169,7 +169,7 @@ func RegisterNotes(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "notes.write.officer",
 		AuditAction:        "note.update",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "curated",
 	}, func(ctx context.Context, input *UpdateNoteInput) (*UpdateNoteOutput, error) {
 		if memberSvc == nil {

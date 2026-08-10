@@ -65,7 +65,6 @@ type CorrectPaymentBody struct {
 	PaidThrough       string `json:"paid_through" format:"date" doc:"Pass the date the payment already grants to leave coverage untouched; pass a different one to supersede it."`
 	TreasurerNote     string `json:"treasurer_note,omitempty"`
 	Reason            string `json:"reason" minLength:"1" doc:"Required. It is what makes the chain readable a year later."`
-	Confirm           bool   `json:"confirm" doc:"Must be true."`
 }
 type CorrectPaymentInput struct {
 	ID             int64  `path:"id"`
@@ -177,7 +176,7 @@ func RegisterCorrections(api huma.API, deps Deps) {
 		Tags: []string{"payments"},
 	}, OperationMeta{
 		RequiredCapability: "payment.read",
-		ConfirmationLevel:  "none",
+		ConfirmationLevel:  ConfirmNone,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *GetPaymentInput) (*GetPaymentOutput, error) {
 		if svc == nil {
@@ -215,7 +214,7 @@ func RegisterCorrections(api huma.API, deps Deps) {
 	}, OperationMeta{
 		RequiredCapability: "payment.correct",
 		AuditAction:        "payment.correct",
-		ConfirmationLevel:  "explicit-confirm",
+		ConfirmationLevel:  ConfirmExplicit,
 		AIToolEligibility:  "never",
 	}, func(ctx context.Context, input *CorrectPaymentInput) (*CorrectPaymentOutput, error) {
 		if svc == nil {
@@ -241,7 +240,7 @@ func RegisterCorrections(api huma.API, deps Deps) {
 			Reason:            input.Body.Reason,
 			ExpectedRevision:  revision,
 			IdempotencyKey:    input.IdempotencyKey,
-			Confirm:           input.Body.Confirm,
+			Confirm:           ConfirmedFrom(ctx),
 		}, time.Now())
 		if err != nil {
 			return nil, mapCorrectionError(err)
