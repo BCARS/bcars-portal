@@ -173,6 +173,75 @@ func (q *Queries) ListAccessGrantsForPerson(ctx context.Context, personID int64)
 	return items, nil
 }
 
+const listAccessGrantsForUser = `-- name: ListAccessGrantsForUser :many
+SELECT g.id, g.user_id, g.person_id, g.access_kind, g.reason, g.granted_by, g.granted_at, g.revoked_at, g.revoked_by, g.revoke_reason, g.created_at, g.updated_at, g.version, p.display_name AS display_name
+  FROM member_access_grants g
+  JOIN persons p ON p.id = g.person_id
+ WHERE g.user_id = ?
+ ORDER BY g.revoked_at IS NOT NULL, p.sort_name, g.id
+`
+
+type ListAccessGrantsForUserRow struct {
+	ID           int64
+	UserID       int64
+	PersonID     int64
+	AccessKind   string
+	Reason       sql.NullString
+	GrantedBy    sql.NullInt64
+	GrantedAt    string
+	RevokedAt    sql.NullString
+	RevokedBy    sql.NullInt64
+	RevokeReason sql.NullString
+	CreatedAt    string
+	UpdatedAt    string
+	Version      int64
+	DisplayName  string
+}
+
+// The officer view of one account: every grant it has ever held, revoked ones
+// included, so "who could reach this record, and when" stays answerable.
+//
+// Distinct from ListActiveAccessGrantsForUser, which is the authorization read
+// and must return only what currently confers access. Keeping them separate
+// means a history view can never accidentally become an authorization answer.
+func (q *Queries) ListAccessGrantsForUser(ctx context.Context, userID int64) ([]ListAccessGrantsForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccessGrantsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAccessGrantsForUserRow{}
+	for rows.Next() {
+		var i ListAccessGrantsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.PersonID,
+			&i.AccessKind,
+			&i.Reason,
+			&i.GrantedBy,
+			&i.GrantedAt,
+			&i.RevokedAt,
+			&i.RevokedBy,
+			&i.RevokeReason,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.DisplayName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveAccessGrantsForUser = `-- name: ListActiveAccessGrantsForUser :many
 SELECT g.id          AS grant_id,
        g.user_id     AS user_id,

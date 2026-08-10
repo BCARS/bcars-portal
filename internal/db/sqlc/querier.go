@@ -221,6 +221,14 @@ type Querier interface {
 	// Officer view. Includes revoked rows so the history of who could see a record
 	// is readable, not just the current state.
 	ListAccessGrantsForPerson(ctx context.Context, personID int64) ([]ListAccessGrantsForPersonRow, error)
+	//
+	// The officer view of one account: every grant it has ever held, revoked ones
+	// included, so "who could reach this record, and when" stays answerable.
+	//
+	// Distinct from ListActiveAccessGrantsForUser, which is the authorization read
+	// and must return only what currently confers access. Keeping them separate
+	// means a history view can never accidentally become an authorization answer.
+	ListAccessGrantsForUser(ctx context.Context, userID int64) ([]ListAccessGrantsForUserRow, error)
 	ListAcsAresSharingHistory(ctx context.Context, personID int64) ([]AcsAresSharingEvent, error)
 	//
 	// The authorization read. Loaded per request, so revoking a grant takes effect
