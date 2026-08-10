@@ -478,8 +478,13 @@ func mapMissing(err error) error {
 // parseContactValue splits the "kind:value" encoding a contact item carries.
 //
 // The encoding is deliberately narrow. A structured payload would let a
-// submitter reach fields no reviewer looked at; "email:someone@example.test"
-// can only ever say two things.
+// submitter reach fields no reviewer looked at; a kind and a value can only
+// ever say two things.
+//
+// No example address appears in this comment on purpose: check-no-secrets.sh
+// rejects an email-like literal in any tracked non-test file, and it is right
+// to, because a real one reaches production source the same way an example
+// does.
 func parseContactValue(raw string) (kind, value string, err error) {
 	parts := strings.SplitN(strings.TrimSpace(raw), ":", 2)
 	if len(parts) != 2 {
