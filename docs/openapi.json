@@ -1522,6 +1522,77 @@
         ],
         "type": "object"
       },
+      "DecideItemBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/DecideItemBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "needs_verification"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Required for a rejection. A member is entitled to know why.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "verification_note": {
+            "description": "Required to approve a sensitive item; record how it was verified.",
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      },
+      "DecideItemResult": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/DecideItemResult.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "applied": {
+            "description": "True when canonical data changed. False for a rejection, a hold, and a replayed approval.",
+            "type": "boolean"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ChangeRequestItem"
+          },
+          "replay": {
+            "description": "True when this item was already decided the same way and the recorded outcome was returned.",
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ChangeRequest"
+          }
+        },
+        "required": [
+          "request",
+          "item",
+          "applied",
+          "replay"
+        ],
+        "type": "object"
+      },
       "DuesRate": {
         "additionalProperties": false,
         "properties": {
@@ -5110,6 +5181,75 @@
           }
         },
         "summary": "Read one change request and its items",
+        "tags": [
+          "change-requests"
+        ]
+      }
+    },
+    "/change-requests/{id}/items/{item_id}/decision": {
+      "post": {
+        "description": "An approval applies through the domain service that owns the field, in the same transaction as the decision. Nothing is applied unless the decision is recorded, and no decision is recorded if the apply fails.",
+        "operationId": "change-request-item-decide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideItemBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecideItemResult"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Approve, reject, or hold one proposed item",
         "tags": [
           "change-requests"
         ]

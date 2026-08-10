@@ -12,6 +12,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/db"
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
 	"github.com/bcars/bcars-portal/internal/domain/idem"
+	"github.com/bcars/bcars-portal/internal/domain/members"
 )
 
 // Officer-entered change-request intake and triage (bcars-portal-4ux.2).
@@ -146,11 +147,40 @@ type TriageChangeRequestOutput struct {
 	Body ChangeRequest
 }
 
+type DecideItemBody struct {
+	Decision         string `json:"decision" enum:"approved,rejected,needs_verification"`
+	Reason           string `json:"reason,omitempty" maxLength:"2000" doc:"Required for a rejection. A member is entitled to know why."`
+	VerificationNote string `json:"verification_note,omitempty" maxLength:"2000" doc:"Required to approve a sensitive item; record how it was verified."`
+}
+
+type DecideItemInput struct {
+	ID     int64 `path:"id"`
+	ItemID int64 `path:"item_id"`
+	Body   DecideItemBody
+}
+
+type DecideItemOutput struct {
+	ETag string `header:"ETag"`
+	Body DecideItemResult
+}
+
+type DecideItemResult struct {
+	Request ChangeRequest     `json:"request"`
+	Item    ChangeRequestItem `json:"item"`
+	Applied bool              `json:"applied" doc:"True when canonical data changed. False for a rejection, a hold, and a replayed approval."`
+	Replay  bool              `json:"replay" doc:"True when this item was already decided the same way and the recorded outcome was returned."`
+}
+
 // RegisterChangeRequests registers officer intake and triage.
 func RegisterChangeRequests(api huma.API, deps Deps) {
 	var svc *changerequests.Service
+	var memberSvc *members.Service
 	if deps.DB != nil {
 		svc = changerequests.NewService(deps.DB)
+		// The adapter set an approval applies through. Passing the service in
+		// rather than letting changerequests build its own keeps every
+		// canonical write going through the package that owns that field.
+		memberSvc = members.NewService(deps.DB)
 	}
 
 	Register(api, huma.Operation{
@@ -315,6 +345,57 @@ func RegisterChangeRequests(api huma.API, deps Deps) {
 			Body: changeRequestToResponse(r),
 		}, nil
 	})
+
+	registerChangeRequestReview(api, svc, memberSvc)
+}
+
+// registerChangeRequestReview registers per-item review and apply.
+func registerChangeRequestReview(api huma.API, svc *changerequests.Service, memberSvc *members.Service) {
+	Register(api, huma.Operation{
+		OperationID: "change-request-item-decide",
+		Method:      http.MethodPost,
+		Path:        "/change-requests/{id}/items/{item_id}/decision",
+		Summary:     "Approve, reject, or hold one proposed item",
+		Description: "An approval applies through the domain service that owns the field, in the " +
+			"same transaction as the decision. Nothing is applied unless the decision is recorded, " +
+			"and no decision is recorded if the apply fails.",
+		Tags: []string{"change-requests"},
+	}, OperationMeta{
+		RequiredCapability: "change_request.review",
+		AuditAction:        "change_request.item.decide",
+		// Applying a reviewed item changes canonical member data, which is
+		// exactly what the confirmation control from bcars-portal-6q6.1 exists
+		// to make deliberate.
+		ConfirmationLevel: ConfirmExplicit,
+		AIToolEligibility: "never",
+	}, func(ctx context.Context, input *DecideItemInput) (*DecideItemOutput, error) {
+		if svc == nil {
+			return nil, ErrNotImplemented()
+		}
+		principal, err := requirePrincipal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		d, err := svc.DecideItem(ctx, principal, memberSvc, input.ID, input.ItemID,
+			changerequests.DecideParams{
+				Decision:         input.Body.Decision,
+				Reason:           input.Body.Reason,
+				VerificationNote: input.Body.VerificationNote,
+			}, time.Now())
+		if err != nil {
+			return nil, mapChangeRequestError(err)
+		}
+		audit.StampResource(ctx, "change_request_item", d.Item.ID)
+		return &DecideItemOutput{
+			ETag: FormatETag(d.Request.Version),
+			Body: DecideItemResult{
+				Request: changeRequestToResponse(d.Request),
+				Item:    changeRequestItemToResponse(d.Item),
+				Applied: d.Applied,
+				Replay:  d.Replay,
+			},
+		}, nil
+	})
 }
 
 // mapChangeRequestError translates domain errors to HTTP.
@@ -336,6 +417,19 @@ func mapChangeRequestError(err error) error {
 		return huma.Error422UnprocessableEntity("target_person_id does not name an existing person")
 	case errors.Is(err, changerequests.ErrAlreadyResolved):
 		return huma.Error409Conflict("this request is already resolved or withdrawn")
+	case errors.Is(err, changerequests.ErrItemDecided):
+		return huma.Error409Conflict("that item has already been decided")
+	case errors.Is(err, changerequests.ErrItemNotInRequest):
+		return huma.Error404NotFound("that item does not belong to this request")
+	case errors.Is(err, changerequests.ErrSelfReview):
+		return huma.Error403Forbidden("a sensitive item cannot be approved by the member who requested it")
+	case errors.Is(err, changerequests.ErrVerificationNoteRequired),
+		errors.Is(err, changerequests.ErrReasonRequired),
+		errors.Is(err, changerequests.ErrUnknownDecision),
+		errors.Is(err, changerequests.ErrNoAdapter),
+		errors.Is(err, changerequests.ErrTargetRequired),
+		errors.Is(err, changerequests.ErrBadValue):
+		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, changerequests.ErrSourceRequired),
 		errors.Is(err, changerequests.ErrSummaryRequired),
 		errors.Is(err, changerequests.ErrTooLong),
@@ -349,6 +443,29 @@ func mapChangeRequestError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	}
 	return huma.Error500InternalServerError("change request operation failed")
+}
+
+func changeRequestItemToResponse(it changerequests.Item) ChangeRequestItem {
+	return ChangeRequestItem{
+		ID:                     it.ID,
+		Ordinal:                it.Ordinal,
+		Operation:              it.Operation,
+		ProposedValue:          it.ProposedValue,
+		TargetKind:             it.TargetKind,
+		TargetID:               it.TargetID,
+		TargetVersion:          it.TargetVersion,
+		Sensitivity:            it.Sensitivity,
+		Status:                 it.Status,
+		ReviewedByUserID:       it.ReviewedBy,
+		ReviewedAt:             it.ReviewedAt,
+		DecisionReason:         it.DecisionReason,
+		VerificationNote:       it.VerificationNote,
+		AppliedAt:              it.AppliedAt,
+		AppliedResourceKind:    it.AppliedResourceKind,
+		AppliedResourceID:      it.AppliedResourceID,
+		AppliedResourceVersion: it.AppliedResourceVersion,
+		Version:                it.Version,
+	}
 }
 
 func changeRequestToResponse(r changerequests.Request) ChangeRequest {

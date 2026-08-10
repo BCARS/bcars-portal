@@ -229,7 +229,12 @@
     "description": "Decide and apply individual change-request items.",
     "category": "membership",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "change-request-item-decide"
+    ],
+    "confirm_operation_ids": [
+      "change-request-item-decide"
+    ]
   },
   {
     "code": "member_access.manage",
