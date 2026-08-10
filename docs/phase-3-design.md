@@ -46,8 +46,18 @@ accessible MVP decisions until `bcars-portal-6pz` begins.
 
 1. A contact method is not login authority. An officer explicitly provisions a
    member user and grants it access to named person records.
-2. Member accounts are optional and passwordless. Officer accounts keep their
-   existing password, recovery, and invitation flows.
+2. Member accounts are optional and passwordless. Officers keep their existing
+   password, recovery, and invitation flows.
+
+   Corrected 2026-08-10 by the repository owner: this does NOT mean an officer
+   account and a member account are different things. An individual is a
+   member; some members are also officers, and an officer role only adds
+   permissions to one identity. Provisioning therefore adds the member role to
+   an existing identity rather than demanding a second mailbox
+   (`bcars-portal-4ux.4`). Whether a session created by an email link may
+   exercise the officer capabilities that identity also holds is a separate
+   decision, tracked as `bcars-portal-4ux.15` and settled before sign-in
+   ships.
 3. One normalized user email may have access to multiple records, which supports
    a shared household mailbox. The user chooses among only those records after
    sign-in. No unique constraint is added to member contact email values.

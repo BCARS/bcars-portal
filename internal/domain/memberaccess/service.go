@@ -58,15 +58,6 @@ var (
 
 	// ErrUnknownAccessKind is returned for an access kind outside the set.
 	ErrUnknownAccessKind = errors.New("memberaccess: access kind must be self or delegate")
-
-	// ErrOfficerAccount is returned when provisioning would touch an account
-	// that already holds officer roles.
-	//
-	// Reuse must never quietly change what an existing account is. An officer
-	// signing in with a password and an optional passwordless member account
-	// are different things, and merging them here could silently widen or
-	// narrow someone's authority.
-	ErrOfficerAccount = errors.New("memberaccess: that address already belongs to an officer account")
 )
 
 // Service provisions member accounts and record access.
@@ -114,12 +105,20 @@ type ProvisionParams struct {
 	Email string
 }
 
-// Provision creates or reuses a passwordless member account.
+// Provision creates or reuses an account and gives it member self-service.
 //
-// It stores NO password: the account exists to receive a sign-in link, and a
-// member who never uses one simply has an account that does nothing. It assigns
-// only the member role, which carries own-profile, own-request, and directory
-// entry, and never a broad administrative read.
+// A NEW account stores no password: it exists to receive a sign-in link, and a
+// member who never uses one simply has an account that does nothing.
+//
+// An EXISTING account is reused as-is. One person is one identity: an officer
+// who is also a member holds both roles on one account, because a role adds
+// permissions rather than defining a separate kind of login. Provisioning never
+// sets, clears, or reads a password, and never removes a role.
+//
+// SECURITY NOTE FOR PASSWORDLESS SIGN-IN (bcars-portal-4ux.5): once an officer
+// holds the member role, an email sign-in link reaches an identity that also
+// carries officer capabilities. Whether such a session may exercise them is a
+// decision that belongs to sign-in, not here; see bcars-portal-4ux.15.
 func (s *Service) Provision(ctx context.Context, p *authz.Principal, params ProvisionParams, now time.Time) (Account, error) {
 	email := NormalizeEmail(params.Email)
 	if email == "" {
@@ -136,17 +135,16 @@ func (s *Service) Provision(ctx context.Context, p *authz.Principal, params Prov
 		existing, err := q.GetUserByEmail(ctx, email)
 		switch {
 		case err == nil:
-			// Reuse. Refuse if this is an officer account: provisioning must
-			// not change what an existing account is.
-			roles, err := q.ActiveRolesForUser(ctx, existing.ID)
-			if err != nil {
-				return err
-			}
-			for _, r := range roles {
-				if r.RoleCode != MemberRole {
-					return ErrOfficerAccount
-				}
-			}
+			// Reuse, whatever roles the account already holds.
+			//
+			// An individual is a member; some members are also officers, and an
+			// officer role only ADDS permissions to the same identity. There is
+			// no such thing as a separate "officer account" to protect from a
+			// separate "member account", so provisioning an address that already
+			// signs in is simply that person gaining member self-service.
+			//
+			// Provisioning never touches an existing password, and never removes
+			// a role. It only adds the member role if it is missing.
 			out = Account{UserID: existing.ID, Email: existing.Email}
 		case errors.Is(err, sql.ErrNoRows):
 			created, err := q.CreateUser(ctx, sqlcgen.CreateUserParams{

@@ -278,9 +278,6 @@ func mapMemberAccessError(err error) error {
 		return huma.Error409Conflict("that account already has access to this record")
 	case errors.Is(err, db.ErrStale):
 		return huma.Error412PreconditionFailed("that grant changed since you read it; re-read and retry")
-	case errors.Is(err, memberaccess.ErrOfficerAccount):
-		return huma.Error409Conflict(
-			"that address already belongs to an officer account; provisioning must not change what it is")
 	case errors.Is(err, memberaccess.ErrEmailRequired),
 		errors.Is(err, memberaccess.ErrUnknownPerson),
 		errors.Is(err, memberaccess.ErrUnknownAccessKind):

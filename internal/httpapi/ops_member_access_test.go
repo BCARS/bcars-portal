@@ -245,26 +245,63 @@ func TestRevocationTakesEffectInsideAnOpenSession(t *testing.T) {
 		"the very next request in the same session must be refused")
 }
 
-// TestProvisioningRefusesAnOfficerAccount proves reuse never quietly changes
-// what an existing account is. Silently adding the member role to an officer,
-// or treating an officer's mailbox as a member account, would blur two
-// different kinds of authority.
-func TestProvisioningRefusesAnOfficerAccount(t *testing.T) {
-	env := setupAuthzTest(t, "secretary")
+// TestProvisioningAddsMemberSelfServiceToAnOfficer is the owner's model: an
+// individual is a member, and some members are also officers. A role adds
+// permissions to one identity rather than defining a separate kind of login, so
+// an officer's address must not need a second mailbox to get member
+// self-service.
+func TestProvisioningAddsMemberSelfServiceToAnOfficer(t *testing.T) {
+	env := setupAuthzTest(t, "treasurer")
 	cookie := env.signIn(t)
 
-	// user 1 is the signed-in secretary.
+	// user 1 is the signed-in treasurer.
+	var officerEmail string
+	require.NoError(t, env.db.QueryRow(`SELECT email FROM users WHERE id = 1`).Scan(&officerEmail))
+	var passwordBefore any
+	require.NoError(t, env.db.QueryRow(`SELECT password_hash FROM users WHERE id = 1`).Scan(&passwordBefore))
+	require.NotNil(t, passwordBefore, "the officer signs in with a password")
+
+	resp := provision(t, env, cookie, officerEmail)
+	require.Equal(t, http.StatusOK, resp.StatusCode, readAll(t, resp))
+	acct := decodeAccount(t, resp)
+
+	assert.False(t, acct.Created, "the officer's existing identity is reused")
+	assert.Equal(t, int64(1), acct.UserID, "one person is one identity")
+
+	rows, err := env.db.Query(
+		`SELECT role_code FROM user_role_grants WHERE user_id = 1 AND revoked_at IS NULL ORDER BY role_code`)
+	require.NoError(t, err)
+	defer rows.Close()
+	var roles []string
+	for rows.Next() {
+		var r string
+		require.NoError(t, rows.Scan(&r))
+		roles = append(roles, r)
+	}
+	assert.Equal(t, []string{"member", "treasurer"}, roles,
+		"the member role is added; the treasurer role is not removed")
+
+	var passwordAfter any
+	require.NoError(t, env.db.QueryRow(`SELECT password_hash FROM users WHERE id = 1`).Scan(&passwordAfter))
+	assert.Equal(t, passwordBefore, passwordAfter,
+		"provisioning must never touch an existing password")
+}
+
+// TestProvisioningAnOfficerTwiceIsIdempotent proves reuse does not stack roles.
+func TestProvisioningAnOfficerTwiceIsIdempotent(t *testing.T) {
+	env := setupAuthzTest(t, "treasurer")
+	cookie := env.signIn(t)
+
 	var officerEmail string
 	require.NoError(t, env.db.QueryRow(`SELECT email FROM users WHERE id = 1`).Scan(&officerEmail))
 
-	resp := provision(t, env, cookie, officerEmail)
-	assert.Equal(t, http.StatusConflict, resp.StatusCode,
-		"provisioning must not touch an officer account")
+	require.Equal(t, http.StatusOK, provision(t, env, cookie, officerEmail).StatusCode)
+	require.Equal(t, http.StatusOK, provision(t, env, cookie, officerEmail).StatusCode)
 
-	var roles int
+	var memberGrants int
 	require.NoError(t, env.db.QueryRow(
-		`SELECT count(*) FROM user_role_grants WHERE user_id = 1 AND role_code = 'member'`).Scan(&roles))
-	assert.Zero(t, roles, "the officer must not have gained the member role")
+		`SELECT count(*) FROM user_role_grants WHERE user_id = 1 AND role_code = 'member'`).Scan(&memberGrants))
+	assert.Equal(t, 1, memberGrants, "provisioning twice must not stack the member role")
 }
 
 // TestContactEmailAloneCreatesNoAccess is ADR-0010's central rule, asserted
