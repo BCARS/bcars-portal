@@ -22,15 +22,12 @@ SELECT count(*)
    AND m.ended_on IS NULL
 `
 
-// The member directory (bcars-portal-4ux.7).
+// The member directory (bcars-portal-4ux.7, extended by 4ux.14).
 //
 // Contact values are filtered HERE, in SQL, not in a service or a template. A
 // value the caller may not see is never selected, so it cannot be leaked by a
 // DTO field someone forgets to strip, a template that renders the wrong
-// variable, or a debug log. The Phase 2 audit found a treasury page reachable
-// only because nothing consumed the link it stored; the same class of mistake
-// with a hidden phone number would be a privacy breach rather than an
-// inconvenience.
+// variable, or a debug log.
 //
 // Keep every comment in this file ASCII: sqlc substitutes sqlc.arg() by byte
 // offset, so a multi-byte character above a query corrupts the SQL it parses.
@@ -56,83 +53,160 @@ SELECT count(*)
  WHERE m.lifecycle = 'approved'
    AND m.ended_on IS NULL
    AND m.base_type IN ('full', 'associate')
+   AND (?1 IS NULL OR m.base_type = ?1)
    AND p.deactivated_at IS NULL
    AND p.deceased_at IS NULL
-   AND (?1 IS NULL
-        OR p.display_name LIKE '%' || ?1 || '%'
-        OR p.call_sign LIKE '%' || ?1 || '%')
+   AND (?2 IS NULL
+        OR p.display_name LIKE '%' || ?2 || '%'
+        OR p.call_sign LIKE '%' || ?2 || '%')
 `
 
-// The same population as ListDirectoryEntries, for pagination. It deliberately
-// shares the eligibility predicate and NOT the contact filtering, because a
-// total must not depend on what the caller may see.
-func (q *Queries) CountDirectoryEntries(ctx context.Context, search interface{}) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countDirectoryEntries, search)
+type CountDirectoryEntriesParams struct {
+	BaseType interface{}
+	Search   interface{}
+}
+
+// The same population as ListDirectoryEntries, for pagination. It shares the
+// membership filter so a total always matches what is being listed, and does
+// NOT share the contact filtering, because a total must not depend on what the
+// caller may see.
+func (q *Queries) CountDirectoryEntries(ctx context.Context, arg CountDirectoryEntriesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countDirectoryEntries, arg.BaseType, arg.Search)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
+const listDirectoryContacts = `-- name: ListDirectoryContacts :many
+WITH page AS (
+    SELECT p.id AS person_id, p.sort_name AS sort_name, m.base_type AS base_type
+      FROM persons p
+      JOIN memberships m ON m.person_id = p.id
+     WHERE m.lifecycle = 'approved'
+       AND m.ended_on IS NULL
+       AND m.base_type IN ('full', 'associate')
+       AND (?1 IS NULL OR m.base_type = ?1)
+       AND p.deactivated_at IS NULL
+       AND p.deceased_at IS NULL
+       AND (?2 IS NULL
+            OR p.display_name LIKE '%' || ?2 || '%'
+            OR p.call_sign LIKE '%' || ?2 || '%')
+     ORDER BY p.sort_name, p.id
+     LIMIT ?4 OFFSET ?3
+)
+SELECT page.person_id AS person_id,
+       cm.kind        AS kind,
+       cm.value_raw   AS value,
+       cm.label       AS label,
+       cm.is_primary  AS is_primary
+  FROM page
+  JOIN contact_methods cm ON cm.person_id = page.person_id
+ WHERE cm.archived_at IS NULL
+   AND cm.kind IN ('email', 'phone')
+   AND CASE
+         WHEN (SELECT ev.audience
+                 FROM contact_method_visibility_events ev
+                WHERE ev.contact_method_id = cm.id
+                ORDER BY ev.effective_at DESC, ev.id DESC
+                LIMIT 1) IS NULL
+         THEN page.base_type = 'full'
+         ELSE (SELECT ev.audience
+                 FROM contact_method_visibility_events ev
+                WHERE ev.contact_method_id = cm.id
+                ORDER BY ev.effective_at DESC, ev.id DESC
+                LIMIT 1) = 'full_members'
+       END
+ ORDER BY page.sort_name, page.person_id, cm.kind, cm.is_primary DESC, cm.id
+`
+
+type ListDirectoryContactsParams struct {
+	BaseType   interface{}
+	Search     interface{}
+	PageOffset int64
+	PageLimit  int64
+}
+
+type ListDirectoryContactsRow struct {
+	PersonID  int64
+	Kind      string
+	Value     string
+	Label     sql.NullString
+	IsPrimary int64
+}
+
+// EVERY shared contact for the members on one page.
+//
+// A member may share more than one number, and both can matter: a member whose
+// mobile has no signal at home needs the landline listed too. Returning one
+// contact per kind silently dropped the rest (bcars-portal-4ux.14).
+//
+// The page CTE repeats the listing's population, filter, ordering, and bounds,
+// so this returns contacts for exactly the members on that page and no others.
+// That is why there is no per-member query and no N+1.
+//
+// A contact survives only when the latest visibility decision for it permits
+// full_members. With no decision on file it falls back to the Phase 1 domain
+// default: a Full member's contact is shareable with Full members, an
+// Associate's is not. An imported import_default event is a recorded decision
+// like any other, so it keeps its result until an officer supersedes it.
+//
+// Primary first, then by id, so a member's main number leads.
+func (q *Queries) ListDirectoryContacts(ctx context.Context, arg ListDirectoryContactsParams) ([]ListDirectoryContactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDirectoryContacts,
+		arg.BaseType,
+		arg.Search,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDirectoryContactsRow{}
+	for rows.Next() {
+		var i ListDirectoryContactsRow
+		if err := rows.Scan(
+			&i.PersonID,
+			&i.Kind,
+			&i.Value,
+			&i.Label,
+			&i.IsPrimary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDirectoryEntries = `-- name: ListDirectoryEntries :many
-SELECT p.id                                     AS person_id,
-       p.display_name                           AS display_name,
-       p.call_sign                              AS call_sign,
-       m.base_type                              AS base_type,
-       CAST(COALESCE((SELECT cm.value_raw
-          FROM contact_methods cm
-         WHERE cm.person_id = p.id
-           AND cm.kind = 'email'
-           AND cm.archived_at IS NULL
-           AND CASE
-                 WHEN (SELECT ev.audience
-                         FROM contact_method_visibility_events ev
-                        WHERE ev.contact_method_id = cm.id
-                        ORDER BY ev.effective_at DESC, ev.id DESC
-                        LIMIT 1) IS NULL
-                 THEN m.base_type = 'full'
-                 ELSE (SELECT ev.audience
-                         FROM contact_method_visibility_events ev
-                        WHERE ev.contact_method_id = cm.id
-                        ORDER BY ev.effective_at DESC, ev.id DESC
-                        LIMIT 1) = 'full_members'
-               END
-         ORDER BY cm.is_primary DESC, cm.id
-         LIMIT 1), '') AS TEXT)                 AS email,
-       CAST(COALESCE((SELECT cm.value_raw
-          FROM contact_methods cm
-         WHERE cm.person_id = p.id
-           AND cm.kind = 'phone'
-           AND cm.archived_at IS NULL
-           AND CASE
-                 WHEN (SELECT ev.audience
-                         FROM contact_method_visibility_events ev
-                        WHERE ev.contact_method_id = cm.id
-                        ORDER BY ev.effective_at DESC, ev.id DESC
-                        LIMIT 1) IS NULL
-                 THEN m.base_type = 'full'
-                 ELSE (SELECT ev.audience
-                         FROM contact_method_visibility_events ev
-                        WHERE ev.contact_method_id = cm.id
-                        ORDER BY ev.effective_at DESC, ev.id DESC
-                        LIMIT 1) = 'full_members'
-               END
-         ORDER BY cm.is_primary DESC, cm.id
-         LIMIT 1), '') AS TEXT)                 AS phone
+SELECT p.id           AS person_id,
+       p.display_name AS display_name,
+       p.call_sign    AS call_sign,
+       m.base_type    AS base_type
   FROM persons p
   JOIN memberships m ON m.person_id = p.id
  WHERE m.lifecycle = 'approved'
    AND m.ended_on IS NULL
    AND m.base_type IN ('full', 'associate')
+   AND (?1 IS NULL OR m.base_type = ?1)
    AND p.deactivated_at IS NULL
    AND p.deceased_at IS NULL
-   AND (?1 IS NULL
-        OR p.display_name LIKE '%' || ?1 || '%'
-        OR p.call_sign LIKE '%' || ?1 || '%')
+   AND (?2 IS NULL
+        OR p.display_name LIKE '%' || ?2 || '%'
+        OR p.call_sign LIKE '%' || ?2 || '%')
  ORDER BY p.sort_name, p.id
- LIMIT ?3 OFFSET ?2
+ LIMIT ?4 OFFSET ?3
 `
 
 type ListDirectoryEntriesParams struct {
+	BaseType   interface{}
 	Search     interface{}
 	PageOffset int64
 	PageLimit  int64
@@ -143,29 +217,22 @@ type ListDirectoryEntriesRow struct {
 	DisplayName string
 	CallSign    sql.NullString
 	BaseType    string
-	Email       string
-	Phone       string
 }
 
-// Rows are active approved Full and Associate members.
+// Rows are active approved members, optionally narrowed to one membership type.
+// Contact values are NOT here; see ListDirectoryContacts, which returns every
+// shared contact rather than one per kind.
 //
-// An email or phone survives only when the latest visibility decision for that
-// contact permits full_members. With no decision on file the row falls back to
-// the Phase 1 domain default: a Full member's contact is shareable with Full
-// members, an Associate's is not. An imported `import_default` event is a
-// recorded decision like any other, so it keeps its result until an officer
-// supersedes it.
-//
-// A withheld value and an absent one both come back as the empty string. That
-// is deliberate: one representation means a caller cannot distinguish "this
-// member hid their number" from "this member has no number on file", which is
-// exactly the non-disclosure the design asks for.
-//
-// Ordering is by sort_name then person id. The id tie-breaker is what keeps a
-// page boundary from shifting between calls when two members sort equally, so
-// paging cannot silently skip someone.
+// Ordering is by sort_name then person id. The id tie-breaker keeps a page
+// boundary from shifting between calls when two members sort equally, so paging
+// cannot silently skip someone.
 func (q *Queries) ListDirectoryEntries(ctx context.Context, arg ListDirectoryEntriesParams) ([]ListDirectoryEntriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listDirectoryEntries, arg.Search, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.QueryContext(ctx, listDirectoryEntries,
+		arg.BaseType,
+		arg.Search,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -178,8 +245,6 @@ func (q *Queries) ListDirectoryEntries(ctx context.Context, arg ListDirectoryEnt
 			&i.DisplayName,
 			&i.CallSign,
 			&i.BaseType,
-			&i.Email,
-			&i.Phone,
 		); err != nil {
 			return nil, err
 		}

@@ -28,22 +28,35 @@ type DirectoryEntry struct {
 	CallSign    string `json:"call_sign,omitempty"`
 	BaseType    string `json:"base_type" enum:"full,associate"`
 
-	Email string `json:"email,omitempty" doc:"Present only when this member shares it with Full members."`
-	Phone string `json:"phone,omitempty" doc:"Present only when this member shares it with Full members."`
+	// Emails and Phones carry EVERY value this member shares. A member may
+	// share more than one number and both can matter: a mobile with no signal
+	// at home is not a substitute for the landline.
+	Emails []DirectoryContact `json:"emails"`
+	Phones []DirectoryContact `json:"phones"`
 
 	// EmailShared and PhoneShared let a UI render "Not shared" without
-	// inferring anything from an empty string. Both are false for a withheld
+	// inferring anything from an empty list. Both are false for a withheld
 	// value AND for one that was never recorded, which is the point: the two
 	// are indistinguishable to a caller.
 	EmailShared bool `json:"email_shared"`
 	PhoneShared bool `json:"phone_shared"`
 }
 
+// DirectoryContact is one shared contact value.
+type DirectoryContact struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty" doc:"Distinguishes a member's numbers, e.g. home or mobile."`
+	// Primary marks the member's main contact of that kind. Primary values are
+	// listed first.
+	Primary bool `json:"primary"`
+}
+
 type DirectoryListInput struct {
-	Search string `query:"search" maxLength:"100" doc:"Matches display name or call sign."`
-	Limit  int64  `query:"limit" minimum:"1" maximum:"1000" doc:"Defaults to 50, or the whole roster when print=true."`
-	Offset int64  `query:"offset" minimum:"0"`
-	Print  bool   `query:"print" doc:"Raise the page bound so a club-sized roster prints as one sheet. The same filtering applies."`
+	Search   string `query:"search" maxLength:"100" doc:"Matches display name or call sign."`
+	BaseType string `query:"base_type" enum:"full,associate" doc:"Narrow to one membership type. Omit for both."`
+	Limit    int64  `query:"limit" minimum:"1" maximum:"1000" doc:"Defaults to 50, or the whole roster when print=true."`
+	Offset   int64  `query:"offset" minimum:"0"`
+	Print    bool   `query:"print" doc:"Raise the page bound so a club-sized roster prints as one sheet. The same filtering applies."`
 }
 
 type DirectoryListBody struct {
@@ -87,11 +100,16 @@ func RegisterDirectory(api huma.API, deps Deps) {
 			return nil, err
 		}
 
+		if !directory.ValidFilter(input.BaseType) {
+			return nil, huma.Error422UnprocessableEntity("base_type must be full or associate")
+		}
+
 		page, err := svc.List(ctx, principal, directory.Query{
-			Search: input.Search,
-			Limit:  input.Limit,
-			Offset: input.Offset,
-			Print:  input.Print,
+			Search:   input.Search,
+			BaseType: input.BaseType,
+			Limit:    input.Limit,
+			Offset:   input.Offset,
+			Print:    input.Print,
 		})
 		if err != nil {
 			return nil, mapDirectoryError(err)
@@ -104,8 +122,8 @@ func RegisterDirectory(api huma.API, deps Deps) {
 				DisplayName: e.DisplayName,
 				CallSign:    e.CallSign,
 				BaseType:    e.BaseType,
-				Email:       e.Email,
-				Phone:       e.Phone,
+				Emails:      toDirectoryContacts(e.Emails),
+				Phones:      toDirectoryContacts(e.Phones),
 				EmailShared: e.EmailShared(),
 				PhoneShared: e.PhoneShared(),
 			})
@@ -118,6 +136,16 @@ func RegisterDirectory(api huma.API, deps Deps) {
 			Offset:  page.Offset,
 		}}, nil
 	})
+}
+
+// toDirectoryContacts maps shared contacts, never returning nil so a client
+// always sees a list rather than a null it has to special-case.
+func toDirectoryContacts(in []directory.Contact) []DirectoryContact {
+	out := make([]DirectoryContact, 0, len(in))
+	for _, c := range in {
+		out = append(out, DirectoryContact{Value: c.Value, Label: c.Label, Primary: c.Primary})
+	}
+	return out
 }
 
 // mapDirectoryError translates domain errors to HTTP.
