@@ -1,10 +1,11 @@
 // Package ratelimit bounds how often an unauthenticated operation may be
 // invoked, per caller source and per target, over a rolling window.
 //
-// It is deliberately generic. Password recovery (bcars-portal-fmc.20) is the
-// first consumer; passwordless member sign-in and blind public correction
-// intake reuse the same mechanism and the same uniform behaviour rather than
-// growing parallel limiters with their own subtly different rules.
+// It is deliberately generic. Password recovery (bcars-portal-fmc.20) is its
+// consumer, and it bounds initial member password setup for free because that
+// is the same flow (ADR-0012). Any future unauthenticated operation reuses this
+// mechanism and its uniform behaviour rather than growing a parallel limiter
+// with its own subtly different rules.
 //
 // # THE ENUMERATION RULE
 //

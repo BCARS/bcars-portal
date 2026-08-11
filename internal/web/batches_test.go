@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -264,8 +265,14 @@ func TestCorrectionDialogSpeaksPlainly(t *testing.T) {
 
 	// No ledger vocabulary in the prose an officer reads. "idempotency_key" is
 	// deliberately not checked: it is a hidden field name, never displayed.
+	//
+	// The scan runs over the visible prose rather than the whole document. The
+	// dialog carries a hidden idempotency key built from the clock, so scanning
+	// the raw HTML for "412" failed on every run whose nanosecond timestamp
+	// happened to contain those digits (bcars-portal-1hl).
+	prose := visibleProse(body)
 	for _, jargon := range []string{"supersed", "entry_kind", "coverage_event", "ETag", "412"} {
-		assert.NotContains(t, body, jargon, "the dialog avoids %q", jargon)
+		assert.NotContains(t, prose, jargon, "the dialog avoids %q", jargon)
 	}
 
 	t.Run("a missing reason is refused with a plain message", func(t *testing.T) {
@@ -370,4 +377,26 @@ func indexOf(haystack, needle string) int {
 		}
 	}
 	return 1 << 30
+}
+
+// visibleProse strips tags from rendered HTML so a wording assertion reads what
+// an officer reads. Attribute values -- hidden field contents above all -- are
+// not prose, and matching against them makes a copy test fail for reasons that
+// have nothing to do with copy.
+func visibleProse(html string) string {
+	var out strings.Builder
+	depth := 0
+	for _, r := range html {
+		switch {
+		case r == '<':
+			depth++
+		case r == '>':
+			if depth > 0 {
+				depth--
+			}
+		case depth == 0:
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
 }

@@ -4535,12 +4535,12 @@
             "type": "string"
           },
           "email": {
-            "description": "Officer email address.",
+            "description": "Account email address. Members and officers use the same sign-in.",
             "format": "email",
             "type": "string"
           },
           "password": {
-            "description": "Officer password.",
+            "description": "Account password.",
             "minLength": 1,
             "type": "string"
           }
@@ -7250,7 +7250,7 @@
     },
     "/member-accounts": {
       "post": {
-        "description": "Stores no password and assigns only the member role. An existing account for the same normalized address is reused, which is how a shared household mailbox reaches several records.",
+        "description": "Assigns only the member role and never chooses a password: a new account has none until its member sets one through password recovery, and an existing account keeps the password and roles it already had. An existing account for the same normalized address is reused, which is how a shared household mailbox reaches several records.",
         "operationId": "member-account-provision",
         "requestBody": {
           "content": {
@@ -7284,7 +7284,7 @@
             "description": "Error"
           }
         },
-        "summary": "Create or reuse a passwordless member account",
+        "summary": "Create or reuse a member account",
         "tags": [
           "member-access"
         ]

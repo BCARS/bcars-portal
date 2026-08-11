@@ -16,8 +16,8 @@ import (
 // --- Session / auth types ---
 
 type signInBody struct {
-	Email    string `json:"email" format:"email" doc:"Officer email address."`
-	Password string `json:"password" minLength:"1" doc:"Officer password."`
+	Email    string `json:"email" format:"email" doc:"Account email address. Members and officers use the same sign-in."`
+	Password string `json:"password" minLength:"1" doc:"Account password."`
 }
 
 type sessionInfo struct {

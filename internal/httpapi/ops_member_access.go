@@ -13,7 +13,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
 )
 
-// Officer provisioning of passwordless member accounts and record access
+// Officer provisioning of optional member accounts and record access
 // (bcars-portal-4ux.4).
 //
 // Every operation here is an officer deciding, explicitly, that one account may
@@ -120,10 +120,11 @@ func RegisterMemberAccess(api huma.API, deps Deps) {
 		OperationID: "member-account-provision",
 		Method:      http.MethodPost,
 		Path:        "/member-accounts",
-		Summary:     "Create or reuse a passwordless member account",
-		Description: "Stores no password and assigns only the member role. An existing account " +
-			"for the same normalized address is reused, which is how a shared household mailbox " +
-			"reaches several records.",
+		Summary:     "Create or reuse a member account",
+		Description: "Assigns only the member role and never chooses a password: a new account has none " +
+			"until its member sets one through password recovery, and an existing account keeps the " +
+			"password and roles it already had. An existing account for the same normalized address " +
+			"is reused, which is how a shared household mailbox reaches several records.",
 		Tags: []string{"member-access"},
 	}, OperationMeta{
 		RequiredCapability: "member_access.manage",

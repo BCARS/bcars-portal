@@ -1,5 +1,5 @@
-// Package memberaccess provisions optional passwordless member accounts and
-// the explicit grants that let one see a person record (bcars-portal-4ux.4).
+// Package memberaccess provisions optional member accounts and the explicit
+// grants that let one see a person record (bcars-portal-4ux.4).
 //
 // The rule this package exists to enforce is ADR-0010's: a contact method is
 // not login authority, and a family relationship is not access. An officer
@@ -10,8 +10,8 @@
 // One account may hold several grants, which is how a shared household mailbox
 // reaches more than one record. That is why provisioning REUSES an existing
 // account for a known address rather than creating a rival one: two accounts
-// for one mailbox would mean two sign-in links and a member seeing half their
-// household depending on which they clicked.
+// for one mailbox would mean two passwords for one mailbox and a member seeing
+// half their household depending on which they signed in with.
 package memberaccess
 
 import (
@@ -107,18 +107,22 @@ type ProvisionParams struct {
 
 // Provision creates or reuses an account and gives it member self-service.
 //
-// A NEW account stores no password: it exists to receive a sign-in link, and a
-// member who never uses one simply has an account that does nothing.
+// A NEW account stores no password, because an officer must not choose a
+// credential for someone else. The member sets the first password through the
+// same enumeration-safe recovery flow officers use (ADR-0012), and a member who
+// never does simply has an account nobody can sign into: authn.SignIn refuses a
+// NULL password_hash with the ordinary invalid-credentials error.
 //
 // An EXISTING account is reused as-is. One person is one identity: an officer
 // who is also a member holds both roles on one account, because a role adds
 // permissions rather than defining a separate kind of login. Provisioning never
 // sets, clears, or reads a password, and never removes a role.
 //
-// SECURITY NOTE FOR PASSWORDLESS SIGN-IN (bcars-portal-4ux.5): once an officer
-// holds the member role, an email sign-in link reaches an identity that also
-// carries officer capabilities. Whether such a session may exercise them is a
-// decision that belongs to sign-in, not here; see bcars-portal-4ux.15.
+// There is no separate member authentication to reason about. ADR-0012 settled
+// that every identity signs in with one email and password, so provisioning an
+// officer's address adds member self-service to the credential they already
+// have. A session carries whatever capabilities that identity's roles confer,
+// and the member role adds only self-service ones.
 func (s *Service) Provision(ctx context.Context, p *authz.Principal, params ProvisionParams, now time.Time) (Account, error) {
 	email := NormalizeEmail(params.Email)
 	if email == "" {
@@ -183,7 +187,7 @@ func (s *Service) Provision(ctx context.Context, p *authz.Principal, params Prov
 				RoleCode:  MemberRole,
 				GrantedBy: actorID,
 				GrantedAt: now.UTC().Format(isoTimestamp),
-				Reason:    nullString("Passwordless member account provisioned by an officer."),
+				Reason:    nullString("Member self-service provisioned by an officer."),
 			}); err != nil {
 				return err
 			}
@@ -337,6 +341,34 @@ func (s *Service) ListGrants(ctx context.Context, p *authz.Principal, userID int
 		return nil, err
 	}
 	return s.loadGrants(ctx, s.Q, userID)
+}
+
+// ListOwnActiveGrants returns the records the CALLER may currently reach.
+//
+// It takes no user ID. ListGrants does, because an officer legitimately asks
+// about somebody else's account; a member-facing surface that accepted one
+// would be a lookup of anyone's access away from a path parameter typo. Here
+// the subject is the principal, so there is no identifier to tamper with.
+//
+// Revoked grants are filtered out rather than returned with a flag, and the
+// read runs on every call rather than being cached on the session. That is what
+// makes revocation take effect inside an existing session: the officer revokes,
+// and the member's next page load no longer lists the record.
+func (s *Service) ListOwnActiveGrants(ctx context.Context, p *authz.Principal) ([]Grant, error) {
+	if p == nil || p.UserID == 0 {
+		return nil, ErrUnknownUser
+	}
+	all, err := s.loadGrants(ctx, s.Q, p.UserID)
+	if err != nil {
+		return nil, err
+	}
+	active := make([]Grant, 0, len(all))
+	for _, g := range all {
+		if g.Active() {
+			active = append(active, g)
+		}
+	}
+	return active, nil
 }
 
 // ListGrantsForPerson returns every account that can reach one record.

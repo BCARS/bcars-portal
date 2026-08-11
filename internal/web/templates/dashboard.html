@@ -6,6 +6,7 @@
 <h2 style="margin: 0 0 24px; font-size: 1.25rem; font-weight: 600;">Dashboard</h2>
 
 <div class="stats">
+    {{if .Nav.Members}}
     <div class="stat-card">
         <div class="label">Total Members</div>
         <div class="value">{{.TotalPersons}}</div>
@@ -18,10 +19,13 @@
         <div class="label">Pending Approval</div>
         <div class="value">{{.PendingApprovals}}</div>
     </div>
+    {{end}}
+    {{if .Nav.Imports}}
     <div class="stat-card">
         <div class="label">Import Runs</div>
         <div class="value">{{.ImportRuns}}</div>
     </div>
+    {{end}}
 </div>
 
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -64,6 +68,7 @@
     </div>
     {{end}}
 
+    {{if .Nav.Audit}}
     <div class="card">
         <h2>Recent Activity</h2>
         {{if .RecentAudit}}
@@ -82,5 +87,6 @@
         <div class="empty-state"><p>No recent activity.</p></div>
         {{end}}
     </div>
+    {{end}}
 </div>
 {{end}}

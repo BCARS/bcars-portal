@@ -20,6 +20,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/batches"
 	"github.com/bcars/bcars-portal/internal/domain/dues"
 	"github.com/bcars/bcars-portal/internal/domain/importd"
+	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
 	"github.com/bcars/bcars-portal/internal/domain/members"
 	"github.com/bcars/bcars-portal/internal/domain/treasury"
 	"github.com/bcars/bcars-portal/internal/domain/worksheets"
@@ -36,13 +37,18 @@ type Handler struct {
 	batches    *batches.Service
 	treasury   *treasury.Service
 	worksheets *worksheets.Service
-	queries    *sqlcgen.Queries
-	db         *sql.DB
-	log        *slog.Logger
-	auth       *authn.AuthService
-	sess       *authn.SessionStore
-	emailLinks *authn.EmailLinkService
-	audit      audit.Recorder
+	// memberAccess answers what records the signed-in member may reach. The
+	// member landing reads it on every request rather than trusting anything
+	// stored on the session, so a revoked grant disappears from an existing
+	// session (ADR-0010).
+	memberAccess *memberaccess.Service
+	queries      *sqlcgen.Queries
+	db           *sql.DB
+	log          *slog.Logger
+	auth         *authn.AuthService
+	sess         *authn.SessionStore
+	emailLinks   *authn.EmailLinkService
+	audit        audit.Recorder
 
 	// cookies is the shared source of session-cookie attributes, so login,
 	// logout and the recovery/invitation flows cannot disagree about them.
@@ -62,11 +68,19 @@ type Handler struct {
 // mailerForTest exposes the sender a test injected.
 func (h *Handler) mailerForTest() *mail.FilelogSender { return h.testMailer }
 
-// Routes the emailed links point at. They are exported so the assembly can
-// configure authn.EmailLinkConfig from the same constants RegisterRoutes uses,
-// rather than the link generator hardcoding a path the router never served.
+// The paths this package serves by name: the routes emailed links point at,
+// and the landings a new session is sent to. They are exported so the assembly
+// can configure authn.EmailLinkConfig from the same constants RegisterRoutes
+// uses, rather than the link generator hardcoding a path the router never
+// served.
 const (
-	RouteLogin             = "/login"
+	RouteLogin = "/login"
+	// RouteMemberHome is where a signed-in member lands. It exists because the
+	// admin dashboard is not a member-safe destination: the member role holds
+	// session.self.read, so before this route a provisioned member who signed
+	// in was sent to /admin/ and shown club-wide counts and the last ten audit
+	// events.
+	RouteMemberHome        = "/member/"
 	RouteForgotPassword    = "/forgot-password"
 	RouteResetPassword     = "/reset-password"
 	RouteInvitationConsume = "/auth/invitations/consume"
@@ -158,22 +172,23 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 	})
 
 	return &Handler{
-		render:     r,
-		members:    members.NewService(database),
-		dues:       dues.NewService(database),
-		batches:    batches.NewService(database),
-		treasury:   treasury.NewService(database),
-		worksheets: worksheets.NewService(database),
-		imports:    importd.NewService(database),
-		queries:    sqlcgen.New(database),
-		db:         database,
-		log:        logger,
-		auth:       authSvc,
-		sess:       sessStore,
-		emailLinks: emailLinks,
-		audit:      audit.NewSQLRecorder(database, logger),
-		cookies:    cookies,
-		clientIP:   clientip.NewHasher(cfg.ClientIP),
+		render:       r,
+		members:      members.NewService(database),
+		dues:         dues.NewService(database),
+		batches:      batches.NewService(database),
+		treasury:     treasury.NewService(database),
+		worksheets:   worksheets.NewService(database),
+		memberAccess: memberaccess.NewService(database),
+		imports:      importd.NewService(database),
+		queries:      sqlcgen.New(database),
+		db:           database,
+		log:          logger,
+		auth:         authSvc,
+		sess:         sessStore,
+		emailLinks:   emailLinks,
+		audit:        audit.NewSQLRecorder(database, logger),
+		cookies:      cookies,
+		clientIP:     clientip.NewHasher(cfg.ClientIP),
 	}, nil
 }
 
@@ -190,18 +205,19 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET "+RouteInvitationConsume, h.logged(h.invitationPage))
 	mux.Handle("POST "+RouteInvitationConsume, h.logged(h.invitationSubmit))
 
-	// Admin routes — each declares the capability it requires and, for
-	// mutations, the audit action it emits. AdminRoutes is the single source
-	// of truth; there is no way to register an admin route without stating a
-	// capability, which is what kept requireAuth-only routes from being
-	// noticed.
-	for _, rt := range h.AdminRoutes() {
+	// Guarded routes — each declares the capability it requires and, for
+	// mutations, the audit action it emits. GuardedRoutes is the single source
+	// of truth; there is no way to register one without stating a capability,
+	// which is what kept requireAuth-only routes from being noticed.
+	for _, rt := range h.GuardedRoutes() {
 		mux.Handle(rt.Pattern, h.requireCap(rt))
 	}
 }
 
-// AdminRoute binds an admin UI route to the capability it requires.
-type AdminRoute struct {
+// GuardedRoute binds a server-rendered route to the capability it requires.
+// The same type covers the officer surface under /admin/ and the member surface
+// under /member/, so neither can be registered without stating a capability.
+type GuardedRoute struct {
 	// Pattern is the net/http ServeMux pattern, including method.
 	Pattern string
 	// Capability is the authz capability code the caller must hold.
@@ -218,8 +234,8 @@ type AdminRoute struct {
 // AdminRoutes returns every admin UI route with its capability requirement.
 // Exported so tests can assert coverage across the whole table rather than
 // route by route.
-func (h *Handler) AdminRoutes() []AdminRoute {
-	return []AdminRoute{
+func (h *Handler) AdminRoutes() []GuardedRoute {
+	return []GuardedRoute{
 		{Pattern: "GET /admin/", Capability: "session.self.read", ResourceKind: "dashboard", handler: h.dashboard},
 
 		{Pattern: "GET /admin/treasury", Capability: "dues.read", ResourceKind: "dues", handler: h.treasuryHome},
@@ -271,6 +287,25 @@ func (h *Handler) AdminRoutes() []AdminRoute {
 	}
 }
 
+// MemberRoutes returns every member self-service route with its capability
+// requirement.
+//
+// It is a separate table from AdminRoutes so the two cannot be confused: an
+// officer capability must never appear here, and a route added here reaches a
+// caller holding only the member role. profile.self.read is the member role's
+// own capability, and the landing narrows further than that — it lists only
+// the records this caller has an active grant to.
+func (h *Handler) MemberRoutes() []GuardedRoute {
+	return []GuardedRoute{
+		{Pattern: "GET " + RouteMemberHome, Capability: "profile.self.read", ResourceKind: "member_access_grant", handler: h.memberHome},
+	}
+}
+
+// GuardedRoutes returns every capability-guarded server-rendered route.
+func (h *Handler) GuardedRoutes() []GuardedRoute {
+	return append(h.AdminRoutes(), h.MemberRoutes()...)
+}
+
 // logged wraps an http.HandlerFunc with request/response logging.
 func (h *Handler) logged(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -282,6 +317,26 @@ func (h *Handler) logged(next http.HandlerFunc) http.Handler {
 	})
 }
 
+// principalForSession resolves a principal from a session that was just
+// created, before the browser has sent the cookie back. Sign-in, invitation
+// acceptance and recovery all need the caller's capabilities to choose a
+// landing, and re-reading the cookie they are about to set would find nothing.
+//
+// A nil result means "no capabilities", which landingFor treats as the officer
+// default: exactly what a role-less account got before this existed.
+func (h *Handler) principalForSession(sessionID string) *authz.Principal {
+	sess, err := h.sess.Get(sessionID)
+	if err != nil {
+		return nil
+	}
+	caps, err := (&authn.SQLCapabilityLoader{DB: h.db}).EffectiveCapabilities(sess.UserID)
+	if err != nil {
+		h.log.Error("load capabilities failed", slog.Int64("user_id", sess.UserID), slog.String("error", err.Error()))
+		return nil
+	}
+	return &authz.Principal{UserID: sess.UserID, Capabilities: caps}
+}
+
 // principalCtxKey keys the resolved principal in the request context.
 type principalCtxKey struct{}
 
@@ -291,7 +346,7 @@ type principalCtxKey struct{}
 //
 // The resolved principal is placed in the request context so handlers reuse it
 // instead of re-running the session and capability queries.
-func (h *Handler) requireCap(rt AdminRoute) http.Handler {
+func (h *Handler) requireCap(rt GuardedRoute) http.Handler {
 	return h.logged(func(w http.ResponseWriter, r *http.Request) {
 		p := h.principalFromRequest(r)
 		if p == nil {
@@ -358,7 +413,7 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 }
 
 // recordDenial audits a rejected admin request.
-func (h *Handler) recordDenial(r *http.Request, rt AdminRoute, userID int64, reason string) {
+func (h *Handler) recordDenial(r *http.Request, rt GuardedRoute, userID int64, reason string) {
 	action := rt.AuditAction
 	if action == "" {
 		action = "authz.denied.web"
@@ -384,7 +439,7 @@ func pathID(r *http.Request) int64 {
 }
 
 // detailJSON records non-PII request context on an audit event.
-func detailJSON(r *http.Request, rt AdminRoute) string {
+func detailJSON(r *http.Request, rt GuardedRoute) string {
 	return fmt.Sprintf(`{"method":%q,"path":%q,"required_capability":%q,"surface":"web"}`,
 		r.Method, r.URL.Path, rt.Capability)
 }
@@ -462,7 +517,7 @@ func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	h.setSessionCookie(w, sessionID)
 
 	h.log.Info("login succeeded", slog.String("email", email))
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	http.Redirect(w, r, landingFor(h.principalForSession(sessionID)), http.StatusSeeOther)
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
@@ -526,10 +581,41 @@ func (n navLinks) AnyTreasury() bool {
 	return n.Standing || n.Batches || n.Worksheets
 }
 
+// AnyOfficer reports whether the caller can reach any officer surface at all.
+func (n navLinks) AnyOfficer() bool {
+	return n.Members || n.Imports || n.Payments || n.Audit || n.AnyTreasury()
+}
+
+// landingFor picks where a signed-in principal belongs.
+//
+// Every surface that hands out a session goes through here, so sign-in, initial
+// password setup and recovery cannot disagree about it. The member role holds
+// session.self.read, which is enough to open the admin dashboard: sending a
+// member there is not merely an unhelpful landing but a disclosure, since that
+// page reports club-wide counts and recent audit events. A caller who can reach
+// no officer surface and holds member self-service goes to the member landing
+// instead.
+func landingFor(p *authz.Principal) string {
+	if navFor(p).AnyOfficer() {
+		return "/admin/"
+	}
+	if hasCap(p, "profile.self.read") {
+		return RouteMemberHome
+	}
+	return "/admin/"
+}
+
 func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := h.principalFromRequest(r)
 	data := dashboardData{Nav: navFor(p)}
+
+	// A member who can reach no officer surface is sent to their own landing
+	// rather than shown an empty officer dashboard.
+	if dest := landingFor(p); dest != "/admin/" {
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
+	}
 
 	if data.Nav.Standing {
 		// Counted through the domain service so the dashboard cannot disagree
@@ -541,14 +627,72 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM persons WHERE deactivated_at IS NULL`).Scan(&data.TotalPersons)
-	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'approved'`).Scan(&data.ActiveMemberships)
-	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'pending'`).Scan(&data.PendingApprovals)
-	_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM import_runs`).Scan(&data.ImportRuns)
-
-	data.RecentAudit, _ = h.queries.ListAuditEvents(ctx, sqlcgen.ListAuditEventsParams{Limit: 10, Offset: 0})
+	// Each figure is gated by the capability that guards the page it summarises.
+	// The dashboard is reachable with session.self.read alone, so counting
+	// unconditionally published club-wide membership totals and the last ten
+	// audit events to anyone holding a session. A summary is a read, not a
+	// decoration.
+	if data.Nav.Members {
+		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM persons WHERE deactivated_at IS NULL`).Scan(&data.TotalPersons)
+		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'approved'`).Scan(&data.ActiveMemberships)
+		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'pending'`).Scan(&data.PendingApprovals)
+	}
+	if data.Nav.Imports {
+		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM import_runs`).Scan(&data.ImportRuns)
+	}
+	if data.Nav.Audit {
+		data.RecentAudit, _ = h.queries.ListAuditEvents(ctx, sqlcgen.ListAuditEventsParams{Limit: 10, Offset: 0})
+	}
 
 	h.render.RenderHTTP(w, "dashboard.html", http.StatusOK, data)
+}
+
+// --- Member self-service ---
+
+type memberHomeData struct {
+	Email string
+	// Records are the person records this caller may currently reach. An empty
+	// list is a real state, not an error: an account exists before an officer
+	// grants it anything, and a revoked grant leaves it empty again.
+	Records []memberRecordRow
+}
+
+type memberRecordRow struct {
+	DisplayName string
+	AccessKind  string
+}
+
+// memberHome is where a signed-in member lands.
+//
+// It reads the caller's active grants on every request through the domain
+// service. Nothing about which records appear here comes from the session, the
+// URL, or a matching contact address, so revoking a grant removes the record
+// from the very next page load of a session that is already open (ADR-0010).
+//
+// It deliberately shows no profile detail or dues figure yet; the safe profile
+// read model is bcars-portal-4ux.6 and the full member shell is
+// bcars-portal-4ux.11.
+func (h *Handler) memberHome(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := h.principalFromRequest(r)
+
+	data := memberHomeData{}
+	_ = h.db.QueryRowContext(ctx, `SELECT email FROM users WHERE id = ?`, p.UserID).Scan(&data.Email)
+
+	grants, err := h.memberAccess.ListOwnActiveGrants(ctx, p)
+	if err != nil {
+		h.log.Error("member grants", slog.String("error", err.Error()))
+		h.renderError(w, r, http.StatusInternalServerError, "Your records could not be loaded. Please try again.")
+		return
+	}
+	for _, g := range grants {
+		data.Records = append(data.Records, memberRecordRow{
+			DisplayName: g.DisplayName,
+			AccessKind:  g.AccessKind,
+		})
+	}
+
+	h.render.RenderHTTP(w, "member_home.html", http.StatusOK, data)
 }
 
 // --- Members ---
@@ -1190,7 +1334,7 @@ func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 				Action:     "auth.recovery.request",
 				Outcome:    audit.OutcomeDenied,
 				ReasonCode: audit.ReasonRateLimited,
-				DetailJSON: detailJSON(r, AdminRoute{}),
+				DetailJSON: detailJSON(r, GuardedRoute{}),
 			})
 			h.render.RenderHTTP(w, "forgot_password.html", http.StatusTooManyRequests, data{
 				Error: "Too many recovery requests. Please wait a few minutes and try again.",
@@ -1263,7 +1407,7 @@ func (h *Handler) resetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setSessionCookie(w, sessionID)
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	http.Redirect(w, r, landingFor(h.principalForSession(sessionID)), http.StatusSeeOther)
 }
 
 func (h *Handler) invitationPage(w http.ResponseWriter, r *http.Request) {
@@ -1325,7 +1469,7 @@ func (h *Handler) invitationSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setSessionCookie(w, sessionID)
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	http.Redirect(w, r, landingFor(h.principalForSession(sessionID)), http.StatusSeeOther)
 }
 
 type errorPageData struct {
