@@ -1,17 +1,17 @@
-# ADR-0004: Argon2id with pepper for officer passwords
+# ADR-0004: Argon2id with pepper for user passwords
 
-- Status: Accepted
+- Status: Accepted; scope extended to member users 2026-08-10
 - Date: 2026-07-26
 
 ## Context
 
-Officer accounts use password authentication. Password recovery is via
-short-lived email links. Threat model includes offline attack against a
-database backup.
+All accounts use password authentication. Password setup and recovery are via
+short-lived email links. Threat model includes offline attack against a database
+backup.
 
 ## Decision
 
-- Hash officer passwords with `argon2id` from `golang.org/x/crypto/argon2`.
+- Hash user passwords with `argon2id` from `golang.org/x/crypto/argon2`.
 - Store `time`, `memory`, `threads`, salt length in per-hash metadata so
   parameters can be rotated later.
 - Add a per-install pepper (`PORTAL_PASSWORD_PEPPER`, 32 random bytes)

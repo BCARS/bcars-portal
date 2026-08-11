@@ -1,13 +1,15 @@
 # ADR-0010: Member record access is an explicit grant, not an inferred link
 
-- Status: Accepted
+- Status: Accepted; authentication context amended 2026-08-10
 - Date: 2026-08-09
 
 ## Context
 
-Phase 3 (`docs/phase-3-design.md`) gives members an optional passwordless
-account. That immediately raises the question the rest of the phase depends on:
-given an authenticated user, which person records may they see?
+Phase 3 (`docs/phase-3-design.md`) gives members an optional provisioned
+account. Members and officers now use the same password and recovery flow under
+ADR-0012; that authentication choice is independent of the question the rest of
+the phase depends on: given an authenticated user, which person records may they
+see?
 
 Three answers were already available in the schema, and all three are wrong:
 
@@ -78,14 +80,19 @@ do not want them.
 - **Derive access from relationships with an officer opt-out**: default-allow
   in a system whose authorization model is default-deny. It also conflates two
   facts the club states separately: who is related, and who may see what.
-- **Give members a password account like officers**: more credentials to
-  support for a population that signs in a few times a year, and a password
-  reset flow is a link-based flow wearing a hat.
+- **Add passwordless member sign-in links**: this was the original Phase 3 plan,
+  but it made authentication method affect authorization as soon as one identity
+  held both member and officer roles. The owner chose one simpler password and
+  recovery model for everyone rather than session downscoping, refusing links
+  for officer-members, or treating a routine email link as an officer login.
 
 ## Consequences
 
 - A member with no grant sees nothing, and that is the correct default. Officer
   provisioning (`bcars-portal-4ux.4`) is a required step, not a convenience.
+- Provisioning does not choose a password. A new member uses the existing
+  recovery flow to set one, then signs in through the same password/session
+  path as an officer. This changes no access-grant rule in this ADR.
 - Anything that needs "which records may this user see" must call the access
   queries. A future join back to `users.person_id` would reintroduce exactly the
   authority this ADR removes; `TestOnlyAnActiveGrantConfersAccess` fails if it

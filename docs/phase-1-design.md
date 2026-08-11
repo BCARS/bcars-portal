@@ -32,7 +32,7 @@ ADRs to write in Workstream 1 (one page each):
 - ADR-0001 SQLite for Phase 1.
 - ADR-0002 Huma + `net/http` (no chi/gin).
 - ADR-0003 Server-side sessions in SQLite; opaque cookie.
-- ADR-0004 Argon2id with pepper for officer passwords.
+- ADR-0004 Argon2id with pepper for user passwords.
 - ADR-0005 Capability-based authorization; no title-string checks.
 - ADR-0006 Preference history pattern for contact-method visibility and ACS/ARES.
 - ADR-0007 Coverage/payment split (records the shape even though tables land in Phase 2).
@@ -312,7 +312,9 @@ CREATE INDEX ix_note_revisions_note ON note_revisions(note_id);
 
 ### 3.5 Authentication & Authorization
 
-`users` — an officer or webmaster login. May or may not be linked to a person.
+`users` — an authenticated identity. Phase 1 uses it for officers and the
+webmaster; Phase 3 may add the member role and explicit record grants to the
+same identity. It may or may not be linked to a person.
 
 ```
 users (
@@ -350,7 +352,9 @@ CREATE INDEX ix_sessions_user ON sessions(user_id);
 Sessions are opaque: the cookie carries only `id`. Rotation on privilege change
 and on high-impact operations ("recent auth" check ≤ 5 minutes).
 
-`email_links` — password recovery + officer invitation + future member sign-in.
+`email_links` — password setup/recovery and officer invitation. Phase 3 reuses
+recovery for a member's initial password rather than adding routine email-link
+sign-in.
 
 ```
 email_links (
