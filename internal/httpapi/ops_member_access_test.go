@@ -76,9 +76,11 @@ func decodeGrant(t *testing.T, resp *http.Response) apiGrant {
 	return g
 }
 
-// TestProvisionCreatesAPasswordlessMemberAccount proves what provisioning does
-// and, more importantly, what it does not.
-func TestProvisionCreatesAPasswordlessMemberAccount(t *testing.T) {
+// TestProvisionCreatesAnAccountWithNoPassword proves what provisioning does
+// and, more importantly, what it does not. An officer must not choose someone
+// else's credential, so the account arrives with none and its member sets the
+// first one through recovery (ADR-0012).
+func TestProvisionCreatesAnAccountWithNoPassword(t *testing.T) {
 	env := setupAuthzTest(t, "secretary")
 	cookie := env.signIn(t)
 

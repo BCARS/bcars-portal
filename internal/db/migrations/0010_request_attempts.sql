@@ -24,9 +24,11 @@
 
 CREATE TABLE request_attempts (
     id           INTEGER PRIMARY KEY,
-    -- operation namespaces the limit. Recovery is the first consumer;
-    -- member sign-in and blind correction intake reuse this table rather than
-    -- adding parallel limiters.
+    -- operation namespaces the limit. Recovery is the consumer, and it covers
+    -- initial member password setup because that is the same flow. Any future
+    -- unauthenticated operation reuses this table rather than adding a parallel
+    -- limiter. (Comment corrected by bcars-portal-4ux.5; the schema this
+    -- migration applied is unchanged.)
     operation    TEXT    NOT NULL CHECK (length(trim(operation)) > 0),
     -- source_hash is the clientip HMAC of the caller address. NULL when the
     -- deployment configured no secret, or the address was unavailable: an

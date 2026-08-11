@@ -87,8 +87,8 @@ var webGuardedRoutes = []struct {
 }
 
 // TestWebRoutes_DenyAuthenticatedWithoutCapability is the web half of the
-// bcars-portal-fmc.1 regression. The "member" role holds only
-// session.self.read.
+// bcars-portal-fmc.1 regression. The "member" role holds session.self.read and
+// its own self-service capabilities, none of which reach an officer page.
 func TestWebRoutes_DenyAuthenticatedWithoutCapability(t *testing.T) {
 	e := setupHandlerWithRoles(t, "member")
 
@@ -156,13 +156,14 @@ func TestImportCommitNeedsCommitCapability(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code, "import.upload must not imply import.commit")
 }
 
-// TestAdminRoutesAllDeclareKnownCapability locks the route table to the
-// capability catalog, so a new admin route cannot ship with a typo'd or
-// invented capability that no role can ever hold.
-func TestAdminRoutesAllDeclareKnownCapability(t *testing.T) {
+// TestGuardedRoutesAllDeclareKnownCapability locks the route table to the
+// capability catalog, so a new route cannot ship with a typo'd or invented
+// capability that no role can ever hold. It sweeps the officer and member
+// tables together, because RegisterRoutes registers them together.
+func TestGuardedRoutesAllDeclareKnownCapability(t *testing.T) {
 	e := setupHandlerWithRoles(t, "administrator")
 
-	routes := e.h.AdminRoutes()
+	routes := e.h.GuardedRoutes()
 	require.NotEmpty(t, routes)
 
 	seen := map[string]bool{}
@@ -238,14 +239,14 @@ func TestAdminRoutePatternsAreWellFormed(t *testing.T) {
 	e := setupHandlerWithRoles(t)
 
 	seen := map[string]bool{}
-	for _, rt := range e.h.AdminRoutes() {
+	for _, rt := range e.h.GuardedRoutes() {
 		t.Run(rt.Pattern, func(t *testing.T) {
 			method, path, ok := strings.Cut(rt.Pattern, " ")
 			require.True(t, ok, "a pattern must be \"METHOD /path\"")
 			assert.Contains(t, []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, method)
 
-			assert.True(t, strings.HasPrefix(path, "/admin/"),
-				"an admin route must live under /admin/")
+			assert.True(t, strings.HasPrefix(path, "/admin/") || strings.HasPrefix(path, RouteMemberHome),
+				"a guarded route must live under /admin/ or %s", RouteMemberHome)
 			assert.NotContains(t, path, "//", "no empty path segment")
 			for _, r := range rt.Pattern {
 				assert.False(t, unicode.IsControl(r) || r == '\t',
@@ -260,7 +261,39 @@ func TestAdminRoutePatternsAreWellFormed(t *testing.T) {
 			assert.False(t, seen[rt.Pattern], "duplicate pattern %q", rt.Pattern)
 			seen[rt.Pattern] = true
 
-			assert.NotEmpty(t, rt.Capability, "every admin route declares a capability")
+			assert.NotEmpty(t, rt.Capability, "every guarded route declares a capability")
 		})
+	}
+}
+
+// TestMemberRoutesCarryNoOfficerCapability keeps the two tables from drifting
+// into each other. A member route requiring member.read or dues.read would
+// hand an ordinary member the administrative reads ADR-0010 withholds, and it
+// would do so without any single line looking wrong.
+func TestMemberRoutesCarryNoOfficerCapability(t *testing.T) {
+	e := setupHandlerWithRoles(t)
+
+	memberCaps := map[string]bool{}
+	rows, err := e.h.db.Query(
+		`SELECT capability_code FROM role_capabilities WHERE role_code = 'member'`)
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var code string
+		require.NoError(t, rows.Scan(&code))
+		memberCaps[code] = true
+	}
+	require.NoError(t, rows.Err())
+	require.NotEmpty(t, memberCaps)
+
+	routes := e.h.MemberRoutes()
+	require.NotEmpty(t, routes, "the member surface must have at least one route")
+	for _, rt := range routes {
+		assert.True(t, strings.HasPrefix(rt.Pattern, "GET "+RouteMemberHome) ||
+			strings.Contains(rt.Pattern, " "+RouteMemberHome),
+			"a member route must live under %s, got %q", RouteMemberHome, rt.Pattern)
+		assert.True(t, memberCaps[rt.Capability],
+			"member route %q requires %q, which the member role does not hold",
+			rt.Pattern, rt.Capability)
 	}
 }
