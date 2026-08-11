@@ -11,18 +11,20 @@ external service.
 ## Outcome
 
 BCARS officers have one review queue for corrections received by telephone,
-email, mail, a meeting, an authenticated member, or the blind public form.
+email, mail, a meeting, or an authenticated member.
 Members may optionally use a provisioned password account to see records an
 officer explicitly associated with that identity, view a safe dues summary, and
 suggest changes. A short-lived recovery link lets a newly provisioned member set
 their first password or replace a forgotten one; it is not a separate sign-in
 method. Active approved Full members may browse and print a private directory
 whose contact values are filtered by the server. Associate members may use their
-own optional access but may not browse the directory.
+own optional access but may not browse the directory. Any authenticated member,
+including an Associate, may suggest a correction about another person without
+receiving profile access to that person.
 
-Member and public input never changes canonical records directly. An officer
-reviews each proposed item, and only an approved, supported item is applied
-through the existing domain service for that field.
+Member input never changes canonical records directly. An officer reviews each
+proposed item, and only an approved, supported item is applied through the
+existing domain service for that field.
 
 ## Explicit exclusions
 
@@ -33,6 +35,7 @@ through the existing domain service for that field.
 - automatic account claiming based on a matching contact email;
 - automatic delegated access from a spouse, household, parent, child, or other
   informational relationship;
+- unauthenticated or anonymous correction submission through the portal;
 - directory access for Associate members, pending applicants, or inactive,
   resigned, deceased, or rejected memberships;
 - live SMTP activation, FCC verification, Groups.io integration, real-data
@@ -71,10 +74,11 @@ accessible MVP decisions until `bcars-portal-6pz` begins.
    the exact compatibility rule.
 5. An informational family relationship and a record-access grant are separate
    facts. Neither creates the other. Explicit access permits viewing the safe
-   own-profile model and submitting a reviewed suggestion, never direct editing
-   or approval.
-6. Every intake channel uses the same request and item model. Source affects
-   provenance and triage, not which canonical validation rules apply.
+   own-profile model, never direct editing or approval. It is not required to
+   submit a reviewed correction suggestion.
+6. Every supported officer or authenticated-member intake channel uses the same
+   request and item model. Source affects provenance and triage, not which
+   canonical validation rules apply.
 7. Requests use typed, allowlisted items. There is no arbitrary JSON field path,
    generic SQL update, or prose-to-record mutation.
 8. Review is per item. Approved, rejected, and needs-verification decisions can
@@ -86,9 +90,10 @@ accessible MVP decisions until `bcars-portal-6pz` begins.
     note, the repository confirmation control, and a reviewer other than the
     requester. Ordinary officer-entered contact corrections may be entered and
     approved by the same officer when policy permits it.
-11. The public form is blind. It stores supplied target hints for later officer
-    triage, performs no member lookup for the caller, sends no email, and returns
-    the same success shape whether a matching person exists or not.
+11. Any authenticated member, including an Associate, may suggest a correction
+    about another person without an access grant to that record. Submission
+    accepts bounded target hints for officer triage and returns no lookup result,
+    current value, or new access. Anonymous callers cannot submit.
 12. Directory eligibility is based on an active approved Full membership, not
     dues standing. Honorary status changes dues, not the underlying Full or
     Associate rights.
@@ -112,7 +117,8 @@ created by joining on `contact_methods.value_norm`.
 The ordinary member role receives only capabilities for:
 
 - reading the caller's explicitly granted safe profile;
-- submitting and tracking reviewed requests for a granted record;
+- submitting and tracking the caller's reviewed requests about themselves or
+  another person, without gaining read access to the target;
 - attempting the member-directory operation, whose resource policy separately
   verifies an active approved Full membership.
 
@@ -160,8 +166,10 @@ The following existing hardening work was completed before the member shell:
 
 A request records its source, optional authenticated requester, optional target
 person, supplied requester/contact snapshot, stated relationship, status, and
-submission/triage timestamps. A blind request may begin without a canonical
-target; an officer links it later without changing what the submitter supplied.
+submission/triage timestamps. An authenticated cross-member suggestion may
+begin with only bounded name/call-sign hints; an officer links it later without
+changing what the submitter supplied. Member submission never performs a target
+lookup for the caller.
 
 Each item records a typed operation, proposed value, optional target resource and
 base version, sensitivity class, review status, reviewer, decision time, reason
@@ -192,8 +200,8 @@ item: pending -> approved | rejected | needs_verification
 ```
 
 Only the authenticated member who submitted a request may withdraw it, and only
-before any item has been applied. Officer-entered and public requests are not
-withdrawn through the member API.
+before any item has been applied. Officer-entered requests are not withdrawn
+through the member API.
 
 ### Apply semantics
 
@@ -249,18 +257,20 @@ deterministic identifier tie-breaker. Pagination and print use the same filtered
 query/service; the print adapter may request the full filtered result within a
 documented club-sized maximum.
 
-## Blind public intake
+## Authenticated cross-member suggestions
 
-The public surface accepts bounded name/call-sign hints, optional requester
-contact, stated relationship, and a plain-language correction. It does not offer
-autocomplete or return match candidates. It creates an unresolved request and
-returns generic receipt copy with no member or request identifier useful for
-probing.
+A provisioned member may submit a correction suggestion about another person
+without an active access grant to that person's profile. This is submission
+authority, not delegated management: the caller receives no profile data,
+current contact values, match candidates, or directory access from the request.
+Every item remains pending until an officer reviews it.
 
-Abuse controls are local and deterministic: per-source and normalized-target
-limits, payload limits, CSRF for the HTML form, safe log redaction, and a simple
-honeypot/timing check that requires no external CAPTCHA provider. Intake sends no
-mail and never changes canonical data.
+Full members may start from a person already visible in the private directory.
+Associates cannot browse that directory, but receive the same correction ability
+through bounded name/call-sign hints that an officer resolves during triage. The
+response shows the requester only what they submitted and a generic review
+status. Anonymous callers use an offline channel through an officer; there is no
+public correction form or API.
 
 ## Informational relationships
 
@@ -270,9 +280,10 @@ actor, time, version, archival state, and optional restricted context. They do
 not appear in the member directory.
 
 A relationship can help an officer understand why one person is suggesting a
-change for another. It does not grant profile visibility, request authority, or
-approval rights. If BCARS chooses to let a helper submit requests for a related
-record, an officer creates a separate revocable access grant.
+change for another. It does not grant profile visibility or approval rights, and
+it is not required for request submission. Any authenticated member already may
+suggest a correction about another person; a separate access grant is needed
+only to read that person's safe profile.
 
 ## API contract
 
@@ -280,15 +291,14 @@ Exact paths are finalized in OpenAPI without changing these resource boundaries.
 
 | Operation family | Capability | Contract purpose |
 | --- | --- | --- |
-| officer request create/list/detail/triage | `change_request.manage` | Capture every channel and resolve blind target hints. |
+| officer request create/list/detail/triage | `change_request.manage` | Capture every channel and resolve unlinked target hints. |
 | per-item review/apply | `change_request.review` | Decide and apply supported items with concurrency, idempotency, and sensitivity policy. |
 | member access grant/revoke | `member_access.manage` | Explicitly associate a provisioned user with person records. |
 | relationship CRUD | `relationship.manage` | Maintain informational links independently of access. |
 | password sign-in and recovery | public | Reuse the existing enumeration-safe recovery/password/session operations for members and officers. |
 | own records/profile/request history | `profile.self.read` | Return only explicitly granted safe data. |
-| own request submit/withdraw | `change_request.submit.self` | Suggest changes without canonical mutation. |
+| member request submit/withdraw | `change_request.submit.member` | An authenticated member may suggest changes about self or another person without canonical mutation or target read access. |
 | directory list/print feed | `directory.read` plus resource policy | Full-member-only, consent-filtered directory. |
-| blind correction submit | public | Store an unresolved suggestion without lookup or disclosure. |
 
 All operations are registered through the generic HTTP layer. Sensitive reads,
 intake, triage, review, access changes, relationship changes, recovery use,
@@ -297,20 +307,21 @@ private field values into log messages.
 
 ## UI boundary
 
-The officer MVP provides a request queue, channel-aware request entry, unlinked
-public triage, per-item current-versus-proposed review, verification notes,
-access grant/revoke, and relationship maintenance.
+The officer MVP provides a request queue, channel-aware request entry,
+authenticated cross-member target triage, per-item current-versus-proposed
+review, verification notes, access grant/revoke, and relationship maintenance.
 
 The member MVP provides password setup/recovery, password sign-in,
 granted-record selection, safe profile and dues standing, request
 submission/status/withdrawal, preference suggestions, directory navigation for
-eligible Full members, and sign-out.
+eligible Full members, a correction-about-someone-else entry point for Full and
+Associate members, and sign-out.
 
 The directory is a plain sortable table with name, call sign, email, and phone.
 Printing is a primary action. Hidden and absent contact cells say “Not shared,”
 and the print view identifies the Bedford County Amateur Radio Society. A link
-from the directory takes the caller to the reviewed correction flow for their own
-record.
+from the directory may start the reviewed correction flow for that listed
+person. Associates use target hints without gaining directory access.
 
 The UI remains a server-rendered adapter. It does not introduce a JavaScript or
 CSS framework, UI-only mutations, or authorization rules present only in a
@@ -324,8 +335,8 @@ template.
   write contract.
 - Canonical apply checks the target version captured or refreshed at review.
 - Tokens are never stored or logged in raw form.
-- Public and member error responses do not reveal person, contact, or account
-  existence.
+- Member submission responses do not reveal target person, contact, or account
+  existence; anonymous submission is not registered.
 - Directory filtering occurs before DTO/template construction.
 - Synthetic fixtures use Bedford County context but no real member information.
 
@@ -349,7 +360,9 @@ fake/filelog mail to set a member password, sign out and sign back in with that
 password, preserve canonical data before review, apply a mixed decision exactly
 once, protect stale and self-sensitive review, show only a safe dues summary,
 enforce directory eligibility and field filtering, revoke access immediately,
-and keep relationships separate from authorization.
+allow an Associate to submit a suggestion about an ungranted target while
+rejecting anonymous submission, and keep relationships separate from
+authorization.
 
 Live SMTP delivery and other external systems are activation evidence, not a
 dependency of that reproducible code-completion gate.
