@@ -12,11 +12,13 @@ external service.
 
 BCARS officers have one review queue for corrections received by telephone,
 email, mail, a meeting, an authenticated member, or the blind public form.
-Members may optionally sign in through a short-lived email link to see records
-an officer explicitly associated with their account, view a safe dues summary,
-and suggest changes. Active approved Full members may browse and print a private
-directory whose contact values are filtered by the server. Associate members may
-use their own optional access but may not browse the directory.
+Members may optionally use a provisioned password account to see records an
+officer explicitly associated with that identity, view a safe dues summary, and
+suggest changes. A short-lived recovery link lets a newly provisioned member set
+their first password or replace a forgotten one; it is not a separate sign-in
+method. Active approved Full members may browse and print a private directory
+whose contact values are filtered by the server. Associate members may use their
+own optional access but may not browse the directory.
 
 Member and public input never changes canonical records directly. An officer
 reviews each proposed item, and only an approved, supported item is applied
@@ -46,18 +48,20 @@ accessible MVP decisions until `bcars-portal-6pz` begins.
 
 1. A contact method is not login authority. An officer explicitly provisions a
    member user and grants it access to named person records.
-2. Member accounts are optional and passwordless. Officers keep their existing
-   password, recovery, and invitation flows.
+2. Member accounts are optional and use the existing email-and-password sign-in,
+   recovery, and session flow. Provisioning does not choose a password for the
+   member. The member uses the enumeration-safe recovery flow to set an initial
+   password and later recover it.
 
    Corrected 2026-08-10 by the repository owner: this does NOT mean an officer
    account and a member account are different things. An individual is a
    member; some members are also officers, and an officer role only adds
    permissions to one identity. Provisioning therefore adds the member role to
    an existing identity rather than demanding a second mailbox
-   (`bcars-portal-4ux.4`). Whether a session created by an email link may
-   exercise the officer capabilities that identity also holds is a separate
-   decision, tracked as `bcars-portal-4ux.15` and settled before sign-in
-   ships.
+   (`bcars-portal-4ux.4`). The owner then removed passwordless member sign-in in
+   `bcars-portal-4ux.15` and ADR-0012, so there is no authentication-method
+   downscoping or special rule for officer-members: everyone authenticates the
+   same identity with a password.
 3. One normalized user email may have access to multiple records, which supports
    a shared household mailbox. The user chooses among only those records after
    sign-in. No unique constraint is added to member contact email values.
@@ -120,26 +124,33 @@ Authorization loads active access grants and current membership state on every
 request. Revoking a grant therefore takes effect within an existing session.
 Possessing the member role without an active grant provides no record access.
 
-## Passwordless member sign-in
+## Member password setup, sign-in, and recovery
 
-The existing email-link service gains a named `member_sign_in` purpose. The
-request endpoint is enumeration-safe and uses the shared per-source/per-target
-attempt limiter. Below the limit it returns the same response for known,
-unknown, inactive, and unprovisioned addresses; only an active provisioned
-member user receives mail. At the limit, the same 429 contract applies to every
-address.
+Phase 3 reuses the existing password and recovery implementation. Officer
+provisioning creates or reuses one active `users` row and adds the member role,
+but never chooses, reads, clears, or replaces a password. A new account with no
+password cannot sign in until its user requests the same enumeration-safe
+recovery flow already available to officers and sets a password.
 
-The link is random, short-lived, single-use, and stored only as a hash. Atomic
-consumption creates a normal server-side session and the one configured cookie
-used by both HTML and `/api/v1`. It never asks a member to create a password.
-Expired or replayed links, inactive users, and users with no active record grant
-fail safely.
+Recovery remains rate-limited per source and normalized target. Below the limit
+it returns the same response for known, unknown, inactive, and unprovisioned
+addresses; only an active provisioned account receives mail. At the limit, the
+same 429 contract applies to every address. The recovery token is random,
+short-lived, single-use, stored only as a hash, and authorizes setting a new
+password. Successful recovery may establish the normal configured session, as
+the existing flow does, but there is no reusable `member_sign_in` purpose or
+email-link-only session path. Subsequent sign-in uses email plus password.
+
+Members and officers receive the same server-side session and configured cookie
+used by both HTML and `/api/v1`; authorization comes from current roles,
+capabilities, and active record grants. Revoked users, expired or replayed
+recovery links, and accounts with no active record grant fail safely.
 
 Local development, tests, and smoke use the fake or filelog mail sender. This
 phase proves the complete flow without production credentials; live relay
 delivery is activated interactively by `bcars-portal-8ou`.
 
-The following existing hardening work is on the Phase 3 critical path:
+The following existing hardening work was completed before the member shell:
 
 - `bcars-portal-6q6.3`: one session cookie for API and HTML;
 - `bcars-portal-fmc.21`: the HTML path supplies the same client-address hash;
@@ -271,16 +282,16 @@ Exact paths are finalized in OpenAPI without changing these resource boundaries.
 | --- | --- | --- |
 | officer request create/list/detail/triage | `change_request.manage` | Capture every channel and resolve blind target hints. |
 | per-item review/apply | `change_request.review` | Decide and apply supported items with concurrency, idempotency, and sensitivity policy. |
-| member access grant/revoke | `member_access.manage` | Explicitly associate a passwordless user with person records. |
+| member access grant/revoke | `member_access.manage` | Explicitly associate a provisioned user with person records. |
 | relationship CRUD | `relationship.manage` | Maintain informational links independently of access. |
-| passwordless link request/consume | public | Enumeration-safe member authentication; successful consume creates a session. |
+| password sign-in and recovery | public | Reuse the existing enumeration-safe recovery/password/session operations for members and officers. |
 | own records/profile/request history | `profile.self.read` | Return only explicitly granted safe data. |
 | own request submit/withdraw | `change_request.submit.self` | Suggest changes without canonical mutation. |
 | directory list/print feed | `directory.read` plus resource policy | Full-member-only, consent-filtered directory. |
 | blind correction submit | public | Store an unresolved suggestion without lookup or disclosure. |
 
 All operations are registered through the generic HTTP layer. Sensitive reads,
-intake, triage, review, access changes, relationship changes, sign-in-link use,
+intake, triage, review, access changes, relationship changes, recovery use,
 directory reads/print, and authorization denials are audited without copying
 private field values into log messages.
 
@@ -290,9 +301,10 @@ The officer MVP provides a request queue, channel-aware request entry, unlinked
 public triage, per-item current-versus-proposed review, verification notes,
 access grant/revoke, and relationship maintenance.
 
-The member MVP provides passwordless entry, granted-record selection, safe
-profile and dues standing, request submission/status/withdrawal, preference
-suggestions, directory navigation for eligible Full members, and sign-out.
+The member MVP provides password setup/recovery, password sign-in,
+granted-record selection, safe profile and dues standing, request
+submission/status/withdrawal, preference suggestions, directory navigation for
+eligible Full members, and sign-out.
 
 The directory is a plain sortable table with name, call sign, email, and phone.
 Printing is a primary action. Hidden and absent contact cells say “Not shared,”
@@ -306,8 +318,8 @@ template.
 
 ## Concurrency, retries, and privacy
 
-- Request creation, link consumption, item approval, access grant/revoke, and
-  relationship writes are safe under retries.
+- Request creation, recovery-link consumption, item approval, access
+  grant/revoke, and relationship writes are safe under retries.
 - Mutable triage and relationship resources use ETags and the existing stale
   write contract.
 - Canonical apply checks the target version captured or refreshed at review.
@@ -332,11 +344,12 @@ make smoke
 ```
 
 Phase 3 closes only after `bcars-portal-4ux.13` proves the assembled real
-binaries can provision synthetic Full and Associate access, consume a one-time
-member link through fake/filelog mail, preserve canonical data before review,
-apply a mixed decision exactly once, protect stale and self-sensitive review,
-show only a safe dues summary, enforce directory eligibility and field filtering,
-revoke access immediately, and keep relationships separate from authorization.
+binaries can provision synthetic Full and Associate access, use recovery through
+fake/filelog mail to set a member password, sign out and sign back in with that
+password, preserve canonical data before review, apply a mixed decision exactly
+once, protect stale and self-sensitive review, show only a safe dues summary,
+enforce directory eligibility and field filtering, revoke access immediately,
+and keep relationships separate from authorization.
 
 Live SMTP delivery and other external systems are activation evidence, not a
 dependency of that reproducible code-completion gate.

@@ -12,7 +12,7 @@ Rationale for a decision belongs here; day-to-day design detail belongs in
 | 0001 | Accepted | Use SQLite for Phase 1 |
 | 0002 | Accepted | Huma v2 on net/http |
 | 0003 | Accepted | Server-side sessions in SQLite |
-| 0004 | Accepted | Argon2id with pepper for officer passwords |
+| 0004 | Accepted | Argon2id with pepper for user passwords |
 | 0005 | Accepted | Capability-based authorization |
 | 0006 | Accepted | Preference history pattern for sharing preferences |
 | 0007 | Accepted | Coverage/payment split (Phase 2 shape) |
@@ -20,3 +20,4 @@ Rationale for a decision belongs here; day-to-day design detail belongs in
 | 0009 | Accepted | Version stamping via ldflags + runtime/debug |
 | 0010 | Accepted | Member record access is an explicit grant |
 | 0011 | Accepted | One generic confirmation control; recent-auth removed |
+| 0012 | Accepted | Members and officers share one password authentication model |

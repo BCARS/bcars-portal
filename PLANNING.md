@@ -256,18 +256,23 @@ Administrative recovery and role changes are audited.
 ### Ordinary Members
 
 - Member portal accounts are optional.
-- Use short-lived, single-use email sign-in links instead of member passwords.
+- Members use the same email-and-password sign-in as officers. A newly
+  provisioned account uses the existing short-lived, single-use recovery link
+  to set its first password; the same flow replaces a forgotten password.
 - A shared contact email can be associated with multiple members.
-- Email sign-in permits only the records and actions explicitly associated with that
-  link and authenticated identity.
+- A contact email never creates login authority. An officer explicitly provisions
+  the account and grants it access to named records; the password authenticates
+  that account.
 - Members primarily view permitted information and submit change requests.
 - Members without usable email continue to use telephone, mail, or in-person service;
   an officer enters the request into the same workflow.
 
 ### Officers and Treasurer
 
-- Officer and treasurer accounts use a password with verified email ownership.
-- Password recovery uses a short-lived single-use email link or verification code.
+- Officer and treasurer accounts use the same password and recovery flow as
+  ordinary member accounts; their roles add capabilities to the same identity.
+- Password setup and recovery use a short-lived single-use email link or
+  verification code.
 - Recovery responses do not reveal whether an email address has an account.
 - Future SMS verification may be added, but Phase 1 does not depend on a text-message
   provider or treat telephone numbers as login identity.
@@ -511,8 +516,8 @@ those additions open.
 | ACS/ARES sharing | Decided | Verified Full members share name/call sign with ACS/ARES by default unless they opt out. Associate participation is explicit. |
 | Officer capability matrix | Decided in principle | President, vice-president, secretary, and treasurer receive broad member-management access. Trustee, activities manager, and other officers receive narrower grants. Exact treasury and audit capabilities remain explicit. |
 | System administration | Decided in principle | A separate webmaster/system-administrator role manages operations and live integration configuration without automatically receiving every club-governance capability. |
-| Officer authentication | Decided | Password plus verified email; recovery by short-lived email link or code. SMS verification may be added later. |
-| Member email-link access | Proposed | Optional and passwordless; not required for the administrative MVP. |
+| User authentication | Decided | Members and officers use one email-and-password sign-in. A short-lived email recovery link sets the initial password or replaces a forgotten one; it is not a routine passwordless sign-in mechanism. SMS verification may be added later. |
+| Member portal access | Decided | Optional and explicitly provisioned. Contact email, family relationship, or membership alone never creates an account or record access. |
 | Blind public correction form | Open | Decide whether unauthenticated users may submit a suggestion without seeing existing data. |
 | Import authority | Decided | Use Groups.io JSON as the primary initial source because it preserves row IDs, with CSV as a cross-check. |
 | Hosting and database | Decided for Phase 1 | Use a persistent single application instance with SQLite and encrypted off-site backups. Revisit PostgreSQL only if hosting or scaling requires it. |
