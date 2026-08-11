@@ -7,10 +7,10 @@ optional access. Beads is the durable task and dependency source of truth. Read
 ## Target outcome
 
 Officers can capture and review corrections from every supported channel;
-members can optionally use the same password and recovery flow as officers to
-see only explicitly granted records and submit suggestions; and active approved
-Full members can browse and print a server-filtered directory. Member/public
-input never changes canonical records before officer review.
+authenticated members, including Associates, can suggest corrections about
+themselves or another person without target-record access; and active approved
+Full members can browse and print a server-filtered directory. Member input
+never changes canonical records before officer review.
 
 ## Workstreams
 
@@ -20,8 +20,7 @@ Three existing hardening beads landed before member access:
 
 - `fmc.21` gives HTML recovery requests the same client-address hash as API
   requests;
-- `fmc.20` adds one enumeration-safe attempt limiter used by recovery and reused
-  by blind intake;
+- `fmc.20` adds the enumeration-safe attempt limiter used by recovery;
 - `6q6.3` unifies the API and HTML session cookie.
 
 `6q6.1` settles the generic confirmation contract before the request-review API
@@ -44,20 +43,22 @@ changing canonical data. Per-item review/apply (`4ux.3`) follows, using explicit
 domain adapters, optimistic concurrency, idempotency, sensitivity policy, and
 the generic confirmation control.
 
-Blind public intake (`4ux.9`) joins the same workflow only after the common
-request API and reusable limiter exist.
+Authenticated cross-member suggestions join the same workflow in `4ux.6`.
+`4ux.9`, the accidental anonymous-public intake story, is superseded by that
+member request contract.
 
 ### WS3 - Optional member identity and self service
 
 Member provisioning (`4ux.4`) explicitly maps a user to one or more person
 records without choosing the user's password. Password onboarding and sign-in
 (`4ux.5`) reuse the existing recovery, password, unified-cookie, and rate-limit
-work. The own-profile/request API (`4ux.6`) can develop in parallel because it
-authorizes a principal and access grant rather than depending on an email
-provider.
+work. The profile/request API (`4ux.6`) keeps profile reads grant-bound while
+allowing any authenticated member to suggest a correction about another person
+without target access.
 
-Informational relationships (`4ux.8`) build on explicit access and the own-
-request contract while proving that relationships never create authority.
+Informational relationships (`4ux.8`) build directly on the Phase 3 foundation
+and prove that relationships neither create authority nor gate correction
+submission.
 
 ### WS4 - Private member directory
 
@@ -69,8 +70,8 @@ filters every target contact value before serialization. The screen and print UI
 ### WS5 - Thin MVP adapters
 
 The officer UI (`4ux.10`) follows all request-review, access, relationship, and
-public-triage APIs. The member UI (`4ux.11`) follows shared password
-authentication and own-profile/request APIs. Both may make reasonable accessible
+member-suggestion triage APIs. The member UI (`4ux.11`) follows shared password
+authentication and profile/request APIs. Both may make reasonable accessible
 layout and copy decisions. Full interactive polish remains deferred.
 
 ### WS6 - Assembly proof and completion audit
@@ -91,13 +92,12 @@ request/access schema + capabilities --------+--> access provisioning
              |             |                            |
              |             +--> review/apply <--- 6q6.1 |
              |             |                            +--> member UI
-             |             +--> blind public intake ----+       |
              |                                                  |
              +--> directory API --------------------------------+--> directory + print UI
              |
-             +--> access + own-request API --> relationships
+             +--> profile + member-request API     relationships
 
-review + access + relationships + public intake --> officer UI
+review + member requests + access + relationships --> officer UI
 all Phase 3 stories ------------------------------> smoke + completion audit
 ```
 
@@ -114,11 +114,11 @@ full acceptance criteria are in Beads.
 | `4ux.3` | Per-field review/apply API | Explicit adapters, sensitivity policy, conflict/idempotency/self-review controls | `4ux.2`, `6q6.1` |
 | `4ux.4` | Member access provisioning API | Explicit user-to-person grants and revocation; shared mailbox support; no officer-chosen password | `4ux.1` |
 | `4ux.5` | Member password onboarding and sign-in | Initial password via recovery, normal password sign-in, one cookie, member-safe routing | `4ux.4`, `6q6.3`, `fmc.20`, `4ux.15` |
-| `4ux.6` | Own-profile/dues/request API | Granted-record read model, safe dues summary, submit/status/withdraw | `4ux.2`, `4ux.4` |
+| `4ux.6` | Profile/dues/member-request API | Grant-bound reads; authenticated self-or-other suggestions; submit/status/withdraw | `4ux.2`, `4ux.4`, `4ux.16` |
 | `4ux.7` | Full-member directory API | Caller eligibility, target eligibility, contact filtering, stable query | `4ux.1` |
-| `4ux.8` | Relationships and explicit delegated access | Informational links kept independent from authority | `4ux.4`, `4ux.6` |
-| `4ux.9` | Blind public correction intake | Generic non-disclosing intake, abuse limits, officer linkage | `4ux.2`, `fmc.20` |
-| `4ux.10` | Officer request/access UI | Queue, capture, triage, per-item review, access and relationships | `4ux.3`, `4ux.4`, `4ux.8`, `4ux.9` |
+| `4ux.8` | Informational relationships | Context only; neither access authority nor a prerequisite for suggestions | `4ux.1` |
+| `4ux.9` | Superseded public correction intake | No anonymous portal surface; intended member behavior moved to `4ux.6` | `4ux.16` |
+| `4ux.10` | Officer request/access UI | Queue, capture, member-suggestion triage, per-item review, access and relationships | `4ux.3`, `4ux.4`, `4ux.6`, `4ux.8` |
 | `4ux.11` | Member profile/request UI | Password setup/sign-in entry, record chooser, safe profile, request tracking | `4ux.5`, `4ux.6` |
 | `4ux.12` | Directory and print UI | Plain sortable table, “Not shared,” letter-print view | `4ux.7`, `4ux.11` |
 | `4ux.13` | Production smoke and completion audit | Real binaries and synthetic end-to-end authorization/review proof | every other Phase 3 story |
@@ -140,8 +140,8 @@ independently but are not hidden prerequisites for this phase.
 
 - Do not split `4ux.1` across agents; it owns the first Phase 3 migration,
   capability seed, generated queries, and identity/access ADR.
-- `fmc.20` owns the reusable attempt-limiter storage/service. Recovery already
-  uses it, and public intake reuses it rather than adding another limiter.
+- `fmc.20` owns the reusable attempt-limiter storage/service used by recovery.
+  Authenticated member suggestions do not add an anonymous intake limiter.
 - After `4ux.1`, request intake, access provisioning, and directory API may run
   in parallel.
 - `4ux.3` owns request-decision/apply semantics. UI tasks do not reproduce those
@@ -175,7 +175,7 @@ also:
 Phase 3 is complete only when all epic children are merged and `4ux.13` proves
 on assembled binaries that:
 
-- officer, member, and blind-public submissions enter one request model and do
+- officer and authenticated-member submissions enter one request model and do
   not change canonical data before review;
 - a mixed per-field review applies only approved supported items exactly once,
   preserves rejected items, and refuses stale or prohibited self-review;
@@ -187,7 +187,8 @@ on assembled binaries that:
 - an active approved Full member can browse and print the same filtered directory,
   while an Associate cannot;
 - hidden and absent contact methods are indistinguishable to the directory caller;
-- public intake reveals no member/account/match information and is rate limited;
+- an Associate can suggest a correction about another person without directory
+  or profile access, while an anonymous caller cannot submit;
 - informational family relationships never grant access by themselves;
 - no code or task depends on `scratch/`, parent/sibling files, real data, live
   SMTP, FCC, Groups.io, deployment, or another external system.

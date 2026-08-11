@@ -1,6 +1,6 @@
 # ADR-0010: Member record access is an explicit grant, not an inferred link
 
-- Status: Accepted; authentication context amended 2026-08-10
+- Status: Accepted; authentication and correction context amended 2026-08-10
 - Date: 2026-08-09
 
 ## Context
@@ -59,13 +59,17 @@ do not want them.
    partial unique index permits at most one *active* grant per pair.
 6. **Relationships confer nothing.** `person_relationships` carries no user
    reference other than actor provenance and no foreign key into
-   `member_access_grants`. If BCARS wants a helper to act for a related record,
-   an officer creates a separate revocable grant.
+   `member_access_grants`. An authenticated member needs no relationship or
+   access grant merely to submit an officer-reviewed correction suggestion about
+   another person. A separate revocable grant is required only to read that
+   person's safe profile.
 7. **The member role is a member role.** `0004_seed_roles.sql` classified
    `member` as kind `officer` when no member-facing surface existed. Migration
-   `0009` reclassifies it as `member` and grants it `profile.self.read`,
-   `change_request.submit.self`, and `directory.read` — never `member.read` or
-   `dues.read`, which are the broad administrative reads.
+   `0009` reclassifies it as `member`; Phase 3 grants `profile.self.read`,
+   `change_request.submit.member`, and `directory.read` — never `member.read` or
+   `dues.read`, which are the broad administrative reads. The initial
+   `change_request.submit.self` seed is renamed by `bcars-portal-4ux.6` because
+   ADR-0013 deliberately permits suggestions about another person.
 
 ## Rejected alternatives
 
@@ -93,6 +97,10 @@ do not want them.
 - Provisioning does not choose a password. A new member uses the existing
   recovery flow to set one, then signs in through the same password/session
   path as an officer. This changes no access-grant rule in this ADR.
+- Correction submission and record reading deliberately ask different
+  authorization questions. ADR-0013 permits any authenticated member to submit
+  a reviewed suggestion about another person; this table remains the sole
+  authority for whether the requester may read that person's profile.
 - Anything that needs "which records may this user see" must call the access
   queries. A future join back to `users.person_id` would reintroduce exactly the
   authority this ADR removes; `TestOnlyAnActiveGrantConfersAccess` fails if it

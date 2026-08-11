@@ -18,8 +18,9 @@ The portal should:
 - Give officers and the treasurer one trustworthy membership system of record.
 - Work well for a small club whose members may rarely use a computer.
 - Support cash and check payment recording without requiring members to use the portal.
-- Let members or family members suggest corrections without directly changing official
-  records.
+- Let any authenticated member, including an Associate, suggest a correction about
+  another person without directly changing official records or receiving management
+  authority over that record.
 - Provide a permissioned alternative to the unrestricted Groups.io file area.
 - Add an optional conversational AI assistant that can use portal tools with exactly
   the logged-in user's authority.
@@ -187,7 +188,10 @@ presence in the unrestricted list as permanent consent.
 
 ### Member Change Requests
 
-Members and family members suggest changes; officers approve them.
+Authenticated members may suggest changes about themselves or another person;
+officers approve them. Submission does not grant permission to read or manage the
+target record. Someone without a portal account contacts an officer through the
+existing telephone, email, mail, or meeting channels rather than using a public form.
 
 A request records:
 
@@ -501,7 +505,7 @@ those additions open.
 | Capability architecture | Decided | API-first application services; UI and future tools are adapters. |
 | Family relationships | Decided | Optional context only; no automatic delegated edit rights. |
 | Shared email | Decided | Allowed for member contact; contact email is not identity. |
-| Member-originated updates | Decided | Suggestions require officer review before changing canonical data. |
+| Member-originated updates | Decided | Any authenticated member, including an Associate, may suggest a correction about another person without target-record access. Suggestions require officer review before changing canonical data. |
 | Initial payment channels | Decided | Design for officer-recorded cash and checks; online payment is later. |
 | Calendar authority | Decided | Keep Groups.io as source of truth and consume its iCal feed. |
 | Membership authority | Decided | The portal becomes authoritative after the reconciled import; Groups.io is a downstream mailing-list and calendar service. |
@@ -518,7 +522,7 @@ those additions open.
 | System administration | Decided in principle | A separate webmaster/system-administrator role manages operations and live integration configuration without automatically receiving every club-governance capability. |
 | User authentication | Decided | Members and officers use one email-and-password sign-in. A short-lived email recovery link sets the initial password or replaces a forgotten one; it is not a routine passwordless sign-in mechanism. SMS verification may be added later. |
 | Member portal access | Decided | Optional and explicitly provisioned. Contact email, family relationship, or membership alone never creates an account or record access. |
-| Blind public correction form | Open | Decide whether unauthenticated users may submit a suggestion without seeing existing data. |
+| Public correction form | Decided against | The portal exposes no anonymous correction intake. Someone without an account contacts an officer; any authenticated member may submit a reviewed suggestion about another person. |
 | Import authority | Decided | Use Groups.io JSON as the primary initial source because it preserves row IDs, with CSV as a cross-check. |
 | Hosting and database | Decided for Phase 1 | Use a persistent single application instance with SQLite and encrypted off-site backups. Revisit PostgreSQL only if hosting or scaling requires it. |
 | Transactional email | Decided in principle | Prefer a dedicated sender on Google-hosted bcars.org email, with qsl@bcars.org as Reply-To if desired. Verify the available Google sending method; evaluate Mailgun or another provider only as fallback. |
@@ -744,14 +748,16 @@ truth for story status and dependencies.
 ### Phase 3 - Member Requests and Optional Access
 
 - Implement officer-entered requests from telephone, mail, and meetings.
-- Add public blind correction suggestions that reveal no existing private data.
-- Add optional email-link member access.
+- Let any authenticated member, including an Associate, suggest a correction about
+  another person without receiving access to that person's record.
+- Add optional password-based member access with recovery-based initial setup.
 - Add the Full-member directory with server-filtered name, call sign, and permitted
   contact methods; Associates do not receive directory browsing access.
 - Let members change contact-sharing and ACS/ARES preferences through the normal
   officer-review workflow.
 - Implement per-field review, approval, rejection, and verification notes.
-- Add optional informational family relationships without delegated edit permission.
+- Add optional informational family relationships as context only; they are not
+  required for correction submission and grant no record access.
 
 ### Phase 4 - Permissioned Files
 
