@@ -40,6 +40,35 @@ SELECT r.id             AS relationship_id,
    AND r.archived_at IS NULL
  ORDER BY other.sort_name, r.id;
 
+-- name: ListRelationshipHistoryForPerson :many
+--
+-- Both directions, archived rows included, so an officer can answer who was
+-- recorded as related to whom and when that changed. Archiving keeps history
+-- rather than deleting it, which is the only reason this query differs from
+-- ListRelationshipsForPerson.
+SELECT r.id             AS relationship_id,
+       r.kind           AS kind,
+       r.context        AS context,
+       r.from_person_id AS from_person_id,
+       r.to_person_id   AS to_person_id,
+       r.created_by     AS created_by,
+       r.created_at     AS created_at,
+       r.updated_at     AS updated_at,
+       r.archived_at    AS archived_at,
+       r.archived_by    AS archived_by,
+       r.archive_reason AS archive_reason,
+       r.version        AS version,
+       CAST(CASE WHEN r.from_person_id = sqlc.arg(person_id) THEN 'outgoing'
+                 ELSE 'incoming' END AS TEXT) AS direction,
+       other.display_name AS other_display_name,
+       other.call_sign    AS other_call_sign
+  FROM person_relationships r
+  JOIN persons other
+    ON other.id = CASE WHEN r.from_person_id = sqlc.arg(person_id)
+                       THEN r.to_person_id ELSE r.from_person_id END
+ WHERE (r.from_person_id = sqlc.arg(person_id) OR r.to_person_id = sqlc.arg(person_id))
+ ORDER BY other.sort_name, r.id;
+
 -- name: UpdatePersonRelationship :one
 UPDATE person_relationships
    SET kind = sqlc.arg(kind),
