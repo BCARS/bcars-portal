@@ -314,6 +314,46 @@ func TestDelegateFormDoesNotClaimTheRecordIsTheirs(t *testing.T) {
 	assert.NotContains(t, body, "My name is wrong")
 }
 
+// TestMemberPagesSpeakToAPerson checks the small things a member actually
+// reads. Each of these shipped wrong once, and none of them is visible in a
+// status code: a raw RFC 3339 timestamp, the database's word for the ordinary
+// membership state, and "1 suggestion(s)".
+func TestMemberPagesSpeakToAPerson(t *testing.T) {
+	e := setupMemberEnv(t)
+	personID := e.grant(t, "Dale Rutherford")
+	cookie := e.signInMember(t)
+
+	var membershipID int64
+	require.NoError(t, e.h.db.QueryRow(
+		`INSERT INTO memberships (person_id, base_type, lifecycle) VALUES (?, 'full', 'approved') RETURNING id`,
+		personID).Scan(&membershipID))
+	_, err := e.h.db.Exec(
+		`INSERT INTO coverage_events (membership_id, paid_through, reason_kind, decided_at)
+		 VALUES (?, '2026-12-31', 'adjustment', '2026-01-01T00:00:00.000Z')`, membershipID)
+	require.NoError(t, err)
+
+	record := e.getAs(t, fmt.Sprintf("/member/records/%d", personID), cookie).Body.String()
+	assert.Contains(t, record, "31 December 2026", "a member reads dates, not storage format")
+	assert.NotContains(t, record, "2026-12-31")
+	assert.NotContains(t, record, "approved",
+		"'approved' is database vocabulary; the ordinary state needs no announcement")
+
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"kind":           {"person.call_sign.set"},
+		"proposed_value": {"W3NEW"},
+		"summary":        {"My call sign changed."},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	landing := e.getAs(t, RouteMemberHome, cookie).Body.String()
+	assert.Contains(t, landing, "You have one suggestion waiting")
+	assert.NotContains(t, landing, "suggestion(s)")
+
+	list := e.getAs(t, RouteMemberRequests, cookie).Body.String()
+	assert.NotContains(t, list, "T00:00:00", "no timestamps in the member's own list")
+	assert.NotRegexp(t, `\d{4}-\d{2}-\d{2}T`, list)
+}
+
 // TestMemberTracksAndWithdrawsOwnSuggestions covers the tracking pages.
 func TestMemberTracksAndWithdrawsOwnSuggestions(t *testing.T) {
 	e := setupMemberEnv(t)

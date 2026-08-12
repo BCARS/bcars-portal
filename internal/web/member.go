@@ -109,6 +109,53 @@ var otherSuggestionKinds = []struct {
 	{changerequests.OpOther, "Something else", "What should change"},
 }
 
+// memberDate turns a stored value into something a member reads.
+//
+// The database stores RFC 3339 because a machine sorts it; "2026-08-12T12:34:06.354Z"
+// on a page asking someone to remember when they sent something is the storage
+// format leaking into the product. An unparseable value falls back to the raw
+// string rather than to an empty cell, because a wrong-looking date is easier
+// to report than a missing one.
+//
+// IT DOES NOT CONVERT TO LOCAL TIME, and that is the point. "Paid through
+// 2026-12-31" is a calendar date the club decided, not an instant: parsing it as
+// UTC midnight and rendering it in a negative-offset zone moved it to 30
+// December, so a member west of Greenwich was shown their dues expiring a day
+// early. A date the club wrote down reads back as the date the club wrote down,
+// wherever the reader happens to be.
+func memberDate(stored string) string {
+	// Coverage dates are stored date-only and timestamps in RFC 3339; both
+	// reach this function, so both are tried.
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, isoStamp, "2006-01-02"} {
+		if parsed, err := time.Parse(layout, stored); err == nil {
+			return parsed.UTC().Format("2 January 2006")
+		}
+	}
+	return stored
+}
+
+const isoStamp = "2006-01-02T15:04:05.000Z"
+
+// membershipStanding describes the lifecycle in words, and says nothing at all
+// for the ordinary case. "approved" is database vocabulary; a member reading
+// their own record does not need to be told the normal state has a name.
+func membershipStanding(lifecycle string) string {
+	switch lifecycle {
+	case "", "approved":
+		return ""
+	case "pending":
+		return "Awaiting approval"
+	case "rejected":
+		return "Not approved"
+	case "resigned":
+		return "Resigned"
+	case "deceased":
+		return ""
+	default:
+		return lifecycle
+	}
+}
+
 // kindLabel names an operation in a table column, where the possessive phrasing
 // the forms use ("My name is wrong") would read wrongly — both for a delegate
 // acting on someone's behalf and for a suggestion about another member.
@@ -155,6 +202,9 @@ type memberRecordRow struct {
 	CallSign    string
 	AccessKind  string
 	DuesStatus  string
+	// PaidThrough is the coverage date in words. Empty when no coverage
+	// decision has ever been recorded, which the page reports as "not
+	// recorded" rather than inventing a date.
 	PaidThrough string
 }
 
@@ -209,7 +259,9 @@ func memberRecordRowFrom(profile memberprofile.Profile) memberRecordRow {
 	}
 	if profile.Standing != nil {
 		row.DuesStatus = profile.Standing.Status
-		row.PaidThrough = profile.Standing.PaidThrough
+		if profile.Standing.PaidThrough != "" {
+			row.PaidThrough = memberDate(profile.Standing.PaidThrough)
+		}
 	}
 	return row
 }
@@ -219,8 +271,9 @@ func memberRecordRowFrom(profile memberprofile.Profile) memberRecordRow {
 type memberRecordData struct {
 	Record   memberRecordRow
 	Contacts []memberContactRow
-	// Membership describes the underlying right, which an honorary dues waiver
-	// never changes.
+	// BaseType is the underlying right, which an honorary dues waiver never
+	// changes. Lifecycle is already phrased for a reader, and is empty for the
+	// ordinary approved case.
 	BaseType  string
 	Lifecycle string
 	Success   string
@@ -245,7 +298,7 @@ func (h *Handler) memberRecord(w http.ResponseWriter, r *http.Request) {
 	data := memberRecordData{
 		Record:    memberRecordRowFrom(profile),
 		BaseType:  profile.BaseType,
-		Lifecycle: profile.Lifecycle,
+		Lifecycle: membershipStanding(profile.Lifecycle),
 		Success:   r.URL.Query().Get("success"),
 	}
 	for _, c := range profile.Contacts {
@@ -604,7 +657,7 @@ func memberRequestRowFrom(req changerequests.Request) memberRequestRow {
 		Status:      req.Status,
 		AboutName:   req.SuppliedName,
 		Summary:     req.Summary,
-		SubmittedAt: req.SubmittedAt,
+		SubmittedAt: memberDate(req.SubmittedAt),
 	}
 	row.Withdrawable = req.Status != changerequests.StatusResolved &&
 		req.Status != changerequests.StatusWithdrawn

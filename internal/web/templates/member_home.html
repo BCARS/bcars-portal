@@ -57,7 +57,8 @@
     </p>
     {{if .OpenRequests}}
     <p class="note">
-        You have {{.OpenRequests}} suggestion(s) waiting for an officer.
+        {{if eq .OpenRequests 1}}You have one suggestion waiting for an officer.
+        {{else}}You have {{.OpenRequests}} suggestions waiting for an officer.{{end}}
         <a href="/member/requests">See your suggestions</a>.
     </p>
     {{else}}
