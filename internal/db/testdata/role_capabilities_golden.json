@@ -13,7 +13,7 @@
     "audit.read",
     "change_request.manage",
     "change_request.review",
-    "change_request.submit.self",
+    "change_request.submit.member",
     "contact_method.write",
     "coverage.adjust",
     "coverage.read",
@@ -51,7 +51,7 @@
     "user.invite"
   ],
   "member": [
-    "change_request.submit.self",
+    "change_request.submit.member",
     "directory.read",
     "profile.self.read",
     "session.self.read"

@@ -171,6 +171,11 @@ type Querier interface {
 	GetEffectiveCoverageEvent(ctx context.Context, membershipID int64) (CoverageEvent, error)
 	GetEmailLinkByTokenHash(ctx context.Context, tokenHash string) (EmailLink, error)
 	GetFCCVerification(ctx context.Context, id int64) (FccVerification, error)
+	//
+	// One record, by person, for this caller. Returns no row when the grant is
+	// missing or revoked, which callers translate to the same 404 an unknown
+	// person produces.
+	GetGrantedProfile(ctx context.Context, arg GetGrantedProfileParams) (GetGrantedProfileRow, error)
 	GetHonoraryGrant(ctx context.Context, id int64) (HonoraryGrant, error)
 	GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyRecord, error)
 	GetImportRun(ctx context.Context, id int64) (ImportRun, error)
@@ -305,6 +310,38 @@ type Querier interface {
 	ListDuesStanding(ctx context.Context, arg ListDuesStandingParams) ([]ListDuesStandingRow, error)
 	ListExternalIDsForEntity(ctx context.Context, arg ListExternalIDsForEntityParams) ([]ExternalID, error)
 	ListFCCVerificationsByMembership(ctx context.Context, membershipID int64) ([]FccVerification, error)
+	//
+	// The caller's own contact methods on a granted record, with the sharing
+	// choice that currently applies to each.
+	//
+	// This is the member's OWN data, so unlike the directory it is not filtered by
+	// visibility: a member must see the phone number the club holds for them in
+	// order to notice it is wrong. The audience the latest visibility event chose
+	// is reported alongside, so the member can see what the club shares rather than
+	// having to ask. An empty shared_with means no decision is on file and the
+	// Phase 1 domain default applies.
+	//
+	// Archived methods are excluded. They are history, and offering them for
+	// correction would invite a member to fix a value nothing uses.
+	ListGrantedContactMethods(ctx context.Context, arg ListGrantedContactMethodsParams) ([]ListGrantedContactMethodsRow, error)
+	// Member self-service profile reads (bcars-portal-4ux.6).
+	//
+	// Every query here joins member_access_grants and requires an ACTIVE grant for
+	// the calling user. That join is the authorization, expressed where it cannot
+	// be forgotten: a record this caller was never granted is not filtered out of a
+	// result, it is never selected, so no DTO field, template variable, or log line
+	// downstream can carry it.
+	//
+	// These deliberately do NOT reuse the administrative person and membership
+	// reads. Those select officer-facing columns -- notes, audit fields, the whole
+	// row -- and a member must never receive them. The column lists below are the
+	// safe read model, and they are short on purpose.
+	//
+	// Every record the caller may currently see, one row per person. A person with
+	// no membership row still appears: the grant is to the PERSON, and a member
+	// whose membership record is missing must still be able to see and correct
+	// their own name rather than silently having no profile at all.
+	ListGrantedProfiles(ctx context.Context, userID int64) ([]ListGrantedProfilesRow, error)
 	ListHonoraryGrantsByMembership(ctx context.Context, membershipID int64) ([]HonoraryGrant, error)
 	ListImportRuns(ctx context.Context, arg ListImportRunsParams) ([]ImportRun, error)
 	// Treasury history and reporting reads.

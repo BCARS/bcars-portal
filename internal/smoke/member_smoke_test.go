@@ -110,8 +110,40 @@ func TestMemberOnboardingSmoke(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
 		"one cookie authenticates both surfaces, and the member holds no officer capability on either")
 
+	// The member API agrees with the landing about which records exist, and
+	// carries the safe dues summary rather than anything a treasurer sees.
+	resp = e.do(http.MethodGet, "/api/v1/me/records", member, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode, "member records: %s", readBody(resp))
+	records := readBody(resp)
+	assert.Contains(t, records, memberSelfName)
+	assert.Contains(t, records, memberOtherName)
+	assert.NotContains(t, records, memberNeverName)
+	for _, officerOnly := range []string{"amount_cents", "treasurer", "audit"} {
+		assert.NotContains(t, records, officerOnly,
+			"the member read model must not carry %q", officerOnly)
+	}
+
+	// A suggestion about someone the member cannot see is accepted, changes
+	// nothing, and confers no access.
+	resp = e.doWithKey(http.MethodPost, "/api/v1/me/change-requests", member,
+		`{"about_name":"Someone Not On My List","summary":"Their call sign is printed wrong.",`+
+			`"items":[{"operation":"other"}]}`, "smoke-suggestion-1")
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "member suggestion: %s", readBody(resp))
+	assert.NotContains(t, readBody(resp), "about_person_id",
+		"submission must not name a canonical record back to the submitter")
+
+	resp = e.do(http.MethodGet, "/api/v1/me/change-requests", member, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, readBody(resp), "Someone Not On My List",
+		"the member can track their own suggestion")
+
 	// Revoking a grant takes effect inside the session that is already open.
 	e.revokeRecord(admin, memberUserID, self)
+
+	resp = e.do(http.MethodGet, "/api/v1/me/records", member, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.NotContains(t, readBody(resp), memberSelfName,
+		"a revoked grant must leave the member API too, not only the landing page")
 	resp = e.do(http.MethodGet, "/member/", member, "")
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	body = readBody(resp)
@@ -183,6 +215,28 @@ func (e *env) revokeRecord(admin *http.Cookie, userID, personID int64) {
 		fmt.Sprintf("/api/v1/member-accounts/%d/records/revoke", userID), admin,
 		fmt.Sprintf(`{"person_id":%d,"reason":"smoke test"}`, personID))
 	require.Equal(e.t, http.StatusOK, resp.StatusCode, "revoke record: %s", readBody(resp))
+}
+
+// doWithKey issues a JSON request carrying an Idempotency-Key, which the
+// submission endpoint requires.
+func (e *env) doWithKey(method, path string, cookie *http.Cookie, body, key string) *http.Response {
+	e.t.Helper()
+	req, err := http.NewRequest(method, e.baseURL+path, strings.NewReader(body))
+	require.NoError(e.t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", key)
+	req.Header.Set("X-Confirm", "true")
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	resp, err := e.client.Do(req)
+	require.NoError(e.t, err)
+
+	raw, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	require.NoError(e.t, err)
+	resp.Body = &replayBody{data: raw}
+	return resp
 }
 
 // postForm submits an HTML form the way a browser does. The API helper sends

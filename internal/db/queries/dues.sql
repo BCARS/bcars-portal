@@ -82,6 +82,10 @@ SELECT m.id           AS membership_id,
         OR m.lifecycle NOT IN ('rejected', 'resigned', 'deceased'))
    AND (CAST(sqlc.arg(membership_id) AS INTEGER) = 0
         OR m.id = CAST(sqlc.arg(membership_id) AS INTEGER))
+   -- person_id serves member self-service, which knows the person it was
+   -- granted and not the membership id underneath it. Zero means no filter.
+   AND (CAST(sqlc.arg(person_id) AS INTEGER) = 0
+        OR m.person_id = CAST(sqlc.arg(person_id) AS INTEGER))
    AND (CAST(sqlc.arg(search) AS TEXT) = ''
         OR p.display_name LIKE '%' || CAST(sqlc.arg(search) AS TEXT) || '%'
         OR COALESCE(p.call_sign, '') LIKE '%' || CAST(sqlc.arg(search) AS TEXT) || '%')

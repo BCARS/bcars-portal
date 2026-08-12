@@ -266,14 +266,22 @@
     "description": "Read own explicitly granted safe profile and dues standing.",
     "category": "member",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "member-record-get",
+      "member-records-list"
+    ]
   },
   {
-    "code": "change_request.submit.self",
-    "description": "Submit, track, and withdraw own change requests.",
+    "code": "change_request.submit.member",
+    "description": "Submit, track, and withdraw own change requests, including a bounded suggestion about another person.",
     "category": "member",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "member-request-get",
+      "member-request-submit",
+      "member-request-withdraw",
+      "member-requests-list"
+    ]
   },
   {
     "code": "directory.read",
