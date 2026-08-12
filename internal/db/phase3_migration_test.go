@@ -419,9 +419,15 @@ func TestChangeRequestSourceConstraints(t *testing.T) {
 		"an authenticated member request must name its requester")
 	assert.NoError(t, create("member", nullInt(userID)))
 
+	// 'public' was a source while an anonymous correction form was still
+	// planned. Migration 0013 removed it from the constraint, so the database
+	// now refuses it exactly like any other unknown channel — the application
+	// is no longer the only thing standing between an anonymous row and the
+	// table.
+	assert.Error(t, create("public", sql.NullInt64{}),
+		"anonymous intake was withdrawn; 'public' must not be storable")
 	assert.Error(t, create("public", nullInt(userID)),
-		"blind public intake authenticates nobody and must not carry a requester")
-	assert.NoError(t, create("public", sql.NullInt64{}))
+		"and naming a requester does not make it storable either")
 
 	assert.Error(t, create("carrier_pigeon", sql.NullInt64{}), "an unknown source is refused")
 
@@ -434,10 +440,16 @@ func TestChangeRequestSourceConstraints(t *testing.T) {
 	})
 }
 
-// TestBlindIntakeStoresHintsWithoutCanonicalData proves the non-disclosure
-// shape at the storage layer: a public request records what was supplied,
-// creates no person, and is not linked to one until an officer triages it.
-func TestBlindIntakeStoresHintsWithoutCanonicalData(t *testing.T) {
+// TestHintedIntakeStoresHintsWithoutCanonicalData proves the non-disclosure
+// shape at the storage layer: a request describing someone by hint records what
+// was supplied, creates no person, and is not linked to one until an officer
+// triages it.
+//
+// The submitter is an authenticated member (bcars-portal-4ux.16). What made the
+// shape worth having was never anonymity — it is that describing a person
+// performs no lookup, which is just as true when the club knows exactly who
+// typed it.
+func TestHintedIntakeStoresHintsWithoutCanonicalData(t *testing.T) {
 	database := openTestDB(t)
 	require.NoError(t, Migrate(database))
 	ctx := context.Background()
@@ -449,8 +461,10 @@ func TestBlindIntakeStoresHintsWithoutCanonicalData(t *testing.T) {
 	var personsBefore int
 	require.NoError(t, database.QueryRow(`SELECT count(*) FROM persons`).Scan(&personsBefore))
 
+	submitter := seedUser(t, database, "submitter@example.test", nil)
 	req, err := q.CreateChangeRequest(ctx, sqlcgen.CreateChangeRequestParams{
-		Source: "public", Status: "submitted",
+		Source: "member", Status: "submitted",
+		RequesterUserID:  nullInt(submitter),
 		SuppliedName:     nullString("K. Member"),
 		SuppliedCallSign: nullString("W3ABC"),
 		SuppliedContact:  nullString("someone@example.test"),
@@ -458,7 +472,7 @@ func TestBlindIntakeStoresHintsWithoutCanonicalData(t *testing.T) {
 		SubmittedAt:      "2026-08-09T12:00:00.000Z",
 	})
 	require.NoError(t, err)
-	assert.False(t, req.TargetPersonID.Valid, "blind intake performs no lookup")
+	assert.False(t, req.TargetPersonID.Valid, "describing a person performs no lookup")
 
 	var personsAfter int
 	require.NoError(t, database.QueryRow(`SELECT count(*) FROM persons`).Scan(&personsAfter))

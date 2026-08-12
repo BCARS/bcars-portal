@@ -62,13 +62,17 @@ for anyone on the internet. Neither change was requested.
 - `bcars-portal-4ux.9` is superseded; no bot trap, anonymous rate limiter, public
   target-probing contract, or public correction UI is built.
 - The `public` source value that migration `0009` wrote into the
-  `member_change_requests` CHECK constraint stays in the schema as an INERT
-  compatibility value. Removing a CHECK constraint in SQLite means rebuilding
-  the table, and this one carries a child item table and four indexes, which is
-  more churn than the value is worth. It is neutralised instead:
-  `changerequests` refuses it at intake (`SourceLegacyPublic`), no route offers
-  it, and a regression test asserts no path can create one. Existing audit
-  provenance is not rewritten.
+  `member_change_requests` CHECK constraint is REMOVED from the schema by
+  migration `0013`, not merely refused by the application. SQLite cannot drop a
+  CHECK in place, so the table is rebuilt by the documented procedure and the
+  child item table's rows are re-verified with `PRAGMA foreign_key_check`.
+  Leaving the value in place was considered and rejected: an application-only
+  guard leaves the schema disagreeing with the application about what is
+  possible, and the schema is what a hand-run `UPDATE`, a future writer, and the
+  next reader will believe. No row is rewritten by the rebuild — a pre-existing
+  `public` row would abort the migration rather than be silently relabelled,
+  because no supported version could have created one and its appearance is
+  something an operator needs to see.
 - The member submission capability is named for member submission rather than
   `self`, because the target need not be the requester.
 - Full-member directory UI may offer “Suggest a correction” on a listed person.

@@ -620,8 +620,7 @@
               "officer_email",
               "officer_mail",
               "officer_meeting",
-              "member",
-              "public"
+              "member"
             ],
             "type": "string"
           },

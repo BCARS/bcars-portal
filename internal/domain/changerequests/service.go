@@ -38,23 +38,12 @@ const (
 	SourceMember         = "member"
 )
 
-// SourceLegacyPublic is INERT. It is not an intake channel.
-//
-// Migration 0009 shipped 'public' in the member_change_requests source CHECK
-// while Phase 3 still planned an anonymous correction form. That plan was
-// withdrawn (bcars-portal-4ux.16): correction suggestions are authenticated,
-// and an anonymous caller cannot submit at all. Dropping the value from the
-// CHECK would mean rebuilding a table that two child tables and several
-// indexes reference, so the value stays in the constraint and is refused here
-// instead: validateCreate rejects it, no HTTP route offers it, and no other
-// code path passes it. TestPublicSourceIsInert holds that line.
-//
-// It is named rather than deleted so a reader who finds 'public' in the schema
-// can find out why, and so a read path can recognise the value if a database
-// ever acquires one by hand.
-const SourceLegacyPublic = "public"
-
 // intakeSources is the set a request may actually be created with.
+//
+// It is the same set migration 0013 leaves in the database CHECK constraint.
+// Phase 3 briefly planned an anonymous 'public' channel; that plan was
+// withdrawn (bcars-portal-4ux.16, ADR-0013) and the value is gone from both
+// places, so neither this package nor a hand-run UPDATE can produce one.
 var intakeSources = map[string]struct{}{
 	SourceOfficerPhone:   {},
 	SourceOfficerEmail:   {},

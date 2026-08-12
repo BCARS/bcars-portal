@@ -653,18 +653,24 @@ func TestNoAnonymousCorrectionIntakeIsRegistered(t *testing.T) {
 			resp.StatusCode, "%s must not be an anonymous intake route", path)
 	}
 
-	// And the officer intake endpoint refuses the legacy source outright, so
-	// the value surviving in the 0009 CHECK constraint stays unreachable.
+	// The officer intake endpoint refuses the withdrawn source outright.
 	resp := doWithHeaders(t, e.authzEnv, http.MethodPost, "/api/v1/change-requests", e.officer,
 		`{"source":"public","supplied_name":"Anon","summary":"x","items":[{"operation":"other"}]}`,
 		map[string]string{"Idempotency-Key": "public-1"})
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode,
-		"'public' is an inert legacy value, not an intake channel")
+		"'public' is not an intake channel")
 
 	var rows int
 	require.NoError(t, e.db.QueryRow(
 		`SELECT count(*) FROM member_change_requests WHERE source = 'public'`).Scan(&rows))
 	assert.Zero(t, rows, "no route may create a public-source request")
+
+	// And the schema agrees, so the API is not the only thing holding the line
+	// (migration 0013).
+	_, err := e.db.Exec(
+		`INSERT INTO member_change_requests (source, status, summary, submitted_at)
+		 VALUES ('public', 'submitted', 'x', '2026-08-12T00:00:00.000Z')`)
+	assert.Error(t, err, "the source constraint must no longer permit 'public'")
 }
 
 // TestMemberCapabilityIsSubmitMember locks the rename in at the catalog, so a

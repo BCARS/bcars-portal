@@ -50,13 +50,8 @@ type ChangeRequestItem struct {
 }
 
 type ChangeRequest struct {
-	ID int64 `json:"id"`
-	// 'public' appears here only because migration 0009 left it in the
-	// database CHECK constraint while an anonymous correction form was still
-	// planned. That plan was withdrawn: no route and no service operation can
-	// create one (changerequests.SourceLegacyPublic). It stays in this enum so
-	// the schema stays honest about what the column permits, and nowhere else.
-	Source string `json:"source" enum:"officer_phone,officer_email,officer_mail,officer_meeting,member,public"`
+	ID     int64  `json:"id"`
+	Source string `json:"source" enum:"officer_phone,officer_email,officer_mail,officer_meeting,member"`
 	Status string `json:"status" enum:"draft,submitted,in_review,resolved,withdrawn"`
 
 	TargetPersonID    int64  `json:"target_person_id,omitempty" doc:"Empty until an officer links an unresolved submission to a person."`

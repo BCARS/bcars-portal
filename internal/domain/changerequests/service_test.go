@@ -50,28 +50,47 @@ func memberParams(summary string) changerequests.CreateParams {
 	}
 }
 
-// TestPublicSourceIsInert holds the line the corrected plan drew. Migration
-// 0009 left 'public' in the database CHECK constraint; nothing may create one.
-func TestPublicSourceIsInert(t *testing.T) {
+// TestPublicSourceIsGone holds the line the corrected plan drew, at both
+// levels it has to hold at.
+//
+// The service refusing 'public' is the cheap half. The half that matters is
+// the database refusing it too: an application-only guard leaves the schema
+// disagreeing with the application about what is possible, and the schema is
+// what a hand-run UPDATE, a future writer, or the next reader will believe.
+func TestPublicSourceIsGone(t *testing.T) {
 	svc, d := newService(t)
 	ctx := context.Background()
 
 	params := memberParams("Anonymous submission")
-	params.Source = changerequests.SourceLegacyPublic
+	params.Source = "public"
 	params.RequesterUserID = 0
 
 	_, err := svc.Create(ctx, nil, params, "public-1", time.Now())
 	require.ErrorIs(t, err, changerequests.ErrSourceRequired,
-		"'public' is a legacy value in the schema, not an intake channel")
+		"'public' is not an intake channel")
+
+	// Straight past the service, at the table itself.
+	_, err = d.Exec(
+		`INSERT INTO member_change_requests (source, status, summary, submitted_at)
+		 VALUES ('public', 'submitted', 'Anonymous submission', '2026-08-12T00:00:00.000Z')`)
+	require.Error(t, err,
+		"migration 0013 removed 'public' from the source constraint; the database must refuse it")
 
 	var rows int
 	require.NoError(t, d.QueryRow(
 		`SELECT count(*) FROM member_change_requests WHERE source = 'public'`).Scan(&rows))
 	assert.Zero(t, rows)
 
-	// The constant still names the value, so a reader who finds 'public' in
-	// the schema can find out what it is, and a read path can recognise it.
-	assert.Equal(t, "public", changerequests.SourceLegacyPublic)
+	// The rebuild kept every other rule the original table carried.
+	_, err = d.Exec(
+		`INSERT INTO member_change_requests (source, status, summary, submitted_at)
+		 VALUES ('member', 'submitted', 'No requester named', '2026-08-12T00:00:00.000Z')`)
+	require.Error(t, err, "a member request must still name its requester")
+
+	_, err = d.Exec(
+		`INSERT INTO member_change_requests (source, status, summary, submitted_at)
+		 VALUES ('officer_mail', 'submitted', '   ', '2026-08-12T00:00:00.000Z')`)
+	require.Error(t, err, "a request must still carry a summary")
 }
 
 // TestMemberSourceRequiresARequester matches the schema CHECK: a member
