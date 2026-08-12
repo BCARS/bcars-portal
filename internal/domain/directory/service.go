@@ -102,6 +102,27 @@ const (
 	FilterAssociate = "associate"
 )
 
+// Sort orders. Name is the default because a roster is read by name; call sign
+// is offered because on the air a call sign is how a member is identified, and
+// looking one up by name first is the wrong way round (bcars-portal-4ux.12).
+//
+// There is deliberately no sort by email or phone. Both are multi-valued and
+// frequently withheld, so ordering by them would sort most of the club into one
+// indistinguishable block and tell a reader who shares what.
+const (
+	SortName     = ""
+	SortCallSign = "call_sign"
+)
+
+// ValidSort reports whether a sort order is known.
+func ValidSort(s string) bool {
+	switch s {
+	case SortName, SortCallSign:
+		return true
+	}
+	return false
+}
+
 // ValidFilter reports whether a membership-type filter is known.
 func ValidFilter(f string) bool {
 	switch f {
@@ -117,8 +138,12 @@ type Query struct {
 	Search string
 	// BaseType narrows to one membership type. Empty lists both.
 	BaseType string
-	Limit    int64
-	Offset   int64
+	// Sort orders the page. An unknown value falls back to name rather than
+	// erroring, because a sort order arriving from a query string is a display
+	// preference, not an assertion the caller is entitled to have honoured.
+	Sort   string
+	Limit  int64
+	Offset int64
 	// Print raises the page bound so a whole club-sized roster prints as one
 	// sheet. Screen and print consume the identical filtered result; print is
 	// not a second, laxer path.
@@ -192,26 +217,69 @@ func (s *Service) List(ctx context.Context, p *authz.Principal, q Query) (Page, 
 		return Page{}, err
 	}
 
-	rows, err := s.Q.ListDirectoryEntries(ctx, sqlcgen.ListDirectoryEntriesParams{
-		BaseType:   baseType,
-		Search:     search,
-		PageLimit:  limit,
-		PageOffset: offset,
-	})
-	if err != nil {
-		return Page{}, err
-	}
+	// The entries and the contacts must be read in the SAME order, because the
+	// contact query repeats the listing's ORDER BY inside its page CTE to pick
+	// the same members for the same bounds. Choosing one order here and the
+	// other there would show one member's contacts beside another's name, so
+	// the two reads are selected together rather than independently.
+	var (
+		rows     []entryRow
+		contacts []contactRow
+	)
+	if q.Sort == SortCallSign {
+		byCallSign, err := s.Q.ListDirectoryEntriesByCallSign(ctx, sqlcgen.ListDirectoryEntriesByCallSignParams{
+			BaseType:   baseType,
+			Search:     search,
+			PageLimit:  limit,
+			PageOffset: offset,
+		})
+		if err != nil {
+			return Page{}, err
+		}
+		for _, r := range byCallSign {
+			rows = append(rows, entryRow{r.PersonID, r.DisplayName, r.CallSign, r.BaseType})
+		}
 
-	// One query for the same page, returning every shared contact. Scoped by
-	// the same predicate and bounds, so it covers exactly these members.
-	contacts, err := s.Q.ListDirectoryContacts(ctx, sqlcgen.ListDirectoryContactsParams{
-		BaseType:   baseType,
-		Search:     search,
-		PageLimit:  limit,
-		PageOffset: offset,
-	})
-	if err != nil {
-		return Page{}, err
+		cs, err := s.Q.ListDirectoryContactsByCallSign(ctx, sqlcgen.ListDirectoryContactsByCallSignParams{
+			BaseType:   baseType,
+			Search:     search,
+			PageLimit:  limit,
+			PageOffset: offset,
+		})
+		if err != nil {
+			return Page{}, err
+		}
+		for _, c := range cs {
+			contacts = append(contacts, contactRow{c.PersonID, c.Kind, c.Value, c.Label, c.IsPrimary})
+		}
+	} else {
+		byName, err := s.Q.ListDirectoryEntries(ctx, sqlcgen.ListDirectoryEntriesParams{
+			BaseType:   baseType,
+			Search:     search,
+			PageLimit:  limit,
+			PageOffset: offset,
+		})
+		if err != nil {
+			return Page{}, err
+		}
+		for _, r := range byName {
+			rows = append(rows, entryRow{r.PersonID, r.DisplayName, r.CallSign, r.BaseType})
+		}
+
+		// One query for the same page, returning every shared contact. Scoped
+		// by the same predicate and bounds, so it covers exactly these members.
+		cs, err := s.Q.ListDirectoryContacts(ctx, sqlcgen.ListDirectoryContactsParams{
+			BaseType:   baseType,
+			Search:     search,
+			PageLimit:  limit,
+			PageOffset: offset,
+		})
+		if err != nil {
+			return Page{}, err
+		}
+		for _, c := range cs {
+			contacts = append(contacts, contactRow{c.PersonID, c.Kind, c.Value, c.Label, c.IsPrimary})
+		}
 	}
 
 	emails := map[int64][]Contact{}
@@ -239,6 +307,26 @@ func (s *Service) List(ctx context.Context, p *authz.Principal, q Query) (Page, 
 	}
 
 	return Page{Entries: entries, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+// entryRow and contactRow are the shape both orderings share.
+//
+// sqlc emits a distinct row type per query, so without these the ordering
+// choice would leak into the mapping below as two near-identical loops -- and
+// the second one is where a field eventually gets missed.
+type entryRow struct {
+	PersonID    int64
+	DisplayName string
+	CallSign    sql.NullString
+	BaseType    string
+}
+
+type contactRow struct {
+	PersonID  int64
+	Kind      string
+	Value     string
+	Label     sql.NullString
+	IsPrimary int64
 }
 
 // searchFilter converts an optional search term into the interface{} shape

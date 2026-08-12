@@ -1,0 +1,98 @@
+{{template "member_layout.html" .}}
+
+{{define "title"}}Member directory - BCARS Portal{{end}}
+
+{{define "content"}}
+<style>
+/* Page-local layout only. Visual design is deferred to the design bead; this
+   is the minimum that keeps the controls on one line and the table readable. */
+.dir-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.dir-filters .form-group { margin-bottom: 0; flex: 1 1 160px; }
+.dir-filters .dir-actions { display: flex; gap: 8px; }
+.dir-pager { display: flex; gap: 16px; margin: 12px 0 0; font-size: 0.875rem; }
+.dir-notshared { color: #94a3b8; }
+</style>
+
+<h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Member directory</h2>
+<p class="note" style="margin: 0 0 16px;">
+    Members of the club and the contact details each one has agreed to share.
+    Please use it to reach fellow members and for nothing else.
+</p>
+
+<div class="card">
+    <form action="/member/directory" method="get">
+        <div class="dir-filters">
+            <div class="form-group">
+                <label for="search">Search</label>
+                <input type="search" id="search" name="search" value="{{.Search}}"
+                       placeholder="Name or call sign">
+            </div>
+            <div class="form-group">
+                <label for="sort">Sort by</label>
+                <select id="sort" name="sort">
+                    {{range .SortOptions}}
+                    <option value="{{.Value}}" {{if eq .Value $.Sort}}selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="type">Show</label>
+                <select id="type" name="type">
+                    {{range .TypeOptions}}
+                    <option value="{{.Value}}" {{if eq .Value $.BaseType}}selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <div class="dir-actions">
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <a class="btn btn-secondary" href="{{.PrintURL}}">Print this list</a>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    {{if .Rows}}
+    <table>
+        <caption>Showing {{len .Rows}} of {{.Total}} members.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Call sign</th>
+                <th scope="col">Email</th>
+                <th scope="col">Phone</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Rows}}
+            <tr>
+                <td>{{.DisplayName}}</td>
+                <td>{{if .CallSign}}{{.CallSign}}{{else}}<span class="dir-notshared">-</span>{{end}}</td>
+                <td>{{if .EmailShared}}{{.Email}}{{else}}<span class="dir-notshared">{{.Email}}</span>{{end}}</td>
+                <td>{{if .PhoneShared}}{{.Phone}}{{else}}<span class="dir-notshared">{{.Phone}}</span>{{end}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+
+    {{if or .HasPrev .HasNext}}
+    <p class="dir-pager">
+        {{if .HasPrev}}<a href="{{.PrevURL}}">&larr; Previous</a>{{end}}
+        {{if .HasNext}}<a href="{{.NextURL}}">Next &rarr;</a>{{end}}
+    </p>
+    {{end}}
+    {{else}}
+    <p class="empty-state">No members match that search.</p>
+    {{end}}
+</div>
+
+<div class="card">
+    <h3>Something here looks wrong?</h3>
+    <p class="note">
+        The officers keep these details, so send them a note and they will review it.
+        You can suggest a correction to your own record from
+        <a href="/member/">your records</a>, or
+        <a href="/member/suggest">tell them about someone else's</a>.
+    </p>
+</div>
+{{end}}
