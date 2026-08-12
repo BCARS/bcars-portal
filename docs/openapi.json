@@ -220,6 +220,25 @@
         ],
         "type": "object"
       },
+      "ArchiveRelationshipBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ArchiveRelationshipBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AuditEventResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1403,6 +1422,51 @@
           "method",
           "received_on",
           "paid_through"
+        ],
+        "type": "object"
+      },
+      "CreateRelationshipBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateRelationshipBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "context": {
+            "description": "Restricted note explaining the link, for officers only.",
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "from_person_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "spouse_partner",
+              "parent_guardian",
+              "child_dependent",
+              "household",
+              "other"
+            ],
+            "type": "string"
+          },
+          "to_person_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_person_id",
+          "to_person_id",
+          "kind"
         ],
         "type": "object"
       },
@@ -4639,6 +4703,103 @@
         ],
         "type": "object"
       },
+      "RelationshipResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/RelationshipResponse.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "archive_reason": {
+            "type": "string"
+          },
+          "archived_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "archived_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "context": {
+            "description": "Restricted officer note. Never returned by member-facing surfaces.",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by_user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "direction": {
+            "enum": [
+              "outgoing",
+              "incoming"
+            ],
+            "type": "string"
+          },
+          "from_person_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "spouse_partner",
+              "parent_guardian",
+              "child_dependent",
+              "household",
+              "other"
+            ],
+            "type": "string"
+          },
+          "other_call_sign": {
+            "type": "string"
+          },
+          "other_display_name": {
+            "type": "string"
+          },
+          "other_person_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "to_person_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "from_person_id",
+          "to_person_id",
+          "kind",
+          "active",
+          "created_at",
+          "version"
+        ],
+        "type": "object"
+      },
       "RevokeFCCBody": {
         "additionalProperties": false,
         "properties": {
@@ -5125,6 +5286,38 @@
         "required": [
           "body",
           "version"
+        ],
+        "type": "object"
+      },
+      "UpdateRelationshipBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UpdateRelationshipBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "context": {
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "spouse_partner",
+              "parent_guardian",
+              "child_dependent",
+              "household",
+              "other"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
         ],
         "type": "object"
       },
@@ -8744,6 +8937,65 @@
         ]
       }
     },
+    "/members/{person_id}/relationships": {
+      "get": {
+        "description": "Current relationships by default; include_archived adds former ones, because a household that has since changed is still the household a past request arrived from.",
+        "operationId": "person-relationships-list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Include archived relationships, so a former household stays answerable.",
+            "explode": false,
+            "in": "query",
+            "name": "include_archived",
+            "schema": {
+              "description": "Include archived relationships, so a former household stays answerable.",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RelationshipResponse"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List a person's relationships in both directions",
+        "tags": [
+          "relationships"
+        ]
+      }
+    },
     "/memberships/{id}/approve": {
       "post": {
         "operationId": "membership-approve",
@@ -10275,6 +10527,212 @@
         "summary": "Read the printable receipt for a payment",
         "tags": [
           "treasury"
+        ]
+      }
+    },
+    "/relationships": {
+      "post": {
+        "description": "Informational only. Recording a relationship grants no record access, no correction-management authority, and no directory visibility; an officer grants access separately and revocably.",
+        "operationId": "relationship-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRelationshipBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record an informational relationship between two people",
+        "tags": [
+          "relationships"
+        ]
+      }
+    },
+    "/relationships/{relationship_id}": {
+      "get": {
+        "operationId": "relationship-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "relationship_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read one relationship",
+        "tags": [
+          "relationships"
+        ]
+      },
+      "patch": {
+        "description": "The two people are not editable. Re-pointing one end would rewrite history under one row; archive the relationship and record the new one instead.",
+        "operationId": "relationship-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "relationship_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Relationship version you last read. Required: a missing header is a 428.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Relationship version you last read. Required: a missing header is a 428.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRelationshipBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Correct a relationship's kind or restricted note",
+        "tags": [
+          "relationships"
+        ]
+      }
+    },
+    "/relationships/{relationship_id}/archive": {
+      "post": {
+        "description": "There is no delete. A relationship that stopped being true is still a fact about the time it covered.",
+        "operationId": "relationship-archive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "relationship_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Relationship version you last read. Required: a missing header is a 428.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "description": "Relationship version you last read. Required: a missing header is a 428.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveRelationshipBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Archive a relationship that is no longer current",
+        "tags": [
+          "relationships"
         ]
       }
     },

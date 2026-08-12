@@ -259,7 +259,13 @@
     "description": "Maintain informational person relationships.",
     "category": "membership",
     "ai_tool_eligibility": "never",
-    "operation_ids": null
+    "operation_ids": [
+      "person-relationships-list",
+      "relationship-archive",
+      "relationship-create",
+      "relationship-get",
+      "relationship-update"
+    ]
   },
   {
     "code": "profile.self.read",

@@ -379,6 +379,12 @@ type Querier interface {
 	ListPersons(ctx context.Context, arg ListPersonsParams) ([]ListPersonsRow, error)
 	ListPersonsByName(ctx context.Context, arg ListPersonsByNameParams) ([]ListPersonsByNameRow, error)
 	//
+	// Both directions, archived rows included, so an officer can answer who was
+	// recorded as related to whom and when that changed. Archiving keeps history
+	// rather than deleting it, which is the only reason this query differs from
+	// ListRelationshipsForPerson.
+	ListRelationshipHistoryForPerson(ctx context.Context, personID int64) ([]ListRelationshipHistoryForPersonRow, error)
+	//
 	// Both directions, active only. The related person's name comes along so a
 	// caller does not need a second query; nothing else about them is exposed.
 	ListRelationshipsForPerson(ctx context.Context, personID int64) ([]ListRelationshipsForPersonRow, error)

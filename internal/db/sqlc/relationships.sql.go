@@ -132,6 +132,92 @@ func (q *Queries) GetPersonRelationship(ctx context.Context, id int64) (PersonRe
 	return i, err
 }
 
+const listRelationshipHistoryForPerson = `-- name: ListRelationshipHistoryForPerson :many
+SELECT r.id             AS relationship_id,
+       r.kind           AS kind,
+       r.context        AS context,
+       r.from_person_id AS from_person_id,
+       r.to_person_id   AS to_person_id,
+       r.created_by     AS created_by,
+       r.created_at     AS created_at,
+       r.updated_at     AS updated_at,
+       r.archived_at    AS archived_at,
+       r.archived_by    AS archived_by,
+       r.archive_reason AS archive_reason,
+       r.version        AS version,
+       CAST(CASE WHEN r.from_person_id = ?1 THEN 'outgoing'
+                 ELSE 'incoming' END AS TEXT) AS direction,
+       other.display_name AS other_display_name,
+       other.call_sign    AS other_call_sign
+  FROM person_relationships r
+  JOIN persons other
+    ON other.id = CASE WHEN r.from_person_id = ?1
+                       THEN r.to_person_id ELSE r.from_person_id END
+ WHERE (r.from_person_id = ?1 OR r.to_person_id = ?1)
+ ORDER BY other.sort_name, r.id
+`
+
+type ListRelationshipHistoryForPersonRow struct {
+	RelationshipID   int64
+	Kind             string
+	Context          sql.NullString
+	FromPersonID     int64
+	ToPersonID       int64
+	CreatedBy        sql.NullInt64
+	CreatedAt        string
+	UpdatedAt        string
+	ArchivedAt       sql.NullString
+	ArchivedBy       sql.NullInt64
+	ArchiveReason    sql.NullString
+	Version          int64
+	Direction        string
+	OtherDisplayName string
+	OtherCallSign    sql.NullString
+}
+
+// Both directions, archived rows included, so an officer can answer who was
+// recorded as related to whom and when that changed. Archiving keeps history
+// rather than deleting it, which is the only reason this query differs from
+// ListRelationshipsForPerson.
+func (q *Queries) ListRelationshipHistoryForPerson(ctx context.Context, personID int64) ([]ListRelationshipHistoryForPersonRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRelationshipHistoryForPerson, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRelationshipHistoryForPersonRow{}
+	for rows.Next() {
+		var i ListRelationshipHistoryForPersonRow
+		if err := rows.Scan(
+			&i.RelationshipID,
+			&i.Kind,
+			&i.Context,
+			&i.FromPersonID,
+			&i.ToPersonID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
+			&i.ArchiveReason,
+			&i.Version,
+			&i.Direction,
+			&i.OtherDisplayName,
+			&i.OtherCallSign,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRelationshipsForPerson = `-- name: ListRelationshipsForPerson :many
 SELECT r.id             AS relationship_id,
        r.kind           AS kind,
