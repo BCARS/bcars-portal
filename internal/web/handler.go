@@ -21,8 +21,10 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
 	"github.com/bcars/bcars-portal/internal/domain/dues"
 	"github.com/bcars/bcars-portal/internal/domain/importd"
+	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
 	"github.com/bcars/bcars-portal/internal/domain/memberprofile"
 	"github.com/bcars/bcars-portal/internal/domain/members"
+	"github.com/bcars/bcars-portal/internal/domain/relationships"
 	"github.com/bcars/bcars-portal/internal/domain/treasury"
 	"github.com/bcars/bcars-portal/internal/domain/worksheets"
 	"github.com/bcars/bcars-portal/internal/mail"
@@ -44,13 +46,19 @@ type Handler struct {
 	// (ADR-0010).
 	memberProfiles *memberprofile.Service
 	changeRequests *changerequests.Service
-	queries        *sqlcgen.Queries
-	db             *sql.DB
-	log            *slog.Logger
-	auth           *authn.AuthService
-	sess           *authn.SessionStore
-	emailLinks     *authn.EmailLinkService
-	audit          audit.Recorder
+	// memberAccess and relationships back the officer review and access
+	// surface (bcars-portal-4ux.10). They are separate services because the
+	// facts they hold are separate: a grant is authority, a relationship is
+	// context, and no page may turn one into the other.
+	memberAccess  *memberaccess.Service
+	relationships *relationships.Service
+	queries       *sqlcgen.Queries
+	db            *sql.DB
+	log           *slog.Logger
+	auth          *authn.AuthService
+	sess          *authn.SessionStore
+	emailLinks    *authn.EmailLinkService
+	audit         audit.Recorder
 
 	// cookies is the shared source of session-cookie attributes, so login,
 	// logout and the recovery/invitation flows cannot disagree about them.
@@ -182,6 +190,8 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 		worksheets:     worksheets.NewService(database),
 		memberProfiles: memberprofile.NewService(database),
 		changeRequests: changerequests.NewService(database),
+		memberAccess:   memberaccess.NewService(database),
+		relationships:  relationships.NewService(database),
 		imports:        importd.NewService(database),
 		queries:        sqlcgen.New(database),
 		db:             database,
@@ -292,7 +302,9 @@ func (h *Handler) AdminRoutes() []GuardedRoute {
 
 // GuardedRoutes returns every capability-guarded server-rendered route.
 func (h *Handler) GuardedRoutes() []GuardedRoute {
-	return append(h.AdminRoutes(), h.MemberRoutes()...)
+	routes := append(h.AdminRoutes(), h.RequestRoutes()...)
+	routes = append(routes, h.AccessRoutes()...)
+	return append(routes, h.MemberRoutes()...)
 }
 
 // logged wraps an http.HandlerFunc with request/response logging.

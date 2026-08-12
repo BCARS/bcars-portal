@@ -1,0 +1,166 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Request {{.Request.ID}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="breadcrumb">
+    <a href="/admin/requests">Correction requests</a><span>/</span>Request {{.Request.ID}}
+</div>
+
+<h2 style="margin: 0 0 16px; font-size: 1.25rem; font-weight: 600;">
+    {{.Request.Kind}} &middot; {{.Request.About}}
+</h2>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="detail-grid">
+    <div class="card">
+        <h2>What the sender said</h2>
+        <p style="font-size:0.875rem;">{{.Request.Summary}}</p>
+        <div class="detail-row"><div class="detail-label">Received</div><div class="detail-value">{{.Supplied.SubmittedAt}}</div></div>
+        <div class="detail-row"><div class="detail-label">Source</div><div class="detail-value">{{.Request.Source}}</div></div>
+        {{if .Supplied.SubmittedBy}}
+        <div class="detail-row"><div class="detail-label">Submitted by</div><div class="detail-value">{{.Supplied.SubmittedBy}}</div></div>
+        {{end}}
+        {{if .Supplied.Name}}
+        <div class="detail-row"><div class="detail-label">Named</div><div class="detail-value">{{.Supplied.Name}}</div></div>
+        {{end}}
+        {{if .Supplied.CallSign}}
+        <div class="detail-row"><div class="detail-label">Call sign given</div><div class="detail-value">{{.Supplied.CallSign}}</div></div>
+        {{end}}
+        {{if .Supplied.Contact}}
+        <div class="detail-row"><div class="detail-label">Contact given</div><div class="detail-value">{{.Supplied.Contact}}</div></div>
+        {{end}}
+        {{if .Supplied.Relationship}}
+        <div class="detail-row">
+            <div class="detail-label">Says they are</div>
+            <div class="detail-value">
+                {{.Supplied.Relationship}}
+                <div style="font-size:0.75rem; color:#94a3b8;">In the sender's words. Nothing was verified, and it grants them nothing.</div>
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <div class="card">
+        <h2>Which record this concerns</h2>
+        {{if .TargetPersonID}}
+        <p style="font-size:0.875rem;">
+            Linked to <a href="/admin/members/{{.TargetPersonID}}">{{.Request.About}}</a>.
+        </p>
+        <p style="font-size:0.8125rem; color:#64748b;">
+            Linking records who an officer decided this is about. It never changes what the sender wrote above.
+        </p>
+        {{else}}
+        <p style="font-size:0.875rem;">
+            Not yet linked to a member record. Items cannot be applied until it is.
+        </p>
+        {{end}}
+
+        {{if .Reviewable}}
+        <form action="/admin/requests/{{.Request.ID}}/target" method="post" style="margin-top:12px;">
+            <input type="hidden" name="version" value="{{.Version}}">
+            <div class="form-group">
+                <label for="target_person_id">Member record number</label>
+                <input type="number" id="target_person_id" name="target_person_id" min="1"
+                       value="{{if .TargetPersonID}}{{.TargetPersonID}}{{end}}"
+                       aria-describedby="target-help">
+                <div id="target-help" style="font-size:0.75rem; color:#64748b; margin-top:4px;">
+                    Find the record under <a href="/admin/members">Members</a> and use its number.
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">{{if .TargetPersonID}}Change link{{else}}Link to this record{{end}}</button>
+        </form>
+        {{end}}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Proposed changes</h2>
+    {{if .Items}}
+    <table>
+        <thead>
+            <tr>
+                <th>What</th>
+                <th>Suggested value</th>
+                <th>Status</th>
+                <th>Decision</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Items}}
+            <tr>
+                <td>
+                    {{.Label}}
+                    {{if .Sensitive}}<span class="badge badge-yellow">Sensitive</span>{{end}}
+                    {{if not .Appliable}}
+                    <div style="font-size:0.75rem; color:#94a3b8;">Cannot be applied automatically; use the usual workflow.</div>
+                    {{end}}
+                </td>
+                <td>{{if .ProposedValue}}{{.ProposedValue}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>
+                    {{if eq .Status "Approved"}}<span class="badge badge-green">{{.Status}}</span>
+                    {{else if eq .Status "Rejected"}}<span class="badge badge-red">{{.Status}}</span>
+                    {{else if eq .Status "Needs verification"}}<span class="badge badge-yellow">{{.Status}}</span>
+                    {{else}}<span class="badge badge-gray">{{.Status}}</span>
+                    {{end}}
+                    {{if .AppliedAt}}<div style="font-size:0.75rem; color:#64748b;">Applied {{.AppliedAt}}</div>{{end}}
+                </td>
+                <td>
+                    {{if .DecisionReason}}<div style="font-size:0.8125rem;">{{.DecisionReason}}</div>{{end}}
+                    {{if .VerificationNote}}<div style="font-size:0.75rem; color:#64748b;">Verified: {{.VerificationNote}}</div>{{end}}
+
+                    {{if and $.CanReview .Decidable $.Reviewable}}
+                    <form action="/admin/requests/{{$.Request.ID}}/items/{{.ID}}/decision" method="post"
+                          style="margin-top:8px; display:grid; gap:6px;">
+                        <label class="sr-only" for="decision-{{.ID}}">Decision</label>
+                        <select id="decision-{{.ID}}" name="decision">
+                            <option value="approved">Approve</option>
+                            <option value="rejected">Reject</option>
+                            <option value="needs_verification">Needs verification</option>
+                        </select>
+                        <input type="text" name="reason" placeholder="Reason (required to reject)"
+                               aria-label="Reason for rejecting or holding item {{.ID}}">
+                        {{if .Sensitive}}
+                        <input type="text" name="verification_note" placeholder="How you verified this (required to approve)"
+                               aria-label="Verification note for item {{.ID}}">
+                        {{end}}
+                        <button type="submit" class="btn btn-sm btn-primary">Record decision</button>
+                    </form>
+                    {{else if and .Decidable $.Reviewable}}
+                    <div style="font-size:0.75rem; color:#94a3b8;">Awaiting an officer who may review.</div>
+                    {{end}}
+                </td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <div class="empty-state"><p>This request proposes nothing.</p></div>
+    {{end}}
+</div>
+
+{{if .Relationships}}
+<div class="card">
+    <h2>Household context</h2>
+    <p style="font-size:0.8125rem; color:#64748b;">
+        Recorded relationships for this record. They are informational only: they give nobody
+        access to a record and are not a reason to approve anything. Access is granted
+        separately on the <a href="/admin/members/{{.TargetPersonID}}/access">record access page</a>.
+    </p>
+    <table>
+        <thead><tr><th>Relationship</th><th>Person</th><th>Note</th></tr></thead>
+        <tbody>
+        {{range .Relationships}}
+            <tr>
+                <td>{{.Kind}}</td>
+                <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
+                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+{{end}}

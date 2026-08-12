@@ -1,0 +1,156 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Record access - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="breadcrumb">
+    <a href="/admin/members">Members</a><span>/</span>
+    <a href="/admin/members/{{.PersonID}}">{{.DisplayName}}</a><span>/</span>Record access
+</div>
+
+<h2 style="margin: 0 0 16px; font-size: 1.25rem; font-weight: 600;">
+    Who can see {{.DisplayName}}'s record{{if .CallSign}} &middot; {{.CallSign}}{{end}}
+</h2>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="alert alert-info">
+    Access is always an explicit decision. Nobody reaches this record because their email
+    matches a contact detail on it, or because they are recorded as family. Revoking takes
+    effect on that member's next page load, including a session they already have open.
+</div>
+
+<div class="card">
+    <h2>Accounts with access</h2>
+    {{if .Grants}}
+    <table>
+        <thead>
+            <tr>
+                <th>Account</th>
+                <th>Kind</th>
+                <th>Granted</th>
+                <th>Status</th>
+                <th>Reason</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Grants}}
+            <tr>
+                <td>
+                    {{.Email}}
+                    {{if not .HasPassword}}
+                    <div style="font-size:0.75rem; color:#94a3b8;">No password set yet</div>
+                    {{end}}
+                </td>
+                <td>{{if eq .AccessKind "self"}}Their own record{{else}}Acting for them{{end}}</td>
+                <td>{{.GrantedAt}}</td>
+                <td>
+                    {{if .Active}}<span class="badge badge-green">Active</span>
+                    {{else}}<span class="badge badge-gray">Revoked {{.RevokedAt}}</span>{{end}}
+                </td>
+                <td>{{if .Reason}}{{.Reason}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>
+                    {{if .Active}}
+                    <form action="/admin/members/{{$.PersonID}}/access/revoke" method="post">
+                        <input type="hidden" name="user_id" value="{{.UserID}}">
+                        <input type="text" name="reason" placeholder="Reason"
+                               aria-label="Reason for revoking access for {{.Email}}"
+                               style="width:auto; margin-right:4px;">
+                        <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+                    </form>
+                    {{end}}
+                </td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <div class="empty-state">
+        <p>No account reaches this record.</p>
+        <p>That is the normal state until an officer grants one.</p>
+    </div>
+    {{end}}
+</div>
+
+<div class="detail-grid">
+    <div class="card">
+        <h2>Grant access</h2>
+        <p style="font-size:0.8125rem; color:#64748b;">
+            The account must already exist. Granting is the decision that this login may read
+            this record, and nothing else follows from it.
+        </p>
+        <form action="/admin/members/{{.PersonID}}/access/grants" method="post">
+            <div class="form-group">
+                <label for="grant_email">Account email</label>
+                <input type="email" id="grant_email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="access_kind">Kind of access</label>
+                <select id="access_kind" name="access_kind">
+                    <option value="self">This is their own record</option>
+                    <option value="delegate">They are acting for this member</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="grant_reason">Reason</label>
+                <input type="text" id="grant_reason" name="reason" placeholder="Why this account may see this record">
+            </div>
+            <button type="submit" class="btn btn-primary">Grant access</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Create an account</h2>
+        <p style="font-size:0.8125rem; color:#64748b;">
+            Creates a member login for an email address, or reuses the one that address
+            already has. It grants no access to any record on its own, and it sets no
+            password &mdash; the member chooses their own.
+        </p>
+        <form action="/admin/members/{{.PersonID}}/access/accounts" method="post">
+            <div class="form-group">
+                <label for="provision_email">Email address</label>
+                <input type="email" id="provision_email" name="email" required>
+            </div>
+            <button type="submit" class="btn btn-secondary">Create or reuse account</button>
+        </form>
+
+        <h3 style="margin-top:20px;">Send a sign-in link</h3>
+        <p style="font-size:0.8125rem; color:#64748b;">
+            Emails the member a link to set their password. Sent the same way whether or not
+            the address has an account, so this cannot be used to check who is registered.
+        </p>
+        <form action="/admin/members/{{.PersonID}}/access/recovery" method="post">
+            <div class="form-group">
+                <label for="recovery_email">Email address</label>
+                <input type="email" id="recovery_email" name="email" required>
+            </div>
+            <button type="submit" class="btn btn-secondary">Send sign-in link</button>
+        </form>
+    </div>
+</div>
+
+{{if .Relationships}}
+<div class="card">
+    <h2>Recorded relationships</h2>
+    <p style="font-size:0.8125rem; color:#64748b;">
+        Informational only. Nothing in this list gives anyone access to this record; every
+        account that can see it appears in the table above and got there by an officer's
+        explicit grant.
+    </p>
+    <table>
+        <thead><tr><th>Relationship</th><th>Person</th><th>Note</th></tr></thead>
+        <tbody>
+        {{range .Relationships}}
+            <tr>
+                <td>{{.Kind}}</td>
+                <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
+                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+{{end}}
