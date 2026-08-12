@@ -1,0 +1,71 @@
+{{template "member_layout.html" .}}
+
+{{define "title"}}{{.Record.DisplayName}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<p class="breadcrumb"><a href="/member/">Your records</a></p>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+
+<div class="card">
+    <h2>{{.Record.DisplayName}}</h2>
+    <table>
+        <tbody>
+            <tr><th scope="row">Name</th><td>{{.Record.DisplayName}}</td></tr>
+            <tr><th scope="row">Call sign</th><td>{{if .Record.CallSign}}{{.Record.CallSign}}{{else}}<span class="note">Not recorded</span>{{end}}</td></tr>
+            <tr><th scope="row">Membership</th><td>
+                {{if eq .BaseType "full"}}Full member{{else if eq .BaseType "associate"}}Associate member{{else}}<span class="note">Not recorded</span>{{end}}
+                {{if .Lifecycle}}<div class="note">{{.Lifecycle}}</div>{{end}}
+            </td></tr>
+            <tr><th scope="row">Dues</th><td>
+                {{if eq .Record.DuesStatus "current"}}Paid up
+                {{else if eq .Record.DuesStatus "expiring"}}Due soon
+                {{else if eq .Record.DuesStatus "expired"}}Overdue
+                {{else if eq .Record.DuesStatus "honorary_waived"}}Honorary — no dues payable
+                {{else}}<span class="note">Not recorded</span>{{end}}
+                {{if .Record.PaidThrough}}<div class="note">Paid through {{.Record.PaidThrough}}</div>{{end}}
+            </td></tr>
+        </tbody>
+    </table>
+    <p class="note">
+        Payment details are not shown here. The treasurer keeps those; ask an
+        officer if you need a receipt.
+    </p>
+</div>
+
+<div class="card">
+    <h2>Contact details</h2>
+    {{if .Contacts}}
+    <table>
+        <caption>“Shared with” is who can see a value in the member directory.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Value</th>
+                <th scope="col">Shared with</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Contacts}}
+            <tr>
+                <td>{{.Kind}}{{if .Label}} <span class="note">({{.Label}})</span>{{end}}{{if .Primary}} <span class="badge badge-gray">Main</span>{{end}}</td>
+                <td>{{.Value}}</td>
+                <td>{{if eq .SharedWith "full_members"}}Full members{{else if .SharedWith}}{{.SharedWith}}{{else}}<span class="note">Club default</span>{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="empty-state">No contact details are recorded for this record.</p>
+    {{end}}
+</div>
+
+<div class="card">
+    <h2>Something wrong?</h2>
+    <p class="note">
+        You cannot edit these details directly. Send a suggestion and an officer
+        will review it before anything changes.
+    </p>
+    <p><a class="btn btn-primary" href="/member/records/{{.Record.PersonID}}/suggest">Suggest a correction</a></p>
+</div>
+{{end}}
