@@ -19,6 +19,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/batches"
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
+	"github.com/bcars/bcars-portal/internal/domain/directory"
 	"github.com/bcars/bcars-portal/internal/domain/dues"
 	"github.com/bcars/bcars-portal/internal/domain/importd"
 	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
@@ -52,6 +53,7 @@ type Handler struct {
 	// context, and no page may turn one into the other.
 	memberAccess  *memberaccess.Service
 	relationships *relationships.Service
+	directory     *directory.Service
 	queries       *sqlcgen.Queries
 	db            *sql.DB
 	log           *slog.Logger
@@ -192,6 +194,7 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 		changeRequests: changerequests.NewService(database),
 		memberAccess:   memberaccess.NewService(database),
 		relationships:  relationships.NewService(database),
+		directory:      directory.NewService(database),
 		imports:        importd.NewService(database),
 		queries:        sqlcgen.New(database),
 		db:             database,
@@ -304,7 +307,8 @@ func (h *Handler) AdminRoutes() []GuardedRoute {
 func (h *Handler) GuardedRoutes() []GuardedRoute {
 	routes := append(h.AdminRoutes(), h.RequestRoutes()...)
 	routes = append(routes, h.AccessRoutes()...)
-	return append(routes, h.MemberRoutes()...)
+	routes = append(routes, h.MemberRoutes()...)
+	return append(routes, h.DirectoryRoutes()...)
 }
 
 // logged wraps an http.HandlerFunc with request/response logging.

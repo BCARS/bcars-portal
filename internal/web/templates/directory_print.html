@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Member directory - {{.Club}}</title>
+<style>
+    /* Self-contained on purpose: this page is the sheet, so it carries no app
+       chrome to hide and no navigation that would print as a row of dead links. */
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; color: #1a1a1a; background: #f5f5f5; }
+    .sheet { background: #fff; max-width: 8.5in; margin: 0 auto; padding: 24px; }
+
+    h1 { font-size: 1.25rem; margin: 0 0 2px; }
+    .sub { color: #555; font-size: 0.875rem; margin: 0 0 16px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 4px 8px; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; font-size: 0.8125rem; }
+    td { font-size: 0.875rem; }
+    .notshared { color: #666; }
+
+    .controls { max-width: 8.5in; margin: 16px auto 0; padding: 0 24px; }
+    .btn { display: inline-block; padding: 6px 16px; border-radius: 6px; font-size: 0.875rem;
+           border: 1px solid #d1d5db; background: #fff; color: #374151; cursor: pointer;
+           font-family: inherit; text-decoration: none; }
+
+    @media print {
+        /* Letter portrait with a real margin, so nothing is lost to the printer. */
+        @page { size: letter portrait; margin: 0.5in; }
+
+        .no-print { display: none !important; }
+        body { background: #fff; }
+        .sheet { max-width: none; margin: 0; padding: 0; }
+
+        /* 12pt: this is read at a desk, often by people who did not bring their
+           reading glasses to the meeting. */
+        body, td { font-size: 11pt; }
+        th { font-size: 11pt; }
+        h1 { font-size: 14pt; }
+
+        /* The header repeats on every page, and a member's row is never split
+           across a page break, so a name never lands on one sheet with its
+           phone number on the next. */
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; break-inside: avoid; }
+        a { color: #000; text-decoration: none; }
+    }
+</style>
+</head>
+<body>
+<div class="sheet">
+    <h1>{{.Club}}</h1>
+    <p class="sub">
+        Member directory{{if .Search}} &mdash; matching &ldquo;{{.Search}}&rdquo;{{end}}{{if .BaseType}} &mdash; {{.BaseType}} members{{end}}.
+        {{.Shown}} of {{.Total}} members.
+        Contact details are shown only where the member agreed to share them.
+    </p>
+
+    {{if .Rows}}
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Call sign</th>
+                <th scope="col">Email</th>
+                <th scope="col">Phone</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Rows}}
+            <tr>
+                <td>{{.DisplayName}}</td>
+                <td>{{if .CallSign}}{{.CallSign}}{{else}}<span class="notshared">-</span>{{end}}</td>
+                <td>{{if .EmailShared}}{{.Email}}{{else}}<span class="notshared">{{.Email}}</span>{{end}}</td>
+                <td>{{if .PhoneShared}}{{.Phone}}{{else}}<span class="notshared">{{.Phone}}</span>{{end}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>No members match this list.</p>
+    {{end}}
+
+    {{if .Truncated}}
+    <p class="sub" style="margin-top: 12px;">
+        This sheet shows the first {{.Shown}} of {{.Total}} members. Narrow the
+        list with a search or a membership type to print the rest.
+    </p>
+    {{end}}
+</div>
+
+<div class="controls no-print">
+    <button type="button" class="btn" onclick="window.print()">Print</button>
+    <a class="btn" href="/member/directory">Back to the directory</a>
+</div>
+</body>
+</html>

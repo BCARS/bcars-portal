@@ -194,6 +194,14 @@ type memberHomeData struct {
 	// officer, so the landing says whether anything is outstanding rather than
 	// only offering a link to go and look.
 	OpenRequests int
+	// DirectoryAvailable gates the directory link.
+	//
+	// Eligibility is asked of the service rather than inferred from the member
+	// role or the directory.read capability, because it is neither: it is an
+	// active grant to an active approved FULL membership. An Associate holds
+	// the capability and is refused the listing, so a link shown to them would
+	// lead to the not-found page the refusal renders (bcars-portal-4ux.12).
+	DirectoryAvailable bool
 }
 
 type memberRecordRow struct {
@@ -245,6 +253,17 @@ func (h *Handler) memberHome(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+
+	if hasCap(p, "directory.read") {
+		eligible, err := h.directory.Eligible(ctx, p)
+		if err != nil {
+			// A failed probe hides the link rather than showing one that might
+			// not work. The directory is a convenience; the records below it
+			// are the reason the member signed in.
+			h.log.Error("directory eligibility", slog.String("error", err.Error()))
+		}
+		data.DirectoryAvailable = eligible
 	}
 
 	h.render.RenderHTTP(w, "member_home.html", http.StatusOK, data)

@@ -282,6 +282,16 @@ type Querier interface {
 	// Primary first, then by id, so a member's main number leads.
 	ListDirectoryContacts(ctx context.Context, arg ListDirectoryContactsParams) ([]ListDirectoryContactsRow, error)
 	//
+	// ListDirectoryContacts for the call-sign order.
+	//
+	// The page CTE has to repeat the call-sign ORDER BY exactly. A CTE ordered
+	// differently would select a DIFFERENT set of members for the same LIMIT and
+	// OFFSET, and the page would show one member's contacts beside another
+	// member's name. The contact visibility rule below is identical to the other
+	// query's, because which values may be seen has nothing to do with what the
+	// reader chose to sort by.
+	ListDirectoryContactsByCallSign(ctx context.Context, arg ListDirectoryContactsByCallSignParams) ([]ListDirectoryContactsByCallSignRow, error)
+	//
 	// Rows are active approved members, optionally narrowed to one membership type.
 	// Contact values are NOT here; see ListDirectoryContacts, which returns every
 	// shared contact rather than one per kind.
@@ -290,6 +300,30 @@ type Querier interface {
 	// boundary from shifting between calls when two members sort equally, so paging
 	// cannot silently skip someone.
 	ListDirectoryEntries(ctx context.Context, arg ListDirectoryEntriesParams) ([]ListDirectoryEntriesRow, error)
+	//
+	// The same population, filter, and bounds as ListDirectoryEntries, ordered by
+	// call sign (bcars-portal-4ux.12).
+	//
+	// It is a separate query rather than one query with a sort parameter because
+	// the query compiler does not bind parameters inside ORDER BY: a placeholder
+	// written there survives into the generated SQL as literal text and fails at
+	// runtime. Two explicit orders are the honest version of the same choice, and
+	// sorting has to stay in SQL regardless -- a page sorted after it was fetched
+	// is only sorted within itself, so the second page would still hold whoever
+	// the SQL put there.
+	//
+	// The two ordering keys are computed in the SELECT list rather than written
+	// into ORDER BY, because the query compiler rejects a CASE expression there.
+	//
+	// Members without a call sign sort LAST rather than first, which is where
+	// SQLite puts NULL and not where a reader looks for them. Name and id remain
+	// the final tie-breakers, so a page boundary cannot shift between calls and
+	// silently skip someone.
+	//
+	// KEEP THIS PREDICATE IN STEP with ListDirectoryEntries, CountDirectoryEntries,
+	// and both contact queries. They describe one population four times; a change
+	// to one that misses the others is how a total stops matching its listing.
+	ListDirectoryEntriesByCallSign(ctx context.Context, arg ListDirectoryEntriesByCallSignParams) ([]ListDirectoryEntriesByCallSignRow, error)
 	ListDuesRates(ctx context.Context) ([]DuesRate, error)
 	// Derived dues standing and coverage reads.
 	//
