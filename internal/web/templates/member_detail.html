@@ -22,6 +22,7 @@
     </div>
     <div style="display: flex; gap: 8px;">
         <a href="/admin/members/{{.Person.ID}}/edit" class="btn btn-secondary btn-sm">Edit</a>
+        <a href="/admin/members/{{.Person.ID}}/access" class="btn btn-secondary btn-sm">Record access</a>
         {{if .Person.DeactivatedAt.Valid}}
         <form method="post" action="/admin/members/{{.Person.ID}}/reactivate">
             <input type="hidden" name="version" value="{{.Person.Version}}">

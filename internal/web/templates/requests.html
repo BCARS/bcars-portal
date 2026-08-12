@@ -1,0 +1,83 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Correction requests - BCARS Portal{{end}}
+
+{{define "content"}}
+<h2 style="margin: 0 0 16px; font-size: 1.25rem; font-weight: 600;">Correction requests</h2>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <form action="/admin/requests" method="get">
+        <div class="search-bar">
+            <label for="status" style="align-self:center; font-size:0.875rem; color:#475569;">Status</label>
+            <select id="status" name="status">
+                {{range .Statuses}}
+                <option value="{{.Value}}" {{if eq .Value $.Filters.Status}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+            </select>
+
+            <label for="source" style="align-self:center; font-size:0.875rem; color:#475569;">Source</label>
+            <select id="source" name="source">
+                {{range .Sources}}
+                <option value="{{.Value}}" {{if eq .Value $.Filters.Source}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+            </select>
+
+            <label style="align-self:center; font-size:0.875rem; color:#475569;">
+                <input type="checkbox" name="unlinked" value="1" {{if .Filters.UnlinkedOnly}}checked{{end}}
+                       style="width:auto; margin-right:4px;">
+                Needs linking
+            </label>
+
+            <button type="submit" class="btn btn-secondary">Filter</button>
+        </div>
+    </form>
+
+    {{if .Requests}}
+    <table>
+        <thead>
+            <tr>
+                <th>Received</th>
+                <th>Source</th>
+                <th>Kind</th>
+                <th>About</th>
+                <th>Summary</th>
+                <th>Awaiting</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Requests}}
+            <tr>
+                <td>{{.SubmittedAt}}</td>
+                <td>{{.Source}}</td>
+                <td>{{.Kind}}</td>
+                <td>
+                    {{.About}}
+                    {{if .Supplied}}<div style="font-size:0.75rem; color:#94a3b8;">As described by the sender; not yet linked</div>{{end}}
+                </td>
+                <td>{{.Summary}}</td>
+                <td>{{if .PendingItems}}{{.PendingItems}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>
+                    {{if eq .Status "Resolved"}}<span class="badge badge-green">{{.Status}}</span>
+                    {{else if eq .Status "Withdrawn"}}<span class="badge badge-gray">{{.Status}}</span>
+                    {{else if eq .Status "In review"}}<span class="badge badge-blue">{{.Status}}</span>
+                    {{else}}<span class="badge badge-yellow">{{.Status}}</span>
+                    {{end}}
+                </td>
+                <td><a href="/admin/requests/{{.ID}}" class="btn btn-sm btn-secondary">Review</a></td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <div class="empty-state">
+        <p>No requests match this filter.</p>
+        <p>Corrections arrive here from officers recording them and from members using the member pages.</p>
+    </div>
+    {{end}}
+</div>
+{{end}}
