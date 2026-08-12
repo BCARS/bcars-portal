@@ -137,6 +137,28 @@ func TestMemberOnboardingSmoke(t *testing.T) {
 	assert.Contains(t, readBody(resp), "Someone Not On My List",
 		"the member can track their own suggestion")
 
+	// The member UI renders the same record, and its suggestion form files a
+	// request through the shipped binary rather than a hand-built handler.
+	resp = e.do(http.MethodGet, fmt.Sprintf("/member/records/%d", self), member, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode, "member record page: %s", readBody(resp))
+	assert.Contains(t, readBody(resp), memberSelfName)
+
+	resp = e.do(http.MethodGet, "/member/suggest", member, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode, "the hint form must render")
+	assert.NotContains(t, readBody(resp), memberNeverName,
+		"the hint form must not list anyone")
+
+	resp = e.postForm("/member/suggest", member, url.Values{
+		"kind":       {"other"},
+		"about_name": {"Someone Not On My List"},
+		"summary":    {"Their call sign is printed wrong."}})
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode, "suggestion form: %s", readBody(resp))
+
+	resp = e.do(http.MethodGet, "/member/requests", member, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, readBody(resp), "Their call sign is printed wrong",
+		"a member can track the suggestion they just sent")
+
 	// Revoking a grant takes effect inside the session that is already open.
 	e.revokeRecord(admin, memberUserID, self)
 

@@ -32,11 +32,18 @@ func TestEveryEmbeddedTemplateIsRegistered(t *testing.T) {
 
 	for _, full := range embedded {
 		name := path.Base(full)
-		if name == layoutTemplate {
-			continue
+		if isLayout(name) {
+			continue // a base is rendered only through a page that embeds it
 		}
 		assert.True(t, registered[name],
 			"template %s is embedded but not registered — it would fail at runtime", name)
+	}
+
+	// Every base must be reachable, or a page embedding it silently renders
+	// nothing but its own blocks.
+	for _, base := range layoutTemplates {
+		assert.Contains(t, embedded, "templates/"+base,
+			"layout %s is named in code but not embedded", base)
 	}
 }
 

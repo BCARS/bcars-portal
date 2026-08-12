@@ -1,0 +1,68 @@
+{{template "member_layout.html" .}}
+
+{{define "title"}}Your suggestion - BCARS Portal{{end}}
+
+{{define "content"}}
+<p class="breadcrumb"><a href="/member/requests">Your suggestions</a></p>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <h2>What you asked for</h2>
+    <p>{{.Request.Summary}}</p>
+    <table>
+        <tbody>
+            <tr><th scope="row">About</th><td>{{if .Request.AboutName}}{{.Request.AboutName}}{{else}}Your own record{{end}}</td></tr>
+            <tr><th scope="row">Sent</th><td>{{.Request.SubmittedAt}}</td></tr>
+            <tr><th scope="row">Status</th><td>
+                {{if eq .Request.Status "withdrawn"}}Withdrawn
+                {{else if eq .Request.Status "resolved"}}Reviewed
+                {{else if eq .Request.Status "in_review"}}An officer is reviewing this
+                {{else}}Waiting for an officer{{end}}
+            </td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>The changes you proposed</h2>
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Change</th>
+                <th scope="col">You suggested</th>
+                <th scope="col">Officer's decision</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Items}}
+            <tr>
+                <td>{{.Label}}</td>
+                <td>{{if .ProposedValue}}{{.ProposedValue}}{{else}}<span class="note">Described above</span>{{end}}</td>
+                <td>
+                    {{if eq .Status "approved"}}<span class="badge badge-green">Applied</span>
+                    {{else if eq .Status "rejected"}}<span class="badge badge-red">Not applied</span>
+                    {{else if eq .Status "needs_verification"}}<span class="badge badge-yellow">An officer needs to check this</span>
+                    {{else}}<span class="badge badge-gray">Not decided yet</span>{{end}}
+                    {{if .DecisionReason}}<div class="note">{{.DecisionReason}}</div>{{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if .Request.Withdrawable}}
+<div class="card">
+    <h2>Changed your mind?</h2>
+    <p class="note">
+        You can withdraw this while no officer has decided any part of it. What
+        you asked for stays on the record, marked withdrawn.
+    </p>
+    <form method="post" action="/member/requests/{{.Request.ID}}/withdrawal">
+        <button type="submit" class="btn btn-secondary">Withdraw this suggestion</button>
+    </form>
+</div>
+{{end}}
+{{end}}

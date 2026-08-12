@@ -1,0 +1,65 @@
+{{template "member_layout.html" .}}
+
+{{define "title"}}Suggest a correction about someone else - BCARS Portal{{end}}
+
+{{define "content"}}
+<p class="breadcrumb"><a href="/member/">Your records</a></p>
+
+<h2>Suggest a correction about another member</h2>
+
+{{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
+
+<div class="alert alert-info">
+    Tell us who this is about in your own words.
+    This form does not look anyone up, so it cannot confirm whether the person is in the club's records —
+    an officer works that out when they review your suggestion.
+    Sending a suggestion does not give you access to anyone's record.
+</div>
+
+<form method="post" action="/member/suggest" class="card">
+    <div class="form-group">
+        <label for="about_name">Who is this about?</label>
+        <input type="text" id="about_name" name="about_name" value="{{.Submitted.AboutName}}"
+               maxlength="200" autocomplete="off">
+        <p class="form-hint">Their name as you know it.</p>
+    </div>
+
+    <div class="form-group">
+        <label for="about_call_sign">Their call sign, if you know it</label>
+        <input type="text" id="about_call_sign" name="about_call_sign" value="{{.Submitted.AboutCallSign}}"
+               maxlength="200" autocomplete="off">
+        <p class="form-hint">A name or a call sign is enough — give whichever you have.</p>
+    </div>
+
+    <div class="form-group">
+        <label for="relationship">How do you know them? (optional)</label>
+        <input type="text" id="relationship" name="relationship" value="{{.Submitted.Relationship}}" maxlength="200">
+        <p class="form-hint">Context for the officers. It gives you no access to their record.</p>
+    </div>
+
+    <fieldset>
+        <legend>What needs correcting?</legend>
+        {{range $i, $k := .Kinds}}
+        <label>
+            <input type="radio" name="kind" value="{{$k.Operation}}"
+                   {{if eq $.Submitted.Kind $k.Operation}}checked{{else if and (eq $.Submitted.Kind "") (eq $i 0)}}checked{{end}}>
+            {{$k.Label}}
+        </label>
+        {{end}}
+    </fieldset>
+
+    <div class="form-group">
+        <label for="proposed_value">What it should be</label>
+        <input type="text" id="proposed_value" name="proposed_value" value="{{.Submitted.ProposedValue}}" maxlength="2000">
+        <p class="form-hint">Leave this empty only if you chose “Something else”.</p>
+    </div>
+
+    <div class="form-group">
+        <label for="summary">Tell the officers what is wrong</label>
+        <textarea id="summary" name="summary" rows="4" maxlength="4000" required>{{.Submitted.Summary}}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Send to the officers</button>
+    <a href="/member/" class="btn btn-secondary">Cancel</a>
+</form>
+{{end}}

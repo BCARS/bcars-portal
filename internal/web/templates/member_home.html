@@ -1,86 +1,76 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your BCARS Records</title>
-    <style>
-        *, *::before, *::after { box-sizing: border-box; }
-        body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f5f5f5; color: #1a1a1a; line-height: 1.5; }
-        a { color: #1a56db; }
+{{template "member_layout.html" .}}
 
-        .skip-link { position: absolute; top: -40px; left: 0; background: #1a56db; color: #fff; padding: 8px 16px; z-index: 100; }
-        .skip-link:focus { top: 0; }
+{{define "title"}}Your records - BCARS Portal{{end}}
 
-        .header { background: #1e293b; color: #fff; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-        .header h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
-        .header .who { color: #94a3b8; font-size: 0.875rem; }
-        .header button { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.875rem; font-family: inherit; padding: 0; }
-        .header button:hover { color: #fff; }
+{{define "content"}}
+<p class="note">Signed in as {{.Email}}</p>
 
-        .container { max-width: 720px; margin: 0 auto; padding: 24px; }
-        .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-        .card h2 { margin: 0 0 12px; font-size: 1rem; font-weight: 600; }
-
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th { text-align: left; padding: 8px 12px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #475569; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
-
-        .empty-state { color: #64748b; }
-        .note { color: #64748b; font-size: 0.875rem; }
-    </style>
-</head>
-<body>
-    <a class="skip-link" href="#main">Skip to main content</a>
-
-    <header class="header">
-        <h1>BCARS Portal</h1>
-        <span class="who">Signed in as {{.Email}}</span>
-        <form method="post" action="/logout">
-            <button type="submit">Sign Out</button>
-        </form>
-    </header>
-
-    <main id="main" class="container">
-        <div class="card">
-            <h2>Your records</h2>
-            {{if .Records}}
-            <table>
-                <caption class="note" style="caption-side: bottom; text-align: left; padding-top: 8px;">
-                    An officer decides which records this account can see. Contact a club officer to correct this list.
-                </caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col">Access</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range .Records}}
-                    <tr>
-                        <td>{{.DisplayName}}</td>
-                        <td>{{if eq .AccessKind "self"}}Your own record{{else}}On behalf of this member{{end}}</td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-            {{else}}
-            <p class="empty-state">
-                This account is not linked to any member record yet. A club officer
-                links your record to your account; until then there is nothing here
-                to show.
-            </p>
+<div class="card">
+    <h2>Your records</h2>
+    {{if .Records}}
+    <table>
+        <caption>A club officer decides which records this account can see. Ask an officer if something is missing.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Dues</th>
+                <th scope="col">Access</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Records}}
+            <tr>
+                <td>
+                    <a href="/member/records/{{.PersonID}}">{{.DisplayName}}</a>
+                    {{if .CallSign}}<div class="note">{{.CallSign}}</div>{{end}}
+                </td>
+                <td>
+                    {{if eq .DuesStatus "current"}}<span class="badge badge-green">Paid up</span>
+                    {{else if eq .DuesStatus "expiring"}}<span class="badge badge-yellow">Due soon</span>
+                    {{else if eq .DuesStatus "expired"}}<span class="badge badge-red">Overdue</span>
+                    {{else if eq .DuesStatus "honorary_waived"}}<span class="badge badge-green">Honorary</span>
+                    {{else}}<span class="badge badge-gray">Not recorded</span>{{end}}
+                    {{if .PaidThrough}}<div class="note">Through {{.PaidThrough}}</div>{{end}}
+                </td>
+                <td>{{if eq .AccessKind "self"}}Your own record{{else}}On behalf of this member{{end}}</td>
+            </tr>
             {{end}}
-        </div>
+        </tbody>
+    </table>
+    {{else}}
+    <p class="empty-state">
+        This account is not linked to any member record yet. A club officer links
+        your record to your account; until then there is nothing here to show.
+    </p>
+    {{end}}
+</div>
 
-        <div class="card">
-            <h2>Your password</h2>
-            <p class="note">
-                You sign in with your email address and a password you chose. If you
-                forget it, use <a href="/forgot-password">Forgot password</a> to set a
-                new one.
-            </p>
-        </div>
-    </main>
-</body>
-</html>
+<div class="card">
+    <h2>Suggest a correction</h2>
+    <p class="note">
+        Noticed something wrong in the club's records — for you or for another
+        member? Send a suggestion and an officer will review it. You do not need
+        to be able to see someone's record to tell us about a mistake in it.
+    </p>
+    <p>
+        <a class="btn btn-primary" href="/member/suggest">Suggest a correction about someone else</a>
+    </p>
+    {{if .OpenRequests}}
+    <p class="note">
+        {{if eq .OpenRequests 1}}You have one suggestion waiting for an officer.
+        {{else}}You have {{.OpenRequests}} suggestions waiting for an officer.{{end}}
+        <a href="/member/requests">See your suggestions</a>.
+    </p>
+    {{else}}
+    <p class="note"><a href="/member/requests">See your suggestions</a></p>
+    {{end}}
+</div>
+
+<div class="card">
+    <h2>Your password</h2>
+    <p class="note">
+        You sign in with your email address and a password you chose. If you
+        forget it, use <a href="/forgot-password">Forgot password</a> to set a new one.
+    </p>
+</div>
+{{end}}

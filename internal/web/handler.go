@@ -18,9 +18,10 @@ import (
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/batches"
+	"github.com/bcars/bcars-portal/internal/domain/changerequests"
 	"github.com/bcars/bcars-portal/internal/domain/dues"
 	"github.com/bcars/bcars-portal/internal/domain/importd"
-	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
+	"github.com/bcars/bcars-portal/internal/domain/memberprofile"
 	"github.com/bcars/bcars-portal/internal/domain/members"
 	"github.com/bcars/bcars-portal/internal/domain/treasury"
 	"github.com/bcars/bcars-portal/internal/domain/worksheets"
@@ -37,18 +38,19 @@ type Handler struct {
 	batches    *batches.Service
 	treasury   *treasury.Service
 	worksheets *worksheets.Service
-	// memberAccess answers what records the signed-in member may reach. The
-	// member landing reads it on every request rather than trusting anything
-	// stored on the session, so a revoked grant disappears from an existing
-	// session (ADR-0010).
-	memberAccess *memberaccess.Service
-	queries      *sqlcgen.Queries
-	db           *sql.DB
-	log          *slog.Logger
-	auth         *authn.AuthService
-	sess         *authn.SessionStore
-	emailLinks   *authn.EmailLinkService
-	audit        audit.Recorder
+	// memberProfiles and changeRequests back the member self-service UI. Both
+	// are consulted on every request rather than trusting anything stored on
+	// the session, so a revoked grant disappears from an existing session
+	// (ADR-0010).
+	memberProfiles *memberprofile.Service
+	changeRequests *changerequests.Service
+	queries        *sqlcgen.Queries
+	db             *sql.DB
+	log            *slog.Logger
+	auth           *authn.AuthService
+	sess           *authn.SessionStore
+	emailLinks     *authn.EmailLinkService
+	audit          audit.Recorder
 
 	// cookies is the shared source of session-cookie attributes, so login,
 	// logout and the recovery/invitation flows cannot disagree about them.
@@ -172,23 +174,24 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 	})
 
 	return &Handler{
-		render:       r,
-		members:      members.NewService(database),
-		dues:         dues.NewService(database),
-		batches:      batches.NewService(database),
-		treasury:     treasury.NewService(database),
-		worksheets:   worksheets.NewService(database),
-		memberAccess: memberaccess.NewService(database),
-		imports:      importd.NewService(database),
-		queries:      sqlcgen.New(database),
-		db:           database,
-		log:          logger,
-		auth:         authSvc,
-		sess:         sessStore,
-		emailLinks:   emailLinks,
-		audit:        audit.NewSQLRecorder(database, logger),
-		cookies:      cookies,
-		clientIP:     clientip.NewHasher(cfg.ClientIP),
+		render:         r,
+		members:        members.NewService(database),
+		dues:           dues.NewService(database),
+		batches:        batches.NewService(database),
+		treasury:       treasury.NewService(database),
+		worksheets:     worksheets.NewService(database),
+		memberProfiles: memberprofile.NewService(database),
+		changeRequests: changerequests.NewService(database),
+		imports:        importd.NewService(database),
+		queries:        sqlcgen.New(database),
+		db:             database,
+		log:            logger,
+		auth:           authSvc,
+		sess:           sessStore,
+		emailLinks:     emailLinks,
+		audit:          audit.NewSQLRecorder(database, logger),
+		cookies:        cookies,
+		clientIP:       clientip.NewHasher(cfg.ClientIP),
 	}, nil
 }
 
@@ -284,20 +287,6 @@ func (h *Handler) AdminRoutes() []GuardedRoute {
 		{Pattern: "POST /admin/imports/{id}/preview", Capability: "import.upload", AuditAction: "import.preview", ResourceKind: "import_run", handler: h.importPreview},
 		{Pattern: "POST /admin/imports/{id}/commit", Capability: "import.commit", AuditAction: "import.commit", ResourceKind: "import_run", handler: h.importCommit},
 		{Pattern: "POST /admin/imports/{id}/discard", Capability: "import.upload", AuditAction: "import.discard", ResourceKind: "import_run", handler: h.importDiscard},
-	}
-}
-
-// MemberRoutes returns every member self-service route with its capability
-// requirement.
-//
-// It is a separate table from AdminRoutes so the two cannot be confused: an
-// officer capability must never appear here, and a route added here reaches a
-// caller holding only the member role. profile.self.read is the member role's
-// own capability, and the landing narrows further than that — it lists only
-// the records this caller has an active grant to.
-func (h *Handler) MemberRoutes() []GuardedRoute {
-	return []GuardedRoute{
-		{Pattern: "GET " + RouteMemberHome, Capability: "profile.self.read", ResourceKind: "member_access_grant", handler: h.memberHome},
 	}
 }
 
@@ -645,54 +634,6 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render.RenderHTTP(w, "dashboard.html", http.StatusOK, data)
-}
-
-// --- Member self-service ---
-
-type memberHomeData struct {
-	Email string
-	// Records are the person records this caller may currently reach. An empty
-	// list is a real state, not an error: an account exists before an officer
-	// grants it anything, and a revoked grant leaves it empty again.
-	Records []memberRecordRow
-}
-
-type memberRecordRow struct {
-	DisplayName string
-	AccessKind  string
-}
-
-// memberHome is where a signed-in member lands.
-//
-// It reads the caller's active grants on every request through the domain
-// service. Nothing about which records appear here comes from the session, the
-// URL, or a matching contact address, so revoking a grant removes the record
-// from the very next page load of a session that is already open (ADR-0010).
-//
-// It deliberately shows no profile detail or dues figure yet; the safe profile
-// read model is bcars-portal-4ux.6 and the full member shell is
-// bcars-portal-4ux.11.
-func (h *Handler) memberHome(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	p := h.principalFromRequest(r)
-
-	data := memberHomeData{}
-	_ = h.db.QueryRowContext(ctx, `SELECT email FROM users WHERE id = ?`, p.UserID).Scan(&data.Email)
-
-	grants, err := h.memberAccess.ListOwnActiveGrants(ctx, p)
-	if err != nil {
-		h.log.Error("member grants", slog.String("error", err.Error()))
-		h.renderError(w, r, http.StatusInternalServerError, "Your records could not be loaded. Please try again.")
-		return
-	}
-	for _, g := range grants {
-		data.Records = append(data.Records, memberRecordRow{
-			DisplayName: g.DisplayName,
-			AccessKind:  g.AccessKind,
-		})
-	}
-
-	h.render.RenderHTTP(w, "member_home.html", http.StatusOK, data)
 }
 
 // --- Members ---

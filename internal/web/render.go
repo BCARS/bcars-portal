@@ -14,8 +14,38 @@ import (
 	"sort"
 )
 
-// layoutTemplate is the shared base other pages embed.
+// layoutTemplate is the officer UI's shared base.
 const layoutTemplate = "layout.html"
+
+// memberLayoutTemplate is the member UI's base. The two surfaces do not share
+// one: the officer chrome links to /admin/ pages a member is refused, and a
+// layout that had to ask which caller it was rendering for would be one
+// forgotten condition away from advertising them (bcars-portal-4ux.11).
+const memberLayoutTemplate = "member_layout.html"
+
+// layoutTemplates are the bases. A base is never rendered on its own, and a
+// page names the one it embeds, so adding a base here is all it takes for
+// pages to use it.
+var layoutTemplates = []string{layoutTemplate, memberLayoutTemplate}
+
+// layoutFor reports which base a page embeds, or "" when it is self-contained.
+func layoutFor(src []byte) string {
+	for _, base := range layoutTemplates {
+		if bytes.Contains(src, []byte(`{{template "`+base+`"`)) {
+			return base
+		}
+	}
+	return ""
+}
+
+func isLayout(page string) bool {
+	for _, base := range layoutTemplates {
+		if page == base {
+			return true
+		}
+	}
+	return false
+}
 
 //go:embed templates/*.html
 var templateFS embed.FS
@@ -45,8 +75,8 @@ func NewRenderer() (*Renderer, error) {
 
 	for _, name := range names {
 		page := path.Base(name)
-		if page == layoutTemplate {
-			continue // the layout is a base, never rendered on its own
+		if isLayout(page) {
+			continue // a base is never rendered on its own
 		}
 
 		src, err := templateFS.ReadFile(name)
@@ -55,8 +85,8 @@ func NewRenderer() (*Renderer, error) {
 		}
 
 		var tmpl *template.Template
-		if bytes.Contains(src, []byte(`{{template "`+layoutTemplate+`"`)) {
-			tmpl, err = template.ParseFS(templateFS, "templates/"+layoutTemplate, name)
+		if base := layoutFor(src); base != "" {
+			tmpl, err = template.ParseFS(templateFS, "templates/"+base, name)
 		} else {
 			tmpl, err = template.ParseFS(templateFS, name)
 		}

@@ -1,0 +1,57 @@
+{{template "member_layout.html" .}}
+
+{{define "title"}}Suggest a correction - BCARS Portal{{end}}
+
+{{define "content"}}
+<p class="breadcrumb"><a href="/member/records/{{.About.PersonID}}">Back to {{.About.DisplayName}}</a></p>
+
+<h2>Suggest a correction to {{.About.DisplayName}}</h2>
+
+{{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
+
+<div class="alert alert-info">
+    An officer reviews every suggestion before anything changes. Nothing on this
+    form edits the club's records directly.
+</div>
+
+<form method="post" action="/member/records/{{.About.PersonID}}/suggest" class="card">
+    <fieldset>
+        <legend>What needs correcting?</legend>
+        {{range $i, $k := .Kinds}}
+        <label>
+            <input type="radio" name="kind" value="{{$k.Operation}}"
+                   {{if eq $.Submitted.Kind $k.Operation}}checked{{else if and (eq $.Submitted.Kind "") (eq $i 0)}}checked{{end}}>
+            {{$k.Label}}
+        </label>
+        {{end}}
+    </fieldset>
+
+    {{if .Contacts}}
+    <div class="form-group">
+        <label for="contact_id">Which contact detail? (only for a contact correction)</label>
+        <select id="contact_id" name="contact_id">
+            <option value="">Choose one</option>
+            {{range .Contacts}}
+            <option value="{{.ID}}" {{if eq (printf "%d" .ID) $.Submitted.ContactSelected}}selected{{end}}>
+                {{.Kind}}{{if .Label}} ({{.Label}}){{end}} — {{.Value}}
+            </option>
+            {{end}}
+        </select>
+    </div>
+    {{end}}
+
+    <div class="form-group">
+        <label for="proposed_value">What it should be</label>
+        <input type="text" id="proposed_value" name="proposed_value" value="{{.Submitted.ProposedValue}}" maxlength="2000">
+        <p class="form-hint">Leave this empty only if you chose “Something else”.</p>
+    </div>
+
+    <div class="form-group">
+        <label for="summary">Tell the officers what is wrong</label>
+        <textarea id="summary" name="summary" rows="4" maxlength="4000" required>{{.Submitted.Summary}}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Send to the officers</button>
+    <a href="/member/records/{{.About.PersonID}}" class="btn btn-secondary">Cancel</a>
+</form>
+{{end}}

@@ -1,0 +1,44 @@
+{{template "member_layout.html" .}}
+
+{{define "title"}}Your suggestions - BCARS Portal{{end}}
+
+{{define "content"}}
+<p class="breadcrumb"><a href="/member/">Your records</a></p>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+
+<div class="card">
+    <h2>Your suggestions</h2>
+    {{if .Requests}}
+    <table>
+        <caption>Only suggestions you sent. Corrections an officer recorded about you are not listed here.</caption>
+        <thead>
+            <tr>
+                <th scope="col">What you asked for</th>
+                <th scope="col">About</th>
+                <th scope="col">Status</th>
+                <th scope="col">Sent</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Requests}}
+            <tr>
+                <td><a href="/member/requests/{{.ID}}">{{.Summary}}</a></td>
+                <td>{{if .AboutName}}{{.AboutName}}{{else}}<span class="note">Your own record</span>{{end}}</td>
+                <td>
+                    {{if eq .Status "withdrawn"}}<span class="badge badge-gray">Withdrawn</span>
+                    {{else if eq .Status "resolved"}}<span class="badge badge-green">Reviewed</span>
+                    {{else if eq .Status "in_review"}}<span class="badge badge-yellow">Being reviewed</span>
+                    {{else}}<span class="badge badge-yellow">Waiting for an officer</span>{{end}}
+                </td>
+                <td class="note">{{.SubmittedAt}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="empty-state">You have not sent any suggestions yet.</p>
+    {{end}}
+    <p><a class="btn btn-secondary" href="/member/suggest">Suggest a correction about someone else</a></p>
+</div>
+{{end}}

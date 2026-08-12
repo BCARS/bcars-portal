@@ -322,6 +322,16 @@ func TestDashboardWithholdsWhatTheCallerCannotRead(t *testing.T) {
 		"a caller without import.upload must not be told how many imports exist")
 }
 
+// officerCookie signs in the provisioning officer.
+func (e *memberTestEnv) officerCookie(t *testing.T) *http.Cookie {
+	t.Helper()
+	w := e.post(t, RouteLogin, url.Values{
+		"email": {"secretary@bcars.example"}, "password": {"officerpassword12345"},
+	}, nil)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	return cookieFrom(t, w)
+}
+
 // signInMember sets a password through recovery and signs in, returning the
 // member's session cookie.
 func (e *memberTestEnv) signInMember(t *testing.T) *http.Cookie {
