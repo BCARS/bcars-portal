@@ -755,7 +755,7 @@ func TestPhase3RoleMatrix(t *testing.T) {
 		"member_access.manage", "relationship.manage",
 	}
 	memberCaps := []string{
-		"profile.self.read", "change_request.submit.self", "directory.read",
+		"profile.self.read", "change_request.submit.member", "directory.read",
 	}
 
 	granted := func(t *testing.T, role string, category string) []string {

@@ -114,8 +114,12 @@ var All = [...]Capability{
 	{Code: "profile.self.read", Category: CategoryMember,
 		Description:       "Read own explicitly granted safe profile and dues standing.",
 		AIToolEligibility: AIEligibilityNever},
-	{Code: "change_request.submit.self", Category: CategoryMember,
-		Description:       "Submit, track, and withdraw own change requests.",
+	// Submission authority is deliberately NOT record-read authority. Holding
+	// this lets a member propose a correction about themselves or about another
+	// person; it never lets them read that person. profile.self.read answers
+	// the reading question, and only for explicitly granted records.
+	{Code: "change_request.submit.member", Category: CategoryMember,
+		Description:       "Submit, track, and withdraw own change requests, including a bounded suggestion about another person.",
 		AIToolEligibility: AIEligibilityNever},
 	{Code: "directory.read", Category: CategoryMember,
 		Description:       "Attempt the member directory; eligibility is checked separately.",

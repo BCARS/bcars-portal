@@ -50,7 +50,12 @@ type ChangeRequestItem struct {
 }
 
 type ChangeRequest struct {
-	ID     int64  `json:"id"`
+	ID int64 `json:"id"`
+	// 'public' appears here only because migration 0009 left it in the
+	// database CHECK constraint while an anonymous correction form was still
+	// planned. That plan was withdrawn: no route and no service operation can
+	// create one (changerequests.SourceLegacyPublic). It stays in this enum so
+	// the schema stays honest about what the column permits, and nowhere else.
 	Source string `json:"source" enum:"officer_phone,officer_email,officer_mail,officer_meeting,member,public"`
 	Status string `json:"status" enum:"draft,submitted,in_review,resolved,withdrawn"`
 
@@ -91,7 +96,7 @@ type ChangeRequestItemBody struct {
 }
 
 type CreateChangeRequestBody struct {
-	Source             string                  `json:"source" enum:"officer_phone,officer_email,officer_mail,officer_meeting" doc:"How the correction reached the officer. Member and public intake use their own endpoints."`
+	Source             string                  `json:"source" enum:"officer_phone,officer_email,officer_mail,officer_meeting" doc:"How the correction reached the officer. A member's own suggestion arrives through /me/change-requests instead; there is no anonymous intake."`
 	TargetPersonID     int64                   `json:"target_person_id,omitempty" doc:"The member this concerns, when known. Otherwise supply a hint."`
 	SuppliedName       string                  `json:"supplied_name,omitempty" maxLength:"200"`
 	SuppliedCallSign   string                  `json:"supplied_call_sign,omitempty" maxLength:"200"`
@@ -113,7 +118,7 @@ type CreateChangeRequestOutput struct {
 
 type ListChangeRequestsInput struct {
 	Status         string `query:"status" enum:"draft,submitted,in_review,resolved,withdrawn" doc:"Optional exact filter."`
-	Source         string `query:"source" enum:"officer_phone,officer_email,officer_mail,officer_meeting,member,public" doc:"Optional exact filter."`
+	Source         string `query:"source" enum:"officer_phone,officer_email,officer_mail,officer_meeting,member" doc:"Optional exact filter."`
 	UnresolvedOnly bool   `query:"unresolved_target_only" doc:"Only submissions with no linked person and no terminal status: the triage queue."`
 	Limit          int64  `query:"limit" minimum:"1" maximum:"200" doc:"Defaults to 50."`
 	Offset         int64  `query:"offset" minimum:"0"`

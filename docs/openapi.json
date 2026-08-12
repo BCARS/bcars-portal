@@ -1056,7 +1056,7 @@
             ]
           },
           "source": {
-            "description": "How the correction reached the officer. Member and public intake use their own endpoints.",
+            "description": "How the correction reached the officer. A member's own suggestion arrives through /me/change-requests instead; there is no anonymous intake.",
             "enum": [
               "officer_phone",
               "officer_email",
@@ -2890,6 +2890,43 @@
         ],
         "type": "object"
       },
+      "MemberContact": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "shared_with": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "version": {
+            "description": "Send as target_version when proposing a correction to this value.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "value",
+          "primary",
+          "version"
+        ],
+        "type": "object"
+      },
       "MemberDeactivateInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2978,6 +3015,96 @@
         ],
         "type": "object"
       },
+      "MemberDuesStanding": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "type": "string"
+          },
+          "paid_through": {
+            "format": "date",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "current",
+              "expiring",
+              "expired",
+              "unknown",
+              "honorary_waived"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "as_of"
+        ],
+        "type": "object"
+      },
+      "MemberProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/MemberProfile.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "access_kind": {
+            "description": "Why you can see this record. Both kinds read the same fields.",
+            "enum": [
+              "self",
+              "delegate"
+            ],
+            "type": "string"
+          },
+          "base_type": {
+            "description": "The underlying membership right. An honorary waiver changes dues, never this.",
+            "enum": [
+              "full",
+              "associate"
+            ],
+            "type": "string"
+          },
+          "call_sign": {
+            "type": "string"
+          },
+          "contacts": {
+            "description": "Present on a single-record read.",
+            "items": {
+              "$ref": "#/components/schemas/MemberContact"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "dues_standing": {
+            "$ref": "#/components/schemas/MemberDuesStanding"
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "person_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "person_id",
+          "display_name",
+          "access_kind"
+        ],
+        "type": "object"
+      },
       "MemberReactivateInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2997,6 +3124,156 @@
         },
         "required": [
           "version"
+        ],
+        "type": "object"
+      },
+      "MemberRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/MemberRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "about_call_sign": {
+            "type": "string"
+          },
+          "about_name": {
+            "type": "string"
+          },
+          "about_person_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MemberRequestItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "resolved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "submitted",
+              "in_review",
+              "resolved",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "withdrawn_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "summary",
+          "submitted_at",
+          "items",
+          "version"
+        ],
+        "type": "object"
+      },
+      "MemberRequestItem": {
+        "additionalProperties": false,
+        "properties": {
+          "decision_reason": {
+            "description": "Why an officer rejected this item.",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "ordinal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "proposed_value": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "needs_verification"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ordinal",
+          "operation",
+          "status"
+        ],
+        "type": "object"
+      },
+      "MemberRequestItemBody": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "description": "Must be an allowlisted operation. There is no arbitrary field path.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "proposed_value": {
+            "description": "Required for every operation except 'other'.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "target_kind": {
+            "description": "Only for one of your own records, and only a resource on that record.",
+            "enum": [
+              "person",
+              "contact_method"
+            ],
+            "type": "string"
+          },
+          "target_version": {
+            "description": "The version you were looking at, so an officer can tell if it changed since.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "operation"
         ],
         "type": "object"
       },
@@ -4605,6 +4882,61 @@
         ],
         "type": "object"
       },
+      "SubmitMyRequestBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/SubmitMyRequestBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "about_call_sign": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "about_name": {
+            "description": "Who this is about, in your words. No lookup is performed and nothing is confirmed.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "about_person_id": {
+            "description": "One of your own records. Omit it to suggest a correction about someone else and describe them instead.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MemberRequestItemBody"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "stated_relationship": {
+            "description": "How you know them. Informational only; it grants nothing.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "summary": {
+            "description": "What should change, in plain language.",
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "items"
+        ],
+        "type": "object"
+      },
       "TimelineEvent": {
         "additionalProperties": false,
         "properties": {
@@ -5327,8 +5659,7 @@
                 "officer_email",
                 "officer_mail",
                 "officer_meeting",
-                "member",
-                "public"
+                "member"
               ],
               "type": "string"
             }
@@ -7245,6 +7576,304 @@
         "summary": "Page and filter posted ledger entries",
         "tags": [
           "treasury"
+        ]
+      }
+    },
+    "/me/change-requests": {
+      "get": {
+        "description": "Only requests you submitted. Officer-entered requests about you are not yours and do not appear.",
+        "operationId": "member-requests-list",
+        "parameters": [
+          {
+            "description": "Optional exact filter.",
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "Optional exact filter.",
+              "enum": [
+                "draft",
+                "submitted",
+                "in_review",
+                "resolved",
+                "withdrawn"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Defaults to 50.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Defaults to 50.",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberRequest"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List your own suggestions",
+        "tags": [
+          "member-self-service"
+        ]
+      },
+      "post": {
+        "description": "Files a suggestion for officer review. It changes no record: canonical data moves only when an officer approves a supported item. Name one of your own records with about_person_id, or omit it and describe the person instead — describing someone performs no lookup and tells you nothing about whether they are on file.",
+        "operationId": "member-request-submit",
+        "parameters": [
+          {
+            "description": "Required. A retry with the same key returns the original submission rather than filing a second one.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Required. A retry with the same key returns the original submission rather than filing a second one.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitMyRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberRequest"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Suggest a correction",
+        "tags": [
+          "member-self-service"
+        ]
+      }
+    },
+    "/me/change-requests/{id}": {
+      "get": {
+        "description": "A request you did not submit answers 404, the same as one that does not exist.",
+        "operationId": "member-request-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberRequest"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read one of your own suggestions",
+        "tags": [
+          "member-self-service"
+        ]
+      }
+    },
+    "/me/change-requests/{id}/withdrawal": {
+      "post": {
+        "description": "Retracts a suggestion no officer has started deciding. Nothing is deleted: what you asked for stays on the record, marked withdrawn.",
+        "operationId": "member-request-withdraw",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberRequest"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Withdraw one of your own suggestions",
+        "tags": [
+          "member-self-service"
+        ]
+      }
+    },
+    "/me/records": {
+      "get": {
+        "description": "Every person record an officer explicitly granted to your account, with the safe dues summary for each. Access comes only from those grants: a matching contact address or a family relationship confers nothing.",
+        "operationId": "member-records-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberProfile"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the records you may see",
+        "tags": [
+          "member-self-service"
+        ]
+      }
+    },
+    "/me/records/{person_id}": {
+      "get": {
+        "description": "A record you were never granted and a record that does not exist both answer 404. Contains no payment detail and no officer or treasurer notes.",
+        "operationId": "member-record-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberProfile"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read one of your records",
+        "tags": [
+          "member-self-service"
         ]
       }
     },

@@ -128,6 +128,10 @@ type StandingQuery struct {
 	Search string
 	// MembershipID restricts to one membership. Zero means all.
 	MembershipID int64
+	// PersonID restricts to one person's memberships. Zero means all. Member
+	// self-service filters by person because a grant names a person, not a
+	// membership.
+	PersonID int64
 	// IncludeEnded keeps rejected, resigned, and deceased memberships, which
 	// the working list excludes.
 	IncludeEnded bool
@@ -154,6 +158,65 @@ func (s *Service) ListStanding(ctx context.Context, p *authz.Principal, q Standi
 	if err := authz.Authorize(ctx, p, "dues.read", nil); err != nil {
 		return nil, err
 	}
+	return s.listStanding(ctx, q)
+}
+
+// StandingForGrantedPerson returns standing for one person to the member who
+// holds an active access grant to that person's record.
+//
+// It exists because dues.read is an ADMINISTRATIVE capability: it lists every
+// membership in the club, and ADR-0010 says an ordinary member must never hold
+// it. A member still needs to know whether their own dues are paid, so this is
+// the narrow door: it authorizes profile.self.read and then re-checks the grant
+// against the database, for THIS caller and THIS person, before selecting
+// anything.
+//
+// The grant check is here rather than in the caller on purpose. A method that
+// skipped dues.read and trusted its caller to have checked would work correctly
+// on the day it was written and become a club-wide dues read the first time
+// someone called it from a handler that forgot.
+//
+// An unknown person, a person with no membership, and a person this caller was
+// never granted are all the same answer: sql.ErrNoRows. Callers translate that
+// to 404, so asking about a stranger cannot distinguish "not yours" from "does
+// not exist".
+func (s *Service) StandingForGrantedPerson(ctx context.Context, p *authz.Principal, personID int64) (Standing, error) {
+	if err := authz.Authorize(ctx, p, "profile.self.read", nil); err != nil {
+		return Standing{}, err
+	}
+	if p == nil || p.UserID == 0 || personID == 0 {
+		return Standing{}, sql.ErrNoRows
+	}
+
+	granted, err := s.Q.CountActiveAccessGrant(ctx, sqlcgen.CountActiveAccessGrantParams{
+		UserID:   p.UserID,
+		PersonID: personID,
+	})
+	if err != nil {
+		return Standing{}, err
+	}
+	if granted == 0 {
+		return Standing{}, sql.ErrNoRows
+	}
+
+	rows, err := s.listStanding(ctx, StandingQuery{
+		PersonID:     personID,
+		IncludeEnded: true,
+		Limit:        1,
+	})
+	if err != nil {
+		return Standing{}, err
+	}
+	if len(rows) == 0 {
+		return Standing{}, sql.ErrNoRows
+	}
+	return rows[0], nil
+}
+
+// listStanding is the shared query. Every exported entry point above it decides
+// its own authorization first; this one decides none, and is unexported so it
+// cannot become an unguarded door from another package.
+func (s *Service) listStanding(ctx context.Context, q StandingQuery) ([]Standing, error) {
 	if q.Status != "" && !validStatus(q.Status) {
 		return nil, fmt.Errorf("%w: %q", ErrUnknownStatus, q.Status)
 	}
@@ -176,6 +239,7 @@ func (s *Service) ListStanding(ctx context.Context, p *authz.Principal, q Standi
 		WarnThrough:  warnThrough.Format(ISODate),
 		IncludeEnded: includeEnded,
 		MembershipID: q.MembershipID,
+		PersonID:     q.PersonID,
 		Search:       q.Search,
 		StatusFilter: q.Status,
 		Lim:          limit,

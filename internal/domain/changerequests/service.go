@@ -10,8 +10,8 @@
 // domain service that owns that field.
 //
 // That is what makes intake safe to hand to any officer, and what lets the same
-// model carry blind public submissions later without those submissions ever
-// touching a member's record.
+// model carry an authenticated member's suggestion about someone else without
+// that suggestion ever touching the other member's record — or revealing it.
 package changerequests
 
 import (
@@ -36,8 +36,32 @@ const (
 	SourceOfficerMail    = "officer_mail"
 	SourceOfficerMeeting = "officer_meeting"
 	SourceMember         = "member"
-	SourcePublic         = "public"
 )
+
+// SourceLegacyPublic is INERT. It is not an intake channel.
+//
+// Migration 0009 shipped 'public' in the member_change_requests source CHECK
+// while Phase 3 still planned an anonymous correction form. That plan was
+// withdrawn (bcars-portal-4ux.16): correction suggestions are authenticated,
+// and an anonymous caller cannot submit at all. Dropping the value from the
+// CHECK would mean rebuilding a table that two child tables and several
+// indexes reference, so the value stays in the constraint and is refused here
+// instead: validateCreate rejects it, no HTTP route offers it, and no other
+// code path passes it. TestPublicSourceIsInert holds that line.
+//
+// It is named rather than deleted so a reader who finds 'public' in the schema
+// can find out why, and so a read path can recognise the value if a database
+// ever acquires one by hand.
+const SourceLegacyPublic = "public"
+
+// intakeSources is the set a request may actually be created with.
+var intakeSources = map[string]struct{}{
+	SourceOfficerPhone:   {},
+	SourceOfficerEmail:   {},
+	SourceOfficerMail:    {},
+	SourceOfficerMeeting: {},
+	SourceMember:         {},
+}
 
 // Request lifecycle states.
 const (
@@ -107,8 +131,8 @@ const DefaultLimit = 50
 // MaxLimit bounds what a caller may ask for in one page.
 const MaxLimit = 200
 
-// Field bounds. Intake accepts free text from a telephone call or a public
-// form, so every string is bounded before it reaches the database.
+// Field bounds. Intake accepts free text from a telephone call or a member's
+// own typing, so every string is bounded before it reaches the database.
 const (
 	MaxSummaryLen  = 4000
 	MaxSuppliedLen = 200
@@ -163,6 +187,20 @@ var (
 
 	// ErrAlreadyResolved is returned when triage targets a terminal request.
 	ErrAlreadyResolved = errors.New("changerequests: request is already resolved or withdrawn")
+
+	// ErrNotYours is returned when a member names a request they did not
+	// submit.
+	//
+	// Callers MUST translate it to the same response ErrNotFound produces. A
+	// distinct "that is not yours" would confirm the request exists, which is
+	// one bit more than a stranger is entitled to and enough to enumerate the
+	// queue by id.
+	ErrNotYours = errors.New("changerequests: request belongs to another submitter")
+
+	// ErrDecidedItems is returned when withdrawing a request an officer has
+	// already started deciding. What was decided stays decided; the member
+	// takes it up with an officer rather than erasing the record.
+	ErrDecidedItems = errors.New("changerequests: an officer has already decided part of this request")
 )
 
 // Service captures and reads member change requests.
@@ -203,11 +241,12 @@ type CreateParams struct {
 	SuppliedContact    string
 	StatedRelationship string
 	Summary            string
-	// RequesterUserID identifies an authenticated member submitting for
-	// themselves. Zero for officer-entered and public intake.
+	// RequesterUserID identifies the authenticated member who submitted this,
+	// whether about themselves or about someone else. Zero for officer-entered
+	// intake. The schema requires it for source 'member'.
 	RequesterUserID int64
-	// SourceIPHash is the hashed caller address, for public intake abuse
-	// review. Empty when unknown.
+	// SourceIPHash is the hashed caller address, kept for abuse review of
+	// authenticated member submissions. Empty when unknown.
 	SourceIPHash string
 	Items        []ItemInput
 }
@@ -478,6 +517,86 @@ func (s *Service) Triage(ctx context.Context, p *authz.Principal, id int64, para
 	return out, nil
 }
 
+// GetForRequester returns one request only to the member who submitted it.
+//
+// The ownership test is part of the read, not a check a caller is trusted to
+// have done: an API handler that forgot it would otherwise expose every
+// officer-entered request by id, complete with the reviewer's notes.
+func (s *Service) GetForRequester(ctx context.Context, p *authz.Principal, id int64) (Request, error) {
+	if p == nil || p.UserID == 0 {
+		return Request{}, ErrNotYours
+	}
+	r, err := s.load(ctx, s.Q, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Request{}, ErrNotFound
+	}
+	if err != nil {
+		return Request{}, err
+	}
+	if r.RequesterUserID != p.UserID {
+		return Request{}, ErrNotYours
+	}
+	return r, nil
+}
+
+// Withdraw retracts a member's own request while it is still undecided.
+//
+// It only ever moves the request's status. Items, the supplied snapshot, and
+// any decision already recorded are left exactly as they are: withdrawal is the
+// member saying "never mind", not a delete, and the audit trail of what was
+// asked for survives it. A request an officer has begun deciding cannot be
+// withdrawn at all, because retracting a request whose approved item already
+// changed a record would leave the record with no stated reason.
+func (s *Service) Withdraw(ctx context.Context, p *authz.Principal, id int64, now time.Time) (Request, error) {
+	if p == nil || p.UserID == 0 {
+		return Request{}, ErrNotYours
+	}
+
+	var out Request
+	err := s.inTx(ctx, func(q *sqlcgen.Queries) error {
+		current, err := s.load(ctx, q, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if current.RequesterUserID != p.UserID {
+			return ErrNotYours
+		}
+		if current.Status == StatusResolved || current.Status == StatusWithdrawn {
+			return ErrAlreadyResolved
+		}
+		for _, it := range current.Items {
+			if it.Status != ItemPending {
+				return ErrDecidedItems
+			}
+		}
+
+		if _, err := q.SetChangeRequestStatus(ctx, sqlcgen.SetChangeRequestStatusParams{
+			Status:      StatusWithdrawn,
+			ResolvedAt:  sql.NullString{},
+			WithdrawnAt: nullString(now.UTC().Format(isoTimestamp)),
+			ID:          id,
+			Version:     current.Version,
+		}); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// The row was read a moment ago, so a missing row here means
+				// the version moved: an officer touched it concurrently.
+				return db.ErrStale
+			}
+			return err
+		}
+
+		out, err = s.load(ctx, q, id)
+		return err
+	})
+	if err != nil {
+		return Request{}, err
+	}
+	return out, nil
+}
+
 // --- internals ---
 
 func (s *Service) inTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error {
@@ -524,10 +643,7 @@ func (s *Service) load(ctx context.Context, q *sqlcgen.Queries, id int64) (Reque
 }
 
 func validateCreate(params CreateParams) error {
-	switch params.Source {
-	case SourceOfficerPhone, SourceOfficerEmail, SourceOfficerMail,
-		SourceOfficerMeeting, SourceMember, SourcePublic:
-	default:
+	if _, ok := intakeSources[params.Source]; !ok {
 		return ErrSourceRequired
 	}
 

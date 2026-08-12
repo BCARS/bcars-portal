@@ -24,7 +24,7 @@ const ReadyzTimeout = 3 * time.Second
 
 // ExpectedMigrationVersion is the goose migration version the readyz check
 // expects. Bump this when adding new migrations.
-const ExpectedMigrationVersion = 11
+const ExpectedMigrationVersion = 12
 
 // Config holds all dependencies needed to assemble the HTTP router.
 type Config struct {

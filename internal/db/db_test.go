@@ -140,7 +140,7 @@ func TestRoleCapabilityEdges(t *testing.T) {
 	// administrative reads must never appear here.
 	assert.ElementsMatch(t, []string{
 		"session.self.read", "profile.self.read",
-		"change_request.submit.self", "directory.read",
+		"change_request.submit.member", "directory.read",
 	}, edges["member"])
 	for _, forbidden := range []string{"member.read", "dues.read", "payment.read", "audit.read"} {
 		assert.NotContains(t, edges["member"], forbidden,

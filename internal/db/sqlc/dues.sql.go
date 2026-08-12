@@ -125,8 +125,8 @@ WITH params AS (
     -- sqlc's SQLite analyzer cannot resolve a table alias inside a CASE that
     -- also contains a bound parameter, so the two dates are bound once here
     -- and joined in as ordinary columns.
-    SELECT CAST(?7        AS TEXT) AS as_of_date,
-           CAST(?8 AS TEXT) AS warn_date
+    SELECT CAST(?8        AS TEXT) AS as_of_date,
+           CAST(?9 AS TEXT) AS warn_date
 ),
 effective_coverage AS (
     -- The effective decision is the newest coverage event that nothing
@@ -187,33 +187,38 @@ SELECT m.id           AS membership_id,
         OR m.lifecycle NOT IN ('rejected', 'resigned', 'deceased'))
    AND (CAST(?2 AS INTEGER) = 0
         OR m.id = CAST(?2 AS INTEGER))
-   AND (CAST(?3 AS TEXT) = ''
-        OR p.display_name LIKE '%' || CAST(?3 AS TEXT) || '%'
-        OR COALESCE(p.call_sign, '') LIKE '%' || CAST(?3 AS TEXT) || '%')
+   -- person_id serves member self-service, which knows the person it was
+   -- granted and not the membership id underneath it. Zero means no filter.
+   AND (CAST(?3 AS INTEGER) = 0
+        OR m.person_id = CAST(?3 AS INTEGER))
    AND (CAST(?4 AS TEXT) = ''
-        OR (CAST(?4 AS TEXT) = 'honorary_waived'
+        OR p.display_name LIKE '%' || CAST(?4 AS TEXT) || '%'
+        OR COALESCE(p.call_sign, '') LIKE '%' || CAST(?4 AS TEXT) || '%')
+   AND (CAST(?5 AS TEXT) = ''
+        OR (CAST(?5 AS TEXT) = 'honorary_waived'
             AND ah.ah_membership_id IS NOT NULL)
-        OR (CAST(?4 AS TEXT) = 'unknown'
+        OR (CAST(?5 AS TEXT) = 'unknown'
             AND ah.ah_membership_id IS NULL
             AND ec.ec_paid_through IS NULL)
-        OR (CAST(?4 AS TEXT) = 'expired'
+        OR (CAST(?5 AS TEXT) = 'expired'
             AND ah.ah_membership_id IS NULL
             AND ec.ec_paid_through IS NOT NULL
             AND ec.ec_paid_through < params.as_of_date)
-        OR (CAST(?4 AS TEXT) = 'expiring'
+        OR (CAST(?5 AS TEXT) = 'expiring'
             AND ah.ah_membership_id IS NULL
             AND ec.ec_paid_through >= params.as_of_date
             AND ec.ec_paid_through <= params.warn_date)
-        OR (CAST(?4 AS TEXT) = 'current'
+        OR (CAST(?5 AS TEXT) = 'current'
             AND ah.ah_membership_id IS NULL
             AND ec.ec_paid_through > params.warn_date))
  ORDER BY p.sort_name, m.id
- LIMIT ?6 OFFSET ?5
+ LIMIT ?7 OFFSET ?6
 `
 
 type ListDuesStandingParams struct {
 	IncludeEnded int64
 	MembershipID int64
+	PersonID     int64
 	Search       string
 	StatusFilter string
 	Off          int64
@@ -257,6 +262,7 @@ func (q *Queries) ListDuesStanding(ctx context.Context, arg ListDuesStandingPara
 	rows, err := q.db.QueryContext(ctx, listDuesStanding,
 		arg.IncludeEnded,
 		arg.MembershipID,
+		arg.PersonID,
 		arg.Search,
 		arg.StatusFilter,
 		arg.Off,
