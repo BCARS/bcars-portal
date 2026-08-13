@@ -68,6 +68,7 @@ golangci:
 	$(GOLANGCI) run
 
 check-secrets:
+	./scripts/check-no-secrets.sh --self-test
 	./scripts/check-no-secrets.sh
 	./scripts/check-version-conflicts.sh
 
@@ -83,9 +84,15 @@ sqlc:
 	fi
 	$(SQLC) generate
 
+# git diff says nothing about an untracked file, so a newly generated query
+# file that was never git-added used to pass this gate both locally and in CI
+# (bcars-portal-6q6.7). git status reports modified and untracked alike.
 sqlc-diff: sqlc
-	@git diff --exit-code -- internal/db/sqlc \
-		|| (echo "sqlc drift detected; run 'make sqlc' and commit"; exit 1)
+	@if [ -n "$$(git status --porcelain -- internal/db/sqlc)" ]; then \
+		git status --short -- internal/db/sqlc; \
+		echo "sqlc drift detected; run 'make sqlc' and commit the result"; \
+		exit 1; \
+	fi
 
 openapi: build
 	$(BIN_DIR)/portal -dump-openapi docs/openapi.json -dump-catalog docs/capability-catalog.json
