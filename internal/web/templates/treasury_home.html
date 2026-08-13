@@ -4,7 +4,7 @@
 
 {{define "content"}}
 <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Treasury</h2>
-<p style="margin: 0 0 16px; color: #555;">Dues standing as of {{.AsOf}}.</p>
+<p style="margin: 0 0 16px; color: var(--text-secondary);">Dues standing as of {{.AsOf}}.</p>
 
 <div class="card">
     <table>
@@ -28,7 +28,7 @@
     </table>
 
     {{if .Overflow}}
-    <p role="status" style="margin-top: 12px; color: #8a4b00;">
+    <p role="status" style="margin-top: 12px; color: var(--caution);">
         These counts stop at the first {{.Total}} memberships. Use the lists below for the full picture.
     </p>
     {{end}}

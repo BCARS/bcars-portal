@@ -217,7 +217,7 @@ func (h *Handler) requestQueue(w http.ResponseWriter, r *http.Request) {
 	for _, req := range list {
 		data.Requests = append(data.Requests, officerRequestRowFrom(req))
 	}
-	h.render.RenderHTTP(w, "requests.html", http.StatusOK, data)
+	h.renderPage(w, r, "requests.html", http.StatusOK, data)
 }
 
 func officerRequestRowFrom(req changerequests.Request) officerRequestRow {
@@ -380,7 +380,7 @@ func (h *Handler) requestDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Relationships = h.relationshipContext(r, req.TargetPersonID)
 
-	h.render.RenderHTTP(w, "request_detail.html", http.StatusOK, data)
+	h.renderPage(w, r, "request_detail.html", http.StatusOK, data)
 }
 
 func officerItemRowFrom(item changerequests.Item) officerItemRow {

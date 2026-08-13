@@ -4,19 +4,19 @@
 
 {{define "content"}}
 <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Record a payment</h2>
-<p style="margin: 0 0 16px; color: #555;">
+<p style="margin: 0 0 16px; color: var(--text-secondary);">
     {{.Standing.DisplayName}}{{if .Standing.CallSign}} ({{.Standing.CallSign}}){{end}}
 </p>
 
 {{if .Saved}}
-<div class="card" role="status" style="border-left: 4px solid #2e7d32;">
+<div class="card" role="status" style="border-left: 4px solid var(--success-text);">
     <p style="margin: 0;"><strong>Saved.</strong> {{.Consequence}}</p>
     {{if .ReceiptCode}}<p style="margin: 4px 0 0;">Receipt {{.ReceiptCode}}</p>{{end}}
 </div>
 {{end}}
 
 {{if .Error}}
-<div class="card" role="alert" style="border-left: 4px solid #c62828;">
+<div class="card" role="alert" style="border-left: 4px solid var(--danger);">
     <p style="margin: 0;">{{.Error}}</p>
 </div>
 {{end}}
@@ -27,14 +27,14 @@
         {{.Standing.Status}} &mdash;
         Dues paid through: {{if .Standing.PaidThrough}}{{.Standing.PaidThrough}}{{else}}not recorded{{end}}
     </p>
-    <p style="margin: 4px 0 0; color: #555;">Membership: {{.Standing.BaseType}}. Judged as of {{.Standing.AsOf}}.</p>
+    <p style="margin: 4px 0 0; color: var(--text-secondary);">Membership: {{.Standing.BaseType}}. Judged as of {{.Standing.AsOf}}.</p>
 </div>
 
 <div class="card">
     <form action="/admin/treasury/memberships/{{.Standing.MembershipID}}/payment" method="post">
         <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
 
-        <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 0 0 16px;">
+        <fieldset style="border: 1px solid var(--card-border); padding: 12px; margin: 0 0 16px;">
             <legend style="font-weight: 600;">Money received</legend>
 
             <label for="amount">Amount</label>
@@ -58,9 +58,9 @@
             <input type="text" id="received_by_officer" name="received_by_officer" value="{{.Officer}}">
         </fieldset>
 
-        <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 0 0 16px;">
+        <fieldset style="border: 1px solid var(--card-border); padding: 12px; margin: 0 0 16px;">
             <legend style="font-weight: 600;">Dues paid through</legend>
-            <p style="margin: 0 0 8px; color: #555;">
+            <p style="margin: 0 0 8px; color: var(--text-secondary);">
                 The amount received and the date dues are paid through are recorded separately.
                 Changing one does not change the other.
             </p>
@@ -75,7 +75,7 @@
                 <li>
                     {{.Label}} &mdash; {{.PaidThrough}}
                     {{if .RateKnown}}(the rate suggests ${{.Amount}}){{else}}(no rate on file){{end}}
-                    <br><span style="color: #555;">{{.Explanation}}</span>
+                    <br><span style="color: var(--text-secondary);">{{.Explanation}}</span>
                 </li>
                 {{end}}
             </ul>

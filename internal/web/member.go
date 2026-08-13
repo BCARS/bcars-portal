@@ -266,7 +266,7 @@ func (h *Handler) memberHome(w http.ResponseWriter, r *http.Request) {
 		data.DirectoryAvailable = eligible
 	}
 
-	h.render.RenderHTTP(w, "member_home.html", http.StatusOK, data)
+	h.renderPage(w, r, "member_home.html", http.StatusOK, data)
 }
 
 func memberRecordRowFrom(profile memberprofile.Profile) memberRecordRow {
@@ -327,7 +327,7 @@ func (h *Handler) memberRecord(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	h.render.RenderHTTP(w, "member_record.html", http.StatusOK, data)
+	h.renderPage(w, r, "member_record.html", http.StatusOK, data)
 }
 
 // loadMemberRecord reads the record named in the path for this caller.
@@ -406,7 +406,7 @@ func (h *Handler) memberSuggestOwnForm(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h.render.RenderHTTP(w, "member_suggest_own.html", http.StatusOK, memberSuggestData{
+	h.renderPage(w, r, "member_suggest_own.html", http.StatusOK, memberSuggestData{
 		About:    memberRecordRowFrom(profile),
 		Contacts: contactRows(profile),
 		Kinds:    kindsFor(profile.AccessKind),
@@ -432,7 +432,7 @@ func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request)
 
 	form, problem := readSuggestForm(r)
 	render := func(msg string) {
-		h.render.RenderHTTP(w, "member_suggest_own.html", http.StatusBadRequest, memberSuggestData{
+		h.renderPage(w, r, "member_suggest_own.html", http.StatusBadRequest, memberSuggestData{
 			About:     memberRecordRowFrom(profile),
 			Contacts:  contactRows(profile),
 			Kinds:     kindsFor(profile.AccessKind),
@@ -496,7 +496,7 @@ func findContact(profile memberprofile.Profile, id int64) (memberprofile.Contact
 }
 
 func (h *Handler) memberSuggestOtherForm(w http.ResponseWriter, r *http.Request) {
-	h.render.RenderHTTP(w, "member_suggest_other.html", http.StatusOK, memberSuggestData{
+	h.renderPage(w, r, "member_suggest_other.html", http.StatusOK, memberSuggestData{
 		Kinds: otherKinds(),
 	})
 }
@@ -512,7 +512,7 @@ func (h *Handler) memberSuggestOtherForm(w http.ResponseWriter, r *http.Request)
 func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Request) {
 	form, problem := readSuggestForm(r)
 	render := func(msg string, status int) {
-		h.render.RenderHTTP(w, "member_suggest_other.html", status, memberSuggestData{
+		h.renderPage(w, r, "member_suggest_other.html", status, memberSuggestData{
 			Kinds:     otherKinds(),
 			Submitted: form,
 			Error:     msg,
@@ -667,7 +667,7 @@ func (h *Handler) memberRequests(w http.ResponseWriter, r *http.Request) {
 	for _, req := range own {
 		data.Requests = append(data.Requests, memberRequestRowFrom(req))
 	}
-	h.render.RenderHTTP(w, "member_requests.html", http.StatusOK, data)
+	h.renderPage(w, r, "member_requests.html", http.StatusOK, data)
 }
 
 func memberRequestRowFrom(req changerequests.Request) memberRequestRow {
@@ -707,7 +707,7 @@ func (h *Handler) memberRequestDetail(w http.ResponseWriter, r *http.Request) {
 			DecisionReason: item.DecisionReason,
 		})
 	}
-	h.render.RenderHTTP(w, "member_request_detail.html", http.StatusOK, data)
+	h.renderPage(w, r, "member_request_detail.html", http.StatusOK, data)
 }
 
 // loadOwnRequest reads a request the caller submitted.

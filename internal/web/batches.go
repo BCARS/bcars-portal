@@ -64,7 +64,7 @@ func (h *Handler) batchList(w http.ResponseWriter, r *http.Request) {
 	for _, b := range rows {
 		data.Batches = append(data.Batches, batchToView(b))
 	}
-	h.render.RenderHTTP(w, "batches.html", http.StatusOK, data)
+	h.renderPage(w, r, "batches.html", http.StatusOK, data)
 }
 
 // batchOpen creates a batch and sends the treasurer straight to its grid.
@@ -187,7 +187,7 @@ func (h *Handler) batchDetail(w http.ResponseWriter, r *http.Request) {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	h.render.RenderHTTP(w, "batch_detail.html", http.StatusOK, data)
+	h.renderPage(w, r, "batch_detail.html", http.StatusOK, data)
 }
 
 func (h *Handler) batchDetailData(r *http.Request, p *authz.Principal, id int64) (batchDetailData, error) {
@@ -525,7 +525,7 @@ func (h *Handler) receiptPage(w http.ResponseWriter, r *http.Request) {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	h.render.RenderHTTP(w, "receipt.html", http.StatusOK, receiptData{
+	h.renderPage(w, r, "receipt.html", http.StatusOK, receiptData{
 		Receipt: receipt, Amount: treasury.Cents(receipt.AmountCents),
 	})
 }
@@ -560,7 +560,7 @@ func (h *Handler) correctionForm(w http.ResponseWriter, r *http.Request) {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	h.render.RenderHTTP(w, "correction.html", http.StatusOK, data)
+	h.renderPage(w, r, "correction.html", http.StatusOK, data)
 }
 
 func (h *Handler) correctionBase(r *http.Request, p *authz.Principal, paymentID int64) (correctionFormData, error) {
@@ -627,7 +627,7 @@ func (h *Handler) correctionSubmit(w http.ResponseWriter, r *http.Request) {
 	cents, err := parseAmountCents(data.Amount)
 	if err != nil {
 		data.Error = formMessage(err)
-		h.render.RenderHTTP(w, "correction.html", http.StatusUnprocessableEntity, data)
+		h.renderPage(w, r, "correction.html", http.StatusUnprocessableEntity, data)
 		return
 	}
 
@@ -645,7 +645,7 @@ func (h *Handler) correctionSubmit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if msg, ok := batchFormMessage(err); ok {
 			data.Error = msg
-			h.render.RenderHTTP(w, "correction.html", http.StatusUnprocessableEntity, data)
+			h.renderPage(w, r, "correction.html", http.StatusUnprocessableEntity, data)
 			return
 		}
 		h.renderDomainError(w, r, err)
@@ -668,7 +668,7 @@ func (h *Handler) renderBatchError(w http.ResponseWriter, r *http.Request, p *au
 		return
 	}
 	data.Error = msg
-	h.render.RenderHTTP(w, "batch_detail.html", http.StatusUnprocessableEntity, data)
+	h.renderPage(w, r, "batch_detail.html", http.StatusUnprocessableEntity, data)
 }
 
 // batchFormMessage turns a domain error into a sentence for an officer. It

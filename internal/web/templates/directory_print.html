@@ -4,26 +4,29 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Member directory - {{.Club}}</title>
+{{template "tokens" .}}
 <style>
     /* Self-contained on purpose: this page is the sheet, so it carries no app
-       chrome to hide and no navigation that would print as a row of dead links. */
-    *, *::before, *::after { box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; color: #1a1a1a; background: #f5f5f5; }
-    .sheet { background: #fff; max-width: 8.5in; margin: 0 auto; padding: 24px; }
+       chrome to hide and no navigation that would print as a row of dead links.
+       It still takes the shared tokens, so the palette and the print ink match
+       the rest of the portal. */
+    body { background: var(--desk-bg); }
+    .sheet { background: var(--card-bg); max-width: 8.5in; margin: 0 auto; padding: 24px; }
 
-    h1 { font-size: 1.25rem; margin: 0 0 2px; }
-    .sub { color: #555; font-size: 0.875rem; margin: 0 0 16px; }
+    h1 { font-size: 1.3em; margin: 0 0 2px; }
+    .sub { color: var(--text-secondary); font-size: .95em; margin: 0 0 var(--space-5); }
 
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #333; padding: 4px 8px; text-align: left; vertical-align: top; }
-    th { background: #f1f5f9; font-size: 0.8125rem; }
-    td { font-size: 0.875rem; }
-    .notshared { color: #666; }
+    table { border-collapse: collapse; font-size: 1em; }
+    th, td {
+        border: 1px solid var(--print-rule); padding: var(--space-1) var(--space-3);
+        text-align: left; vertical-align: top; background: none;
+    }
+    th { background: var(--table-header-bg); font-size: .87em; letter-spacing: 0; }
+    td { font-size: .95em; }
+    tr:hover td { background: none; }
+    .notshared { color: var(--text-muted); }
 
-    .controls { max-width: 8.5in; margin: 16px auto 0; padding: 0 24px; }
-    .btn { display: inline-block; padding: 6px 16px; border-radius: 6px; font-size: 0.875rem;
-           border: 1px solid #d1d5db; background: #fff; color: #374151; cursor: pointer;
-           font-family: inherit; text-decoration: none; }
+    .controls { max-width: 8.5in; margin: var(--space-5) auto 0; padding: 0 24px; }
 
     @media print {
         /* Letter portrait with a real margin, so nothing is lost to the printer. */
@@ -31,6 +34,7 @@
 
         .no-print { display: none !important; }
         body { background: #fff; }
+        .sheet { box-shadow: none; }
         .sheet { max-width: none; margin: 0; padding: 0; }
 
         /* 12pt: this is read at a desk, often by people who did not bring their
@@ -91,8 +95,8 @@
 </div>
 
 <div class="controls no-print">
-    <button type="button" class="btn" onclick="window.print()">Print</button>
-    <a class="btn" href="/member/directory">Back to the directory</a>
+    <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
+    <a class="btn btn-secondary" href="/member/directory">Back to the directory</a>
 </div>
 </body>
 </html>

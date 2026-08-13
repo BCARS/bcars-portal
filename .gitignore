@@ -23,6 +23,11 @@
 /extracted/
 /transcripts/
 
+# Design mockups and working material supplied out of band. CLAUDE.md already
+# describes this directory as ignored, but nothing enforced it, and the copy
+# in use holds a real contact-database export.
+/scratch/
+
 # IDE / OS
 .DS_Store
 .idea/

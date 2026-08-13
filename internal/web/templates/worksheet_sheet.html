@@ -7,7 +7,7 @@
 /* Screen: keep the sheet legible but out of the way of the controls. */
 .sheet { background: #fff; }
 .sheet table { width: 100%; border-collapse: collapse; }
-.sheet th, .sheet td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
+.sheet th, .sheet td { border: 1px solid var(--print-ink); padding: 4px 6px; vertical-align: top; }
 .sheet .write-box { min-width: 70px; }
 .sheet .rule { display: block; min-height: 18px; }
 
@@ -38,7 +38,7 @@
 
 <div class="no-print">
     <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">{{.Run.Label}}</h2>
-    <p style="margin: 0 0 16px; color: #555;">
+    <p style="margin: 0 0 16px; color: var(--text-secondary);">
         Preview. Use your browser's Print or Save as PDF.
     </p>
     <p>
@@ -49,7 +49,7 @@
     {{if .CanBatch}}
     <div class="card">
         <h3 style="margin: 0 0 8px; font-size: 1rem;">Enter this sheet now</h3>
-        <p style="margin: 0 0 8px; color: #555;">
+        <p style="margin: 0 0 8px; color: var(--text-secondary);">
             Opens a batch linked to this sheet so you can work down the page in the same order.
             No amounts are filled in: you type what is written on the paper.
         </p>

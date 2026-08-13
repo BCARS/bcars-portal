@@ -308,6 +308,7 @@ func (h *Handler) GuardedRoutes() []GuardedRoute {
 	routes := append(h.AdminRoutes(), h.RequestRoutes()...)
 	routes = append(routes, h.AccessRoutes()...)
 	routes = append(routes, h.MemberRoutes()...)
+	routes = append(routes, h.PreferenceRoutes()...)
 	return append(routes, h.DirectoryRoutes()...)
 }
 
@@ -526,7 +527,7 @@ type loginData struct {
 }
 
 func (h *Handler) loginPage(w http.ResponseWriter, r *http.Request) {
-	h.render.RenderHTTP(w, "login.html", http.StatusOK, loginData{})
+	h.renderPage(w, r, "login.html", http.StatusOK, loginData{})
 }
 
 func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
@@ -541,7 +542,7 @@ func (h *Handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := h.auth.SignIn(email, password, h.clientIP.HashRequest(r), r.UserAgent())
 	if err != nil {
 		h.log.Info("login failed", slog.String("email", email), slog.String("error", err.Error()))
-		h.render.RenderHTTP(w, "login.html", http.StatusUnauthorized, loginData{
+		h.renderPage(w, r, "login.html", http.StatusUnauthorized, loginData{
 			Email: email,
 			Error: "Invalid email or password.",
 		})
@@ -678,7 +679,7 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 		data.RecentAudit, _ = h.queries.ListAuditEvents(ctx, sqlcgen.ListAuditEventsParams{Limit: 10, Offset: 0})
 	}
 
-	h.render.RenderHTTP(w, "dashboard.html", http.StatusOK, data)
+	h.renderPage(w, r, "dashboard.html", http.StatusOK, data)
 }
 
 // --- Members ---
@@ -737,7 +738,7 @@ func (h *Handler) memberList(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	h.render.RenderHTTP(w, "members.html", http.StatusOK, data)
+	h.renderPage(w, r, "members.html", http.StatusOK, data)
 }
 
 type timelineItem struct {
@@ -783,7 +784,7 @@ func (h *Handler) memberDetail(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	h.render.RenderHTTP(w, "member_detail.html", http.StatusOK, data)
+	h.renderPage(w, r, "member_detail.html", http.StatusOK, data)
 }
 
 type memberFormData struct {
@@ -793,7 +794,7 @@ type memberFormData struct {
 }
 
 func (h *Handler) memberNew(w http.ResponseWriter, r *http.Request) {
-	h.render.RenderHTTP(w, "member_form.html", http.StatusOK, memberFormData{})
+	h.renderPage(w, r, "member_form.html", http.StatusOK, memberFormData{})
 }
 
 func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
@@ -812,7 +813,7 @@ func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.log.Error("create person failed", slog.String("error", err.Error()))
-		h.render.RenderHTTP(w, "member_form.html", http.StatusUnprocessableEntity, memberFormData{Error: err.Error()})
+		h.renderPage(w, r, "member_form.html", http.StatusUnprocessableEntity, memberFormData{Error: err.Error()})
 		return
 	}
 
@@ -831,7 +832,7 @@ func (h *Handler) memberEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.render.RenderHTTP(w, "member_form.html", http.StatusOK, memberFormData{IsEdit: true, Person: person})
+	h.renderPage(w, r, "member_form.html", http.StatusOK, memberFormData{IsEdit: true, Person: person})
 }
 
 func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
@@ -855,7 +856,7 @@ func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.log.Error("update person failed", slog.Int64("id", id), slog.String("error", err.Error()))
 		person, _ := h.members.GetPerson(ctx, p, id)
-		h.render.RenderHTTP(w, "member_form.html", http.StatusUnprocessableEntity, memberFormData{
+		h.renderPage(w, r, "member_form.html", http.StatusUnprocessableEntity, memberFormData{
 			IsEdit: true,
 			Person: person,
 			Error:  friendlyError(err),
@@ -1000,7 +1001,7 @@ func (h *Handler) contactNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.render.RenderHTTP(w, "contact_form.html", http.StatusOK, contactFormData{
+	h.renderPage(w, r, "contact_form.html", http.StatusOK, contactFormData{
 		PersonID:   person.ID,
 		PersonName: person.DisplayName,
 	})
@@ -1029,7 +1030,7 @@ func (h *Handler) contactCreate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.log.Error("create contact method failed", slog.Int64("person_id", id), slog.String("error", err.Error()))
 		person, _ := h.members.GetPerson(ctx, p, id)
-		h.render.RenderHTTP(w, "contact_form.html", http.StatusUnprocessableEntity, contactFormData{
+		h.renderPage(w, r, "contact_form.html", http.StatusUnprocessableEntity, contactFormData{
 			PersonID:   id,
 			PersonName: person.DisplayName,
 			Error:      err.Error(),
@@ -1051,7 +1052,7 @@ func (h *Handler) importList(w http.ResponseWriter, r *http.Request) {
 		Error   string
 		Success string
 	}
-	h.render.RenderHTTP(w, "imports.html", http.StatusOK, data{
+	h.renderPage(w, r, "imports.html", http.StatusOK, data{
 		Runs:    runs,
 		Error:   r.URL.Query().Get("error"),
 		Success: r.URL.Query().Get("success"),
@@ -1112,7 +1113,7 @@ func (h *Handler) importDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.render.RenderHTTP(w, "import_detail.html", http.StatusOK, data)
+	h.renderPage(w, r, "import_detail.html", http.StatusOK, data)
 }
 
 func stagedToRow(row sqlcgen.StagedImportRow) importDetailRow {
@@ -1296,7 +1297,7 @@ func (h *Handler) forgotPasswordPage(w http.ResponseWriter, r *http.Request) {
 		Error   string
 		Success bool
 	}
-	h.render.RenderHTTP(w, "forgot_password.html", http.StatusOK, data{})
+	h.renderPage(w, r, "forgot_password.html", http.StatusOK, data{})
 }
 
 func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
@@ -1305,7 +1306,7 @@ func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		Success bool
 	}
 	if err := r.ParseForm(); err != nil {
-		h.render.RenderHTTP(w, "forgot_password.html", http.StatusBadRequest, data{Error: "Invalid form data."})
+		h.renderPage(w, r, "forgot_password.html", http.StatusBadRequest, data{Error: "Invalid form data."})
 		return
 	}
 
@@ -1322,7 +1323,7 @@ func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 				ReasonCode: audit.ReasonRateLimited,
 				DetailJSON: detailJSON(r, GuardedRoute{}),
 			})
-			h.render.RenderHTTP(w, "forgot_password.html", http.StatusTooManyRequests, data{
+			h.renderPage(w, r, "forgot_password.html", http.StatusTooManyRequests, data{
 				Error: "Too many recovery requests. Please wait a few minutes and try again.",
 			})
 			return
@@ -1330,7 +1331,7 @@ func (h *Handler) forgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Always show success to prevent email enumeration.
-	h.render.RenderHTTP(w, "forgot_password.html", http.StatusOK, data{Success: true})
+	h.renderPage(w, r, "forgot_password.html", http.StatusOK, data{Success: true})
 }
 
 func (h *Handler) resetPasswordPage(w http.ResponseWriter, r *http.Request) {
@@ -1340,10 +1341,10 @@ func (h *Handler) resetPasswordPage(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "Missing recovery token. Please use the link from your email."})
+		h.renderPage(w, r, "reset_password.html", http.StatusBadRequest, data{Error: "Missing recovery token. Please use the link from your email."})
 		return
 	}
-	h.render.RenderHTTP(w, "reset_password.html", http.StatusOK, data{Token: token})
+	h.renderPage(w, r, "reset_password.html", http.StatusOK, data{Token: token})
 }
 
 func (h *Handler) resetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
@@ -1352,7 +1353,7 @@ func (h *Handler) resetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		Error string
 	}
 	if err := r.ParseForm(); err != nil {
-		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "Invalid form data."})
+		h.renderPage(w, r, "reset_password.html", http.StatusBadRequest, data{Error: "Invalid form data."})
 		return
 	}
 
@@ -1361,27 +1362,27 @@ func (h *Handler) resetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	confirm := r.FormValue("confirm")
 
 	if password != confirm {
-		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Token: token, Error: "Passwords do not match."})
+		h.renderPage(w, r, "reset_password.html", http.StatusBadRequest, data{Token: token, Error: "Passwords do not match."})
 		return
 	}
 	if len(password) < 12 {
-		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Token: token, Error: "Password must be at least 12 characters."})
+		h.renderPage(w, r, "reset_password.html", http.StatusBadRequest, data{Token: token, Error: "Password must be at least 12 characters."})
 		return
 	}
 
 	link, err := h.emailLinks.ConsumeLink(token)
 	if err != nil {
-		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "This recovery link is invalid or has expired. Please request a new one."})
+		h.renderPage(w, r, "reset_password.html", http.StatusBadRequest, data{Error: "This recovery link is invalid or has expired. Please request a new one."})
 		return
 	}
 	if link.Purpose != authn.PurposeRecovery || link.UserID == nil {
-		h.render.RenderHTTP(w, "reset_password.html", http.StatusBadRequest, data{Error: "Invalid recovery link."})
+		h.renderPage(w, r, "reset_password.html", http.StatusBadRequest, data{Error: "Invalid recovery link."})
 		return
 	}
 
 	if err := h.auth.SetPassword(r.Context(), *link.UserID, password); err != nil {
 		h.log.Error("reset password", slog.String("error", err.Error()))
-		h.render.RenderHTTP(w, "reset_password.html", http.StatusInternalServerError, data{Error: "Failed to reset password. Please try again."})
+		h.renderPage(w, r, "reset_password.html", http.StatusInternalServerError, data{Error: "Failed to reset password. Please try again."})
 		return
 	}
 
@@ -1403,10 +1404,10 @@ func (h *Handler) invitationPage(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "Missing invitation token."})
+		h.renderPage(w, r, "accept_invitation.html", http.StatusBadRequest, data{Error: "Missing invitation token."})
 		return
 	}
-	h.render.RenderHTTP(w, "accept_invitation.html", http.StatusOK, data{Token: token})
+	h.renderPage(w, r, "accept_invitation.html", http.StatusOK, data{Token: token})
 }
 
 func (h *Handler) invitationSubmit(w http.ResponseWriter, r *http.Request) {
@@ -1415,7 +1416,7 @@ func (h *Handler) invitationSubmit(w http.ResponseWriter, r *http.Request) {
 		Error string
 	}
 	if err := r.ParseForm(); err != nil {
-		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "Invalid form data."})
+		h.renderPage(w, r, "accept_invitation.html", http.StatusBadRequest, data{Error: "Invalid form data."})
 		return
 	}
 
@@ -1424,27 +1425,27 @@ func (h *Handler) invitationSubmit(w http.ResponseWriter, r *http.Request) {
 	confirm := r.FormValue("confirm")
 
 	if password != confirm {
-		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Token: token, Error: "Passwords do not match."})
+		h.renderPage(w, r, "accept_invitation.html", http.StatusBadRequest, data{Token: token, Error: "Passwords do not match."})
 		return
 	}
 	if len(password) < 12 {
-		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Token: token, Error: "Password must be at least 12 characters."})
+		h.renderPage(w, r, "accept_invitation.html", http.StatusBadRequest, data{Token: token, Error: "Password must be at least 12 characters."})
 		return
 	}
 
 	link, err := h.emailLinks.ConsumeLink(token)
 	if err != nil {
-		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "This invitation link is invalid or has expired."})
+		h.renderPage(w, r, "accept_invitation.html", http.StatusBadRequest, data{Error: "This invitation link is invalid or has expired."})
 		return
 	}
 	if link.Purpose != authn.PurposeInvitation {
-		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusBadRequest, data{Error: "Invalid invitation link."})
+		h.renderPage(w, r, "accept_invitation.html", http.StatusBadRequest, data{Error: "Invalid invitation link."})
 		return
 	}
 
 	userID, err := h.auth.CreateUserFromInvitation(r.Context(), link, password)
 	if err != nil {
-		h.render.RenderHTTP(w, "accept_invitation.html", http.StatusConflict, data{Error: "An account already exists for this email. Please sign in instead."})
+		h.renderPage(w, r, "accept_invitation.html", http.StatusConflict, data{Error: "An account already exists for this email. Please sign in instead."})
 		return
 	}
 
@@ -1497,7 +1498,7 @@ func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, code int, 
 		Title:   title,
 		Message: message,
 	}
-	h.render.RenderHTTP(w, "error.html", code, data)
+	h.renderPage(w, r, "error.html", code, data)
 }
 
 // renderDomainError maps common domain errors to appropriate HTTP responses.

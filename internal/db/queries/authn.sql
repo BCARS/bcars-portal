@@ -77,3 +77,12 @@ WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > strftime('%Y-%m-%d
 
 -- name: ConsumeEmailLink :exec
 UPDATE email_links SET consumed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?;
+
+-- name: GetUserTextSize :one
+SELECT text_size FROM users WHERE id = ?;
+
+-- name: SetUserTextSize :exec
+UPDATE users
+SET text_size = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ?;

@@ -13,7 +13,7 @@
 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
     <div>
         <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Import Run #{{.Run.ID}}</h2>
-        <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
+        <div style="font-size: 0.875rem; color: var(--text-helper); margin-top: 4px;">
             {{.Run.SourceFilename}} ({{.Run.SourceKind}})
             {{if or (eq .Run.Status "validated") (eq .Run.Status "previewed")}}<span class="badge badge-yellow">Pending Review</span>
             {{else if eq .Run.Status "committed"}}<span class="badge badge-green">Committed</span>
@@ -54,7 +54,7 @@
 {{if .ManualItems}}
 <div class="card">
     <h3>Rows Requiring Manual Review</h3>
-    <p style="font-size: 0.875rem; color: #64748b; margin-bottom: 12px;">
+    <p style="font-size: 0.875rem; color: var(--text-helper); margin-bottom: 12px;">
         These rows need a decision before the import can be committed. Use Skip to exclude a row, or Approve to include it.
     </p>
     <table>

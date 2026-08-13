@@ -245,8 +245,11 @@ func TestAdminRoutePatternsAreWellFormed(t *testing.T) {
 			require.True(t, ok, "a pattern must be \"METHOD /path\"")
 			assert.Contains(t, []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, method)
 
-			assert.True(t, strings.HasPrefix(path, "/admin/") || strings.HasPrefix(path, RouteMemberHome),
-				"a guarded route must live under /admin/ or %s", RouteMemberHome)
+			assert.True(t,
+				strings.HasPrefix(path, "/admin/") ||
+					strings.HasPrefix(path, RouteMemberHome) ||
+					strings.HasPrefix(path, RoutePreferences),
+				"a guarded route must live under /admin/, %s or %s", RouteMemberHome, RoutePreferences)
 			assert.NotContains(t, path, "//", "no empty path segment")
 			for _, r := range rt.Pattern {
 				assert.False(t, unicode.IsControl(r) || r == '\t',

@@ -14,7 +14,7 @@
 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
     <div>
         <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">{{.Person.DisplayName}}</h2>
-        <div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">
+        <div style="font-size: 0.875rem; color: var(--text-helper); margin-top: 4px;">
             {{if .Person.CallSign.Valid}}{{.Person.CallSign.String}}{{end}}
             {{if .Person.DeactivatedAt.Valid}}<span class="badge badge-red">Deactivated</span>{{end}}
             {{if .Person.DeceasedAt.Valid}}<span class="badge badge-gray">Deceased</span>{{end}}
@@ -43,7 +43,7 @@
         <h3>Person Details</h3>
         <div class="detail-row"><div class="detail-label">Display Name</div><div class="detail-value">{{.Person.DisplayName}}</div></div>
         <div class="detail-row"><div class="detail-label">Sort Name</div><div class="detail-value">{{.Person.SortName}}</div></div>
-        <div class="detail-row"><div class="detail-label">Call Sign</div><div class="detail-value">{{if .Person.CallSign.Valid}}{{.Person.CallSign.String}}{{else}}<span style="color:#94a3b8;">Not set</span>{{end}}</div></div>
+        <div class="detail-row"><div class="detail-label">Call Sign</div><div class="detail-value">{{if .Person.CallSign.Valid}}{{.Person.CallSign.String}}{{else}}<span style="color:var(--text-muted);">Not set</span>{{end}}</div></div>
         <div class="detail-row"><div class="detail-label">Created</div><div class="detail-value">{{.Person.CreatedAt}}</div></div>
         <div class="detail-row"><div class="detail-label">Updated</div><div class="detail-value">{{.Person.UpdatedAt}}</div></div>
     </div>
@@ -61,7 +61,7 @@
         </div>
         {{end}}
         {{else}}
-        <p style="color: #94a3b8; font-size: 0.875rem;">No contact methods.</p>
+        <p style="color: var(--text-muted); font-size: 0.875rem;">No contact methods.</p>
         {{end}}
         <div style="margin-top: 12px;">
             <a href="/admin/members/{{.Person.ID}}/contacts/new" class="btn btn-sm btn-secondary">Add Contact</a>
@@ -108,7 +108,7 @@
         </tbody>
     </table>
     {{else}}
-    <p style="color: #94a3b8; font-size: 0.875rem;">No memberships.</p>
+    <p style="color: var(--text-muted); font-size: 0.875rem;">No memberships.</p>
     {{end}}
 </div>
 
@@ -118,8 +118,8 @@
     </div>
     {{if .Notes}}
     {{range .Notes}}
-    <div style="border-bottom: 1px solid #f1f5f9; padding: 12px 0;">
-        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">
+    <div style="border-bottom: 1px solid var(--divider); padding: 12px 0;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-helper); margin-bottom: 4px;">
             <span><span class="badge badge-gray">{{.Category}}</span> <span class="badge badge-gray">{{.Visibility}}</span></span>
             <span>{{.CreatedAt}}</span>
         </div>
@@ -127,7 +127,7 @@
     </div>
     {{end}}
     {{else}}
-    <p style="color: #94a3b8; font-size: 0.875rem;">No notes.</p>
+    <p style="color: var(--text-muted); font-size: 0.875rem;">No notes.</p>
     {{end}}
 
     <form method="post" action="/admin/members/{{.Person.ID}}/notes" style="margin-top: 16px;">
@@ -136,7 +136,7 @@
             <textarea id="note-body" name="body" rows="3" placeholder="Write a note..." required></textarea>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-            <select name="category" class="form-group" style="width: auto; padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+            <select name="category" class="form-group" style="width: auto; padding: 6px 12px; border: 1px solid var(--input-border); border-radius: 6px; font-size: 0.875rem;">
                 <option value="general">General</option>
                 <option value="approval">Approval</option>
                 <option value="honorary">Honorary</option>
@@ -150,12 +150,12 @@
 <div class="card" style="margin-top: 16px;">
     <h3>Activity Timeline</h3>
     {{range .Timeline}}
-    <div style="border-bottom: 1px solid #f1f5f9; padding: 8px 0; display: flex; justify-content: space-between; align-items: center;">
+    <div style="border-bottom: 1px solid var(--divider); padding: 8px 0; display: flex; justify-content: space-between; align-items: center;">
         <div>
             <span class="badge badge-gray">{{.Kind}}</span>
             <span style="font-size: 0.875rem; margin-left: 8px;">{{.Detail}}</span>
         </div>
-        <span style="font-size: 0.75rem; color: #94a3b8; white-space: nowrap;">{{.OccurredAt}}</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">{{.OccurredAt}}</span>
     </div>
     {{end}}
 </div>
