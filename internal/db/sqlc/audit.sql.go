@@ -168,8 +168,9 @@ WHERE (?1 IS NULL OR instr(action, ?1) = 1)
   AND (?2 IS NULL OR actor_user_id = ?2)
   AND (?3 IS NULL OR resource_kind = ?3)
   AND (?4 IS NULL OR resource_id = ?4)
+  AND (?5 IS NULL OR outcome = ?5)
 ORDER BY occurred_at DESC, id DESC
-LIMIT ?6 OFFSET ?5
+LIMIT ?7 OFFSET ?6
 `
 
 type SearchAuditEventsParams struct {
@@ -177,6 +178,7 @@ type SearchAuditEventsParams struct {
 	ActorUserID  interface{}
 	ResourceKind interface{}
 	ResourceID   interface{}
+	Outcome      interface{}
 	Offset       int64
 	Limit        int64
 }
@@ -185,6 +187,9 @@ type SearchAuditEventsParams struct {
 // Every filter is optional (pass NULL to skip it) and all filters compose.
 // action is matched as a prefix (instr(...) = 1 rather than LIKE, so the
 // caller's value needs no wildcard escaping); the rest are exact matches.
+// Filtering on outcome answers "show me the denials" directly, rather than
+// through the authz.denied action-prefix convention, which only holds for
+// operations that declare no audit action of their own.
 // The tiebreak on id keeps the order total, which offset paging requires.
 func (q *Queries) SearchAuditEvents(ctx context.Context, arg SearchAuditEventsParams) ([]AuditEvent, error) {
 	rows, err := q.db.QueryContext(ctx, searchAuditEvents,
@@ -192,6 +197,7 @@ func (q *Queries) SearchAuditEvents(ctx context.Context, arg SearchAuditEventsPa
 		arg.ActorUserID,
 		arg.ResourceKind,
 		arg.ResourceID,
+		arg.Outcome,
 		arg.Offset,
 		arg.Limit,
 	)

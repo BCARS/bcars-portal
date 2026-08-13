@@ -246,6 +246,16 @@
             "description": "Dot-separated audit action name (e.g. member.create).",
             "type": "string"
           },
+          "actor_role_codes": {
+            "description": "Roles the actor held when the event happened, recorded at write time. Empty for an unauthenticated actor and for events written before this was populated.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "actor_user_id": {
             "format": "int64",
             "type": "integer"
@@ -263,6 +273,15 @@
             "type": "string"
           },
           "outcome": {
+            "enum": [
+              "success",
+              "failure",
+              "denied"
+            ],
+            "type": "string"
+          },
+          "reason_code": {
+            "description": "Why a denial or failure occurred, e.g. unauthenticated, missing_capability, missing_confirmation, rate_limited.",
             "type": "string"
           },
           "request_id": {
@@ -5619,6 +5638,21 @@
               "format": "int64",
               "minimum": 0,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by outcome (exact). 'denied' returns every refusal, whatever action it was recorded under.",
+            "explode": false,
+            "in": "query",
+            "name": "outcome",
+            "schema": {
+              "description": "Filter by outcome (exact). 'denied' returns every refusal, whatever action it was recorded under.",
+              "enum": [
+                "success",
+                "failure",
+                "denied"
+              ],
+              "type": "string"
             }
           }
         ],

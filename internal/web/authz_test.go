@@ -297,3 +297,53 @@ func TestMemberRoutesCarryNoOfficerCapability(t *testing.T) {
 			rt.Pattern, rt.Capability)
 	}
 }
+
+// TestWebDenialRecordsTheActorsRoles is the admin UI half of fmc.16. A denial
+// on the server-rendered surface must answer the same question the API's does:
+// was this somebody signed out, or somebody signed in without permission?
+func TestWebDenialRecordsTheActorsRoles(t *testing.T) {
+	e := setupHandlerWithRoles(t, "member")
+
+	// Signed in, without the capability.
+	req := e.authedRequest("POST", "/admin/imports/1/commit", "")
+	w := httptest.NewRecorder()
+	e.mux.ServeHTTP(w, req)
+	require.Equal(t, http.StatusForbidden, w.Code)
+
+	var roles, reason string
+	require.NoError(t, e.h.db.QueryRow(`
+		SELECT coalesce(actor_role_codes, ''), reason_code FROM audit_events
+		 WHERE action = 'import.commit' AND outcome = 'denied'`).Scan(&roles, &reason))
+	assert.Equal(t, "member", roles, "the denial records what the caller actually was")
+	assert.Equal(t, "missing_capability", reason)
+
+	// Signed out, against the same route.
+	anon := httptest.NewRequest("POST", "/admin/members/1/deactivate", nil)
+	w = httptest.NewRecorder()
+	e.mux.ServeHTTP(w, anon)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+
+	var anonRoles sql.NullString
+	require.NoError(t, e.h.db.QueryRow(`
+		SELECT actor_role_codes, reason_code FROM audit_events
+		 WHERE action = 'member.deactivate' AND outcome = 'denied'`).Scan(&anonRoles, &reason))
+	assert.False(t, anonRoles.Valid, "an unauthenticated denial records no roles")
+	assert.Equal(t, "unauthenticated", reason)
+}
+
+// TestWebSuccessRecordsTheActorsRoles covers the non-denial path.
+func TestWebSuccessRecordsTheActorsRoles(t *testing.T) {
+	e := setupHandlerWithRoles(t, "secretary")
+
+	req := e.authedRequest("POST", "/admin/members/new",
+		"display_name=Audited+Person&sort_name=audited+person&base_type=full")
+	w := httptest.NewRecorder()
+	e.mux.ServeHTTP(w, req)
+	require.Equal(t, http.StatusSeeOther, w.Code, "the member must be created")
+
+	var roles string
+	require.NoError(t, e.h.db.QueryRow(`
+		SELECT coalesce(actor_role_codes, '') FROM audit_events
+		 WHERE action = 'member.create' AND outcome = 'success'`).Scan(&roles))
+	assert.Equal(t, "secretary", roles)
+}

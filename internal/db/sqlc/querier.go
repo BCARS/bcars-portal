@@ -479,6 +479,9 @@ type Querier interface {
 	// Every filter is optional (pass NULL to skip it) and all filters compose.
 	// action is matched as a prefix (instr(...) = 1 rather than LIKE, so the
 	// caller's value needs no wildcard escaping); the rest are exact matches.
+	// Filtering on outcome answers "show me the denials" directly, rather than
+	// through the authz.denied action-prefix convention, which only holds for
+	// operations that declare no audit action of their own.
 	// The tiebreak on id keeps the order total, which offset paging requires.
 	SearchAuditEvents(ctx context.Context, arg SearchAuditEventsParams) ([]AuditEvent, error)
 	SetChangeRequestStatus(ctx context.Context, arg SetChangeRequestStatusParams) (MemberChangeRequest, error)

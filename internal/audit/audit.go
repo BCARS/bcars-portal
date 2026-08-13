@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
@@ -61,6 +62,11 @@ type Event struct {
 	Action string
 	// ActorUserID is the acting user; 0 means unauthenticated.
 	ActorUserID int64
+	// ActorRoleCodes are the roles that user held AT THE TIME. They are
+	// recorded rather than derived on read because roles change: an officer
+	// reviewing a denial from last spring needs to know what the actor was
+	// then, not what they are now.
+	ActorRoleCodes []string
 	// ResourceKind and ResourceID identify the target, when known.
 	ResourceKind string
 	ResourceID   int64
@@ -162,6 +168,14 @@ func (r *SQLRecorder) Record(ctx context.Context, e Event) {
 	}
 	if e.ActorUserID != 0 {
 		params.ActorUserID = sql.NullInt64{Int64: e.ActorUserID, Valid: true}
+	}
+	if len(e.ActorRoleCodes) > 0 {
+		// Comma-separated, which the column has always been shaped for. The
+		// API splits it back into a list so the wire format is not a parsing
+		// exercise for every reader.
+		params.ActorRoleCodes = sql.NullString{
+			String: strings.Join(e.ActorRoleCodes, ","), Valid: true,
+		}
 	}
 	if e.ResourceKind != "" {
 		params.ResourceKind = sql.NullString{String: e.ResourceKind, Valid: true}
