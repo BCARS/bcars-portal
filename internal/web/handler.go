@@ -355,13 +355,21 @@ func (h *Handler) requireCap(rt GuardedRoute) http.Handler {
 	return h.logged(func(w http.ResponseWriter, r *http.Request) {
 		p := h.principalFromRequest(r)
 		if p == nil {
-			h.recordDenial(r, rt, 0, audit.ReasonUnauthenticated)
+			// No principal, so no roles: an unauthenticated denial records an
+			// empty role list, which is itself the distinction an officer
+			// reviewing denials is looking for.
+			h.recordDenial(r, rt, 0, nil, audit.ReasonUnauthenticated)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 
+		// Loaded once per guarded request and used by whichever audit event
+		// this request ends up producing. Roles are recorded, never consulted:
+		// the capability check on the next line is the authorization.
+		roles := h.rolesFor(p.UserID)
+
 		if _, ok := p.Capabilities[rt.Capability]; !ok {
-			h.recordDenial(r, rt, p.UserID, audit.ReasonMissingCapability)
+			h.recordDenial(r, rt, p.UserID, roles, audit.ReasonMissingCapability)
 			h.log.Warn("capability denied",
 				slog.Int64("user_id", p.UserID),
 				slog.String("capability", rt.Capability),
@@ -385,12 +393,13 @@ func (h *Handler) requireCap(rt GuardedRoute) http.Handler {
 				kind, id = k, i
 			}
 			h.audit.Record(r.Context(), audit.Event{
-				Action:       rt.AuditAction,
-				ActorUserID:  p.UserID,
-				ResourceKind: kind,
-				ResourceID:   id,
-				Outcome:      audit.OutcomeForStatus(sw.status),
-				DetailJSON:   detailJSON(r, rt),
+				Action:         rt.AuditAction,
+				ActorUserID:    p.UserID,
+				ActorRoleCodes: roles,
+				ResourceKind:   kind,
+				ResourceID:     id,
+				Outcome:        audit.OutcomeForStatus(sw.status),
+				DetailJSON:     detailJSON(r, rt),
 			})
 		}
 	})
@@ -418,19 +427,20 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 }
 
 // recordDenial audits a rejected admin request.
-func (h *Handler) recordDenial(r *http.Request, rt GuardedRoute, userID int64, reason string) {
+func (h *Handler) recordDenial(r *http.Request, rt GuardedRoute, userID int64, roles []string, reason string) {
 	action := rt.AuditAction
 	if action == "" {
 		action = "authz.denied.web"
 	}
 	h.audit.Record(r.Context(), audit.Event{
-		Action:       action,
-		ActorUserID:  userID,
-		ResourceKind: rt.ResourceKind,
-		ResourceID:   pathID(r),
-		Outcome:      audit.OutcomeDenied,
-		ReasonCode:   reason,
-		DetailJSON:   detailJSON(r, rt),
+		Action:         action,
+		ActorUserID:    userID,
+		ActorRoleCodes: roles,
+		ResourceKind:   rt.ResourceKind,
+		ResourceID:     pathID(r),
+		Outcome:        audit.OutcomeDenied,
+		ReasonCode:     reason,
+		DetailJSON:     detailJSON(r, rt),
 	})
 }
 
@@ -447,6 +457,25 @@ func pathID(r *http.Request) int64 {
 func detailJSON(r *http.Request, rt GuardedRoute) string {
 	return fmt.Sprintf(`{"method":%q,"path":%q,"required_capability":%q,"surface":"web"}`,
 		r.Method, r.URL.Path, rt.Capability)
+}
+
+// rolesFor loads the role codes a user currently holds, for the audit trail.
+//
+// It is a separate read from the capability load rather than a field on
+// authz.Principal, because authz.Principal is the AUTHORIZATION type and roles
+// decide nothing here: capabilities do, and they already contain the union of
+// role-granted and directly-granted codes. Putting roles on that struct would
+// invite a future check to read them.
+//
+// A failure yields no roles rather than refusing the request. One thinner audit
+// column is a better outcome than an admin page that will not load.
+func (h *Handler) rolesFor(userID int64) []string {
+	roles, err := (&authn.SQLCapabilityLoader{DB: h.db}).EffectiveRoles(userID)
+	if err != nil {
+		h.log.Error("load roles failed", slog.Int64("user_id", userID), slog.String("error", err.Error()))
+		return nil
+	}
+	return roles
 }
 
 // principalFromRequest resolves the authenticated principal from the session

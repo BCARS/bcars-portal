@@ -11,6 +11,16 @@ type CapabilityLoader interface {
 	EffectiveCapabilities(userID int64) (map[string]struct{}, error)
 }
 
+// RoleLoader optionally reports the role codes a user holds.
+//
+// It is a separate, optional interface rather than a second method on
+// CapabilityLoader so that adding it breaks no existing implementation: a
+// loader that does not provide roles simply yields a principal with none, and
+// authorization is unaffected either way because it reads capabilities.
+type RoleLoader interface {
+	EffectiveRoles(userID int64) ([]string, error)
+}
+
 // Middleware resolves the session cookie → Principal and attaches it to the
 // request context. Unauthenticated requests pass through with a nil principal
 // (the authz layer decides whether to allow or deny).
@@ -59,6 +69,18 @@ func Middleware(store *SessionStore, capLoader CapabilityLoader, cookies Session
 				Capabilities: caps,
 				SessionID:    sess.ID,
 			}
+
+			// Roles are for the audit trail only. A failure to load them is
+			// deliberately NOT treated the way a capability failure is: an
+			// unreadable capability set means permissions are unknown and the
+			// request continues unauthenticated, whereas unreadable roles mean
+			// one audit column is thinner than usual. Refusing the request over
+			// that would trade a working portal for a tidier log.
+			if rl, ok := capLoader.(RoleLoader); ok {
+				if roles, err := rl.EffectiveRoles(sess.UserID); err == nil {
+					p.Roles = roles
+				}
+			}
 			next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), p)))
 		})
 	}
@@ -101,4 +123,30 @@ func (l *SQLCapabilityLoader) EffectiveCapabilities(userID int64) (map[string]st
 		caps[code] = struct{}{}
 	}
 	return caps, errors.Join(rows.Err())
+}
+
+// EffectiveRoles returns the role codes the user currently holds.
+//
+// Direct capability grants are deliberately absent: they are not roles, and
+// listing them here would make the audit column answer a different question
+// than its name asks.
+func (l *SQLCapabilityLoader) EffectiveRoles(userID int64) ([]string, error) {
+	rows, err := l.DB.Query(
+		`SELECT role_code FROM user_role_grants
+		  WHERE user_id = ? AND revoked_at IS NULL
+		  ORDER BY role_code`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var roles []string
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		roles = append(roles, code)
+	}
+	return roles, rows.Err()
 }

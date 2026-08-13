@@ -127,6 +127,14 @@ func recordEvent(ctx huma.Context, rec audit.Recorder, meta OperationMeta, actio
 		ReasonCode:  reason,
 	}
 
+	// Roles come from the principal rather than the caller, so every emitter
+	// records them without having to remember to. An unauthenticated denial has
+	// none, which is itself the answer to "was this someone logged out, or
+	// someone logged in without permission".
+	if p := authn.PrincipalFrom(ctx.Context()); p != nil {
+		e.ActorRoleCodes = p.Roles
+	}
+
 	// A handler that stamped its resource wins; otherwise fall back to the
 	// operation tag and the {id} path parameter.
 	if kind, id, ok := audit.StampedResource(ctx.Context()); ok {
