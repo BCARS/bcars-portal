@@ -4,14 +4,14 @@
 
 {{define "content"}}
 <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">{{.Batch.Label}}</h2>
-<p style="margin: 0 0 16px; color: #555;">
+<p style="margin: 0 0 16px; color: var(--text-secondary);">
     {{if eq .Batch.State "open"}}Open for entry.{{end}}
     {{if eq .Batch.State "posted"}}Posted {{.Batch.PostedAt}}.{{end}}
     {{if eq .Batch.State "abandoned"}}Abandoned. Nothing here was recorded as money.{{end}}
 </p>
 
 {{if .Error}}
-<div class="card" role="alert" style="border-left: 4px solid #c62828;">
+<div class="card" role="alert" style="border-left: 4px solid var(--danger);">
     <p style="margin: 0;">{{.Error}}</p>
 </div>
 {{end}}
@@ -27,7 +27,7 @@
             <tr><th scope="row">All rows</th><th>{{.Totals.Entries}}</th><th>${{.Totals.NetTotal}}</th></tr>
         </tbody>
     </table>
-    <p style="margin: 8px 0 0; color: #555;">
+    <p style="margin: 8px 0 0; color: var(--text-secondary);">
         These totals are calculated by the server. Count the cash and the checks against them before posting.
     </p>
 </div>
@@ -35,7 +35,7 @@
 {{if .WorksheetRows}}
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Working down sheet {{.WorksheetRunID}}</h3>
-    <p style="margin: 0 0 8px; color: #555;">
+    <p style="margin: 0 0 8px; color: var(--text-secondary);">
         {{.WorksheetDone}} of {{len .WorksheetRows}} entered. The order below is the order the
         sheet was printed in, so you can work straight down the paper.
     </p>
@@ -77,7 +77,7 @@
             {{end}}
         </tbody>
     </table>
-    <p style="margin: 8px 0 0; color: #555;">
+    <p style="margin: 8px 0 0; color: var(--text-secondary);">
         Nothing above is recorded until you enter an amount and add the row.
     </p>
 </div>
@@ -168,7 +168,7 @@
 
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Defaults for new rows</h3>
-    <p style="margin: 0 0 8px; color: #555;">
+    <p style="margin: 0 0 8px; color: var(--text-secondary);">
         These prefill each new row. Every row still records its own amount and its own
         Dues paid through date.
     </p>
@@ -228,7 +228,7 @@
             <tr>
                 <td>{{.MemberName}}</td>
                 <td>
-                    {{if .Superseded}}<s>${{.Amount}}</s> <span style="color:#555;">(corrected)</span>
+                    {{if .Superseded}}<s>${{.Amount}}</s> <span style="color:var(--text-secondary);">(corrected)</span>
                     {{else}}${{.Amount}}{{end}}
                 </td>
                 <td>{{.Method}}</td>
@@ -256,7 +256,7 @@
         {{range .Activity}}
         <li style="margin-bottom: 6px;">
             {{.Summary}}
-            <br><span style="color: #555;">{{.At}}{{if .Reason}} &mdash; {{.Reason}}{{end}}</span>
+            <br><span style="color: var(--text-secondary);">{{.At}}{{if .Reason}} &mdash; {{.Reason}}{{end}}</span>
         </li>
         {{end}}
     </ol>

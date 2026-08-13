@@ -33,8 +33,8 @@
             {{range .Members}}
                 <tr>
                     <td><a href="/admin/members/{{.ID}}">{{.DisplayName}}</a></td>
-                    <td>{{if .CallSign.Valid}}{{.CallSign.String}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
-                    <td>{{if .BaseType}}{{.BaseType}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                    <td>{{if .CallSign.Valid}}{{.CallSign.String}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                    <td>{{if .BaseType}}{{.BaseType}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
                     <td>
                         {{if .DeactivatedAt.Valid}}<span class="badge badge-red">Deactivated</span>
                         {{else if .DeceasedAt.Valid}}<span class="badge badge-gray">Deceased</span>

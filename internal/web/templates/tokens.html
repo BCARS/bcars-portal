@@ -1,0 +1,258 @@
+{{define "tokens"}}
+<style>
+    /*
+     * Design tokens and shared base styles (bcars-portal-6pz.1).
+     *
+     * Every colour, size, spacing step, radius and shadow the portal uses is
+     * declared once here and referenced through var(). Before this block the
+     * palette was written out as literal hex in seven places -- both layouts
+     * and each of the five standalone pages -- which is how the page
+     * background came to be #f5f5f5 on some screens and #f7f7f5 on others.
+     *
+     * Values come from scratch/design_handoff_bcars_portal/README.md. A screen
+     * that needs a colour the design does not name should get a token added
+     * here rather than a literal in a page.
+     */
+    :root {
+        /* Type. The root size is the whole point of the text-size preference:
+           everything downstream is em/rem, so changing this one declaration
+           scales the interface without transform, without reflow surprises,
+           and without any page having to opt in. */
+        font-size: 18px;
+
+        --font-sans: system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+        --font-mono: ui-monospace, Menlo, monospace;
+        --font-serif: Georgia, "Times New Roman", serif;
+
+        /* Surfaces and text */
+        --surface-dark: #1e293b;
+        --page-bg: #f7f7f5;
+        --card-bg: #ffffff;
+        --card-border: #e2e8f0;
+        --divider: #f1f5f9;
+        --table-header-bg: #f8fafc;
+        --row-hover: #f8fafc;
+        --input-border: #cbd5e1;
+        --text: #1a1a1a;
+        --text-secondary: #475569;
+        --text-helper: #64748b;
+        --text-muted: #94a3b8;
+        --on-dark-secondary: #cbd5e1;
+
+        /* Primary */
+        --primary: #1a56db;
+        --primary-hover: #123f9e;
+        --primary-on-light: #1a3fa8;
+        --primary-tint: #f5f8ff;
+
+        /* Status: badges are a fill plus a text colour, panels add a border. */
+        --success-bg: #f0fdf4;
+        --success-border: #bbf7d0;
+        --success-text: #166534;
+        --badge-success-bg: #dcfce7;
+        --badge-info-bg: #dbeafe;
+        --badge-info-text: #1e40af;
+        --panel-info-bg: #eff6ff;
+        --panel-info-border: #bfdbfe;
+        --badge-warning-bg: #fef9c3;
+        --badge-warning-text: #854d0e;
+        --panel-warning-bg: #fffbeb;
+        --panel-warning-border: #fde68a;
+        --panel-warning-text: #78350f;
+        --badge-danger-bg: #fee2e2;
+        --badge-danger-text: #991b1b;
+        --panel-danger-bg: #fef2f2;
+        --panel-danger-border: #fecaca;
+        --row-attention: #fffdf5;
+        --caution: #92400e;
+        --caution-strong: #b45309;
+        --danger: #b91c1c;
+        --danger-strong: #dc2626;
+
+        /* Print. Printed sheets are documents, not UI: near-black ink on
+           white, serif face, and rules rather than fills. */
+        --print-ink: #111;
+        --print-rule: #999;
+        --print-rule-light: #ccc;
+        --desk-bg: #e6e4df;
+
+        /* Spacing */
+        --space-1: 4px;
+        --space-2: 6px;
+        --space-3: 10px;
+        --space-4: 14px;
+        --space-5: 18px;
+        --space-6: 22px;
+        --space-7: 28px;
+
+        /* Radius */
+        --radius-dense: 7px;
+        --radius-control: 8px;
+        --radius-card: 10px;
+        --radius-pill: 999px;
+
+        /* Shadows. Cards are flat and carry a border instead. */
+        --shadow-modal: 0 12px 34px rgba(0, 0, 0, .28);
+        --shadow-paper: 0 3px 14px rgba(0, 0, 0, .14);
+    }
+
+    /*
+     * The large size is a user preference stored on the user row and stamped
+     * onto <html> by the server, so the page arrives at the right size rather
+     * than being corrected by a script after first paint.
+     */
+    :root[data-text-size="large"] { font-size: 22px; }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+        font-family: var(--font-sans);
+        margin: 0;
+        background: var(--page-bg);
+        color: var(--text);
+        line-height: 1.5;
+    }
+
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Focus must stay visible everywhere. Do not replace this with
+       outline: none anywhere downstream. */
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    .skip-link {
+        position: absolute; top: -40px; left: 0;
+        background: var(--primary); color: #fff;
+        padding: var(--space-2) var(--space-5); z-index: 100;
+    }
+    .skip-link:focus { top: 0; }
+
+    .card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-card);
+        padding: var(--space-6) 24px;
+        margin-bottom: var(--space-5);
+    }
+    .card h2 { margin: 0 0 var(--space-3); font-size: 1.1em; font-weight: 700; }
+    .card h3 { margin: 0 0 var(--space-2); font-size: .95em; font-weight: 700; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .95em; }
+    th {
+        text-align: left;
+        padding: var(--space-3) var(--space-3);
+        background: var(--table-header-bg);
+        border-bottom: 2px solid var(--card-border);
+        font-weight: 600;
+        color: #334155;
+        font-size: .85em;
+        letter-spacing: .03em;
+    }
+    td { padding: var(--space-3) var(--space-3); border-bottom: 1px solid var(--divider); }
+    tr:hover td { background: var(--row-hover); }
+
+    .btn {
+        display: inline-block;
+        padding: var(--space-4) var(--space-5);
+        border-radius: var(--radius-control);
+        font-size: .95em;
+        font-weight: 600;
+        font-family: inherit;
+        border: 1px solid transparent;
+        cursor: pointer;
+        text-align: center;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); text-decoration: none; }
+    .btn-secondary { background: var(--card-bg); color: var(--text-secondary); border-color: var(--input-border); }
+    .btn-secondary:hover { background: var(--table-header-bg); text-decoration: none; }
+    .btn-danger { background: var(--danger-strong); color: #fff; }
+    .btn-danger:hover { background: var(--danger); text-decoration: none; }
+    .btn-sm { padding: var(--space-2) var(--space-4); font-size: .87em; }
+
+    .form-group { margin-bottom: var(--space-5); }
+    .form-group label {
+        display: block; font-size: .92em; font-weight: 600;
+        margin-bottom: var(--space-1); color: var(--text-secondary);
+    }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%;
+        padding: var(--space-4) var(--space-5);
+        border: 2px solid var(--input-border);
+        border-radius: var(--radius-control);
+        font-size: .95em;
+        font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+        outline: 2px solid var(--primary); outline-offset: -1px; border-color: var(--primary);
+    }
+    .required-marker { color: var(--danger); }
+
+    .badge {
+        display: inline-block;
+        padding: 2px var(--space-3);
+        border-radius: var(--radius-pill);
+        font-size: .8em;
+        font-weight: 600;
+    }
+    .badge-green { background: var(--badge-success-bg); color: var(--success-text); }
+    .badge-yellow { background: var(--badge-warning-bg); color: var(--badge-warning-text); }
+    .badge-red { background: var(--badge-danger-bg); color: var(--badge-danger-text); }
+    .badge-gray { background: var(--divider); color: var(--text-secondary); }
+    .badge-blue { background: var(--badge-info-bg); color: var(--badge-info-text); }
+
+    .callsign { font-family: var(--font-mono); }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-5);
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-card);
+        padding: var(--space-5) var(--space-5);
+    }
+    .stat-card .label { font-size: .85em; color: var(--text-secondary); font-weight: 600; }
+    .stat-card .value { font-size: 2.2em; font-weight: 700; letter-spacing: -.02em; margin-top: var(--space-1); }
+
+    .search-bar { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); }
+    .search-bar input { flex: 1; }
+
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+    @media (max-width: 768px) { .detail-grid { grid-template-columns: 1fr; } }
+    .detail-row {
+        display: flex; gap: var(--space-3);
+        padding: 11px 0; border-bottom: 1px solid var(--divider);
+        font-size: .95em;
+    }
+    .detail-label { width: 210px; color: var(--text-secondary); flex-shrink: 0; font-weight: 600; }
+    .detail-value { flex: 1; }
+
+    .alert {
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-control);
+        margin-bottom: var(--space-5);
+        font-size: .95em;
+    }
+    .alert-info { background: var(--panel-info-bg); border: 1px solid var(--panel-info-border); color: var(--badge-info-text); }
+    .alert-success { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success-text); }
+    .alert-warning { background: var(--panel-warning-bg); border: 1px solid var(--panel-warning-border); color: var(--caution); }
+    .alert-error { background: var(--panel-danger-bg); border: 1px solid var(--panel-danger-border); color: var(--badge-danger-text); }
+
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--text-helper); }
+    .empty-state p { margin: var(--space-3) 0; }
+
+    .breadcrumb { font-size: .9em; color: var(--text-secondary); margin-bottom: var(--space-5); }
+    .breadcrumb a { color: var(--text-secondary); }
+    .breadcrumb span { margin: 0 var(--space-1); }
+
+    .flash { animation: flash-fade 0.3s ease-in; }
+    @keyframes flash-fade { from { background: var(--badge-warning-bg); } to { background: transparent; } }
+</style>
+{{end}}

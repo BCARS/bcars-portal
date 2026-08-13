@@ -11,21 +11,21 @@
 <div class="card">
     <form action="/admin/requests" method="get">
         <div class="search-bar">
-            <label for="status" style="align-self:center; font-size:0.875rem; color:#475569;">Status</label>
+            <label for="status" style="align-self:center; font-size:0.875rem; color:var(--text-secondary);">Status</label>
             <select id="status" name="status">
                 {{range .Statuses}}
                 <option value="{{.Value}}" {{if eq .Value $.Filters.Status}}selected{{end}}>{{.Label}}</option>
                 {{end}}
             </select>
 
-            <label for="source" style="align-self:center; font-size:0.875rem; color:#475569;">Source</label>
+            <label for="source" style="align-self:center; font-size:0.875rem; color:var(--text-secondary);">Source</label>
             <select id="source" name="source">
                 {{range .Sources}}
                 <option value="{{.Value}}" {{if eq .Value $.Filters.Source}}selected{{end}}>{{.Label}}</option>
                 {{end}}
             </select>
 
-            <label style="align-self:center; font-size:0.875rem; color:#475569;">
+            <label style="align-self:center; font-size:0.875rem; color:var(--text-secondary);">
                 <input type="checkbox" name="unlinked" value="1" {{if .Filters.UnlinkedOnly}}checked{{end}}
                        style="width:auto; margin-right:4px;">
                 Needs linking
@@ -57,10 +57,10 @@
                 <td>{{.Kind}}</td>
                 <td>
                     {{.About}}
-                    {{if .Supplied}}<div style="font-size:0.75rem; color:#94a3b8;">As described by the sender; not yet linked</div>{{end}}
+                    {{if .Supplied}}<div style="font-size:0.75rem; color:var(--text-muted);">As described by the sender; not yet linked</div>{{end}}
                 </td>
                 <td>{{.Summary}}</td>
-                <td>{{if .PendingItems}}{{.PendingItems}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>{{if .PendingItems}}{{.PendingItems}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
                 <td>
                     {{if eq .Status "Resolved"}}<span class="badge badge-green">{{.Status}}</span>
                     {{else if eq .Status "Withdrawn"}}<span class="badge badge-gray">{{.Status}}</span>

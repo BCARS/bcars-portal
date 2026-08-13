@@ -126,7 +126,7 @@ func (h *Handler) memberAccessPage(w http.ResponseWriter, r *http.Request) {
 
 	data.Relationships = h.relationshipContext(r, person.ID)
 
-	h.render.RenderHTTP(w, "member_access.html", http.StatusOK, data)
+	h.renderPage(w, r, "member_access.html", http.StatusOK, data)
 }
 
 // loadAccessPerson reads the record this page is about.

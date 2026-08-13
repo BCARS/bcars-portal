@@ -491,6 +491,7 @@ type User struct {
 	CreatedAt          string
 	UpdatedAt          string
 	Version            int64
+	TextSize           string
 }
 
 type UserCapabilityGrant struct {

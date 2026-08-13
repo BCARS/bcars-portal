@@ -41,7 +41,7 @@
                 <td>
                     {{.Email}}
                     {{if not .HasPassword}}
-                    <div style="font-size:0.75rem; color:#94a3b8;">No password set yet</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">No password set yet</div>
                     {{end}}
                 </td>
                 <td>{{if eq .AccessKind "self"}}Their own record{{else}}Acting for them{{end}}</td>
@@ -50,7 +50,7 @@
                     {{if .Active}}<span class="badge badge-green">Active</span>
                     {{else}}<span class="badge badge-gray">Revoked {{.RevokedAt}}</span>{{end}}
                 </td>
-                <td>{{if .Reason}}{{.Reason}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>{{if .Reason}}{{.Reason}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
                 <td>
                     {{if .Active}}
                     <form action="/admin/members/{{$.PersonID}}/access/revoke" method="post">
@@ -77,7 +77,7 @@
 <div class="detail-grid">
     <div class="card">
         <h2>Grant access</h2>
-        <p style="font-size:0.8125rem; color:#64748b;">
+        <p style="font-size:0.8125rem; color:var(--text-helper);">
             The account must already exist. Granting is the decision that this login may read
             this record, and nothing else follows from it.
         </p>
@@ -103,7 +103,7 @@
 
     <div class="card">
         <h2>Create an account</h2>
-        <p style="font-size:0.8125rem; color:#64748b;">
+        <p style="font-size:0.8125rem; color:var(--text-helper);">
             Creates a member login for an email address, or reuses the one that address
             already has. It grants no access to any record on its own, and it sets no
             password &mdash; the member chooses their own.
@@ -117,7 +117,7 @@
         </form>
 
         <h3 style="margin-top:20px;">Send a sign-in link</h3>
-        <p style="font-size:0.8125rem; color:#64748b;">
+        <p style="font-size:0.8125rem; color:var(--text-helper);">
             Emails the member a link to set their password. Sent the same way whether or not
             the address has an account, so this cannot be used to check who is registered.
         </p>
@@ -134,7 +134,7 @@
 {{if .Relationships}}
 <div class="card">
     <h2>Recorded relationships</h2>
-    <p style="font-size:0.8125rem; color:#64748b;">
+    <p style="font-size:0.8125rem; color:var(--text-helper);">
         Informational only. Nothing in this list gives anyone access to this record; every
         account that can see it appears in the table above and got there by an officer's
         explicit grant.
@@ -146,7 +146,7 @@
             <tr>
                 <td>{{.Kind}}</td>
                 <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
-                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
             </tr>
         {{end}}
         </tbody>

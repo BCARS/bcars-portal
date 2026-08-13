@@ -32,8 +32,8 @@ func TestEveryEmbeddedTemplateIsRegistered(t *testing.T) {
 
 	for _, full := range embedded {
 		name := path.Base(full)
-		if isLayout(name) {
-			continue // a base is rendered only through a page that embeds it
+		if isShared(name) {
+			continue // machinery: a base or the token partial, never rendered alone
 		}
 		assert.True(t, registered[name],
 			"template %s is embedded but not registered — it would fail at runtime", name)

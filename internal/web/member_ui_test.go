@@ -582,7 +582,7 @@ func TestMemberPagesCarryAccessibilityBasics(t *testing.T) {
 			require.Equal(t, http.StatusOK, w.Code)
 			body := w.Body.String()
 
-			assert.Contains(t, body, `<html lang="en">`, "a screen reader needs the language")
+			assert.Contains(t, body, `<html lang="en"`, "a screen reader needs the language")
 			assert.Contains(t, body, `class="skip-link"`, "keyboard users need to skip the header")
 			assert.Contains(t, body, `<main id="main"`, "the skip link needs its target")
 			assert.Contains(t, body, "<title>", "a tab needs a name")

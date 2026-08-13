@@ -37,7 +37,7 @@
             <div class="detail-label">Says they are</div>
             <div class="detail-value">
                 {{.Supplied.Relationship}}
-                <div style="font-size:0.75rem; color:#94a3b8;">In the sender's words. Nothing was verified, and it grants them nothing.</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">In the sender's words. Nothing was verified, and it grants them nothing.</div>
             </div>
         </div>
         {{end}}
@@ -49,7 +49,7 @@
         <p style="font-size:0.875rem;">
             Linked to <a href="/admin/members/{{.TargetPersonID}}">{{.Request.About}}</a>.
         </p>
-        <p style="font-size:0.8125rem; color:#64748b;">
+        <p style="font-size:0.8125rem; color:var(--text-helper);">
             Linking records who an officer decided this is about. It never changes what the sender wrote above.
         </p>
         {{else}}
@@ -66,7 +66,7 @@
                 <input type="number" id="target_person_id" name="target_person_id" min="1"
                        value="{{if .TargetPersonID}}{{.TargetPersonID}}{{end}}"
                        aria-describedby="target-help">
-                <div id="target-help" style="font-size:0.75rem; color:#64748b; margin-top:4px;">
+                <div id="target-help" style="font-size:0.75rem; color:var(--text-helper); margin-top:4px;">
                     Find the record under <a href="/admin/members">Members</a> and use its number.
                 </div>
             </div>
@@ -95,21 +95,21 @@
                     {{.Label}}
                     {{if .Sensitive}}<span class="badge badge-yellow">Sensitive</span>{{end}}
                     {{if not .Appliable}}
-                    <div style="font-size:0.75rem; color:#94a3b8;">Cannot be applied automatically; use the usual workflow.</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">Cannot be applied automatically; use the usual workflow.</div>
                     {{end}}
                 </td>
-                <td>{{if .ProposedValue}}{{.ProposedValue}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>{{if .ProposedValue}}{{.ProposedValue}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
                 <td>
                     {{if eq .Status "Approved"}}<span class="badge badge-green">{{.Status}}</span>
                     {{else if eq .Status "Rejected"}}<span class="badge badge-red">{{.Status}}</span>
                     {{else if eq .Status "Needs verification"}}<span class="badge badge-yellow">{{.Status}}</span>
                     {{else}}<span class="badge badge-gray">{{.Status}}</span>
                     {{end}}
-                    {{if .AppliedAt}}<div style="font-size:0.75rem; color:#64748b;">Applied {{.AppliedAt}}</div>{{end}}
+                    {{if .AppliedAt}}<div style="font-size:0.75rem; color:var(--text-helper);">Applied {{.AppliedAt}}</div>{{end}}
                 </td>
                 <td>
                     {{if .DecisionReason}}<div style="font-size:0.8125rem;">{{.DecisionReason}}</div>{{end}}
-                    {{if .VerificationNote}}<div style="font-size:0.75rem; color:#64748b;">Verified: {{.VerificationNote}}</div>{{end}}
+                    {{if .VerificationNote}}<div style="font-size:0.75rem; color:var(--text-helper);">Verified: {{.VerificationNote}}</div>{{end}}
 
                     {{if and $.CanReview .Decidable $.Reviewable}}
                     <form action="/admin/requests/{{$.Request.ID}}/items/{{.ID}}/decision" method="post"
@@ -129,7 +129,7 @@
                         <button type="submit" class="btn btn-sm btn-primary">Record decision</button>
                     </form>
                     {{else if and .Decidable $.Reviewable}}
-                    <div style="font-size:0.75rem; color:#94a3b8;">Awaiting an officer who may review.</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">Awaiting an officer who may review.</div>
                     {{end}}
                 </td>
             </tr>
@@ -144,7 +144,7 @@
 {{if .Relationships}}
 <div class="card">
     <h2>Household context</h2>
-    <p style="font-size:0.8125rem; color:#64748b;">
+    <p style="font-size:0.8125rem; color:var(--text-helper);">
         Recorded relationships for this record. They are informational only: they give nobody
         access to a record and are not a reason to approve anything. Access is granted
         separately on the <a href="/admin/members/{{.TargetPersonID}}/access">record access page</a>.
@@ -156,7 +156,7 @@
             <tr>
                 <td>{{.Kind}}</td>
                 <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
-                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:#94a3b8;">-</span>{{end}}</td>
+                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
             </tr>
         {{end}}
         </tbody>

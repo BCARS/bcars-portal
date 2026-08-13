@@ -117,7 +117,7 @@ func (h *Handler) worksheetOptions(w http.ResponseWriter, r *http.Request) {
 	for _, run := range runs {
 		data.Runs = append(data.Runs, worksheetRunToView(run))
 	}
-	h.render.RenderHTTP(w, "worksheet_options.html", http.StatusOK, data)
+	h.renderPage(w, r, "worksheet_options.html", http.StatusOK, data)
 }
 
 // worksheetCreate generates a durable run and shows it.
@@ -213,7 +213,7 @@ func (h *Handler) worksheetSheet(w http.ResponseWriter, r *http.Request) {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	h.render.RenderHTTP(w, "worksheet_sheet.html", http.StatusOK, data)
+	h.renderPage(w, r, "worksheet_sheet.html", http.StatusOK, data)
 }
 
 func (h *Handler) worksheetSheetData(r *http.Request, p *authz.Principal, id int64) (worksheetSheetData, error) {
@@ -332,7 +332,7 @@ func (h *Handler) renderWorksheetOptionsError(w http.ResponseWriter, r *http.Req
 	for _, run := range runs {
 		data.Runs = append(data.Runs, worksheetRunToView(run))
 	}
-	h.render.RenderHTTP(w, "worksheet_options.html", http.StatusUnprocessableEntity, data)
+	h.renderPage(w, r, "worksheet_options.html", http.StatusUnprocessableEntity, data)
 }
 
 func worksheetErrorMessage(err error) string {

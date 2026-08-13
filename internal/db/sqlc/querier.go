@@ -209,6 +209,7 @@ type Querier interface {
 	GetStagedRow(ctx context.Context, id int64) (StagedImportRow, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserTextSize(ctx context.Context, id int64) (string, error)
 	GetWorksheetRun(ctx context.Context, id int64) (DuesWorksheetRun, error)
 	// Member record access grants.
 	//
@@ -491,6 +492,7 @@ type Querier interface {
 	SetChangeRequestTarget(ctx context.Context, arg SetChangeRequestTargetParams) (MemberChangeRequest, error)
 	SetPaymentBatchWorksheetRun(ctx context.Context, arg SetPaymentBatchWorksheetRunParams) error
 	SetPrimary(ctx context.Context, id int64) error
+	SetUserTextSize(ctx context.Context, arg SetUserTextSizeParams) error
 	SetWorksheetRunRowCount(ctx context.Context, arg SetWorksheetRunRowCountParams) error
 	SumPaymentBatchEntries(ctx context.Context, batchID int64) (SumPaymentBatchEntriesRow, error)
 	// Bumps the batch version after an entry mutation, so a browser holding a

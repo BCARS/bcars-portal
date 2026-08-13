@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" data-text-size="{{.TextSize}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text size - BCARS Portal</title>
+{{template "tokens" .}}
+<style>
+    /* Standalone on purpose: the officer and member shells are separate, and
+       this one page is reachable from both. Rendering it inside either would
+       mean choosing a chrome, and choosing wrong shows a member a row of
+       /admin/ links. The back link below is resolved per caller instead. */
+    .container { max-width: 700px; margin: 0 auto; padding: var(--space-7); }
+    .sample { border: 1px solid var(--card-border); border-radius: var(--radius-control); padding: var(--space-5); background: var(--table-header-bg); }
+    fieldset { border: 0; padding: 0; margin: 0 0 var(--space-6); }
+    legend { font-size: 1.1em; font-weight: 700; padding: 0; margin-bottom: var(--space-2); }
+    .choice { display: flex; gap: var(--space-4); align-items: flex-start; padding: var(--space-4) 0; border-bottom: 1px solid var(--divider); }
+    .choice:last-of-type { border-bottom: 0; }
+    .choice input { width: 20px; height: 20px; margin: 2px 0 0; flex-shrink: 0; }
+    .choice .title { font-weight: 600; }
+    .choice .detail { color: var(--text-secondary); font-size: .9em; }
+</style>
+</head>
+<body>
+<main id="main" class="container">
+    <p class="breadcrumb"><a href="{{.BackHref}}">&larr; Back to {{.BackLabel}}</a></p>
+
+    <h1>Text size</h1>
+    <p class="note">This is saved to your account, not to this computer, so it
+    follows you to any machine you sign in from and does not change what anyone
+    else sees when they use this one.</p>
+
+    {{if .Saved}}
+    <div class="alert alert-success" role="status">Saved. The whole portal now uses this size.</div>
+    {{end}}
+    {{if .Error}}
+    <div class="alert alert-error" role="alert">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/preferences/text-size">
+        <fieldset>
+            <legend>How big should the type be?</legend>
+
+            <label class="choice">
+                <input type="radio" name="text_size" value="base" {{if eq .TextSize "base"}}checked{{end}}>
+                <span>
+                    <span class="title">Normal</span><br>
+                    <span class="detail">The standard size. Right for most people.</span>
+                </span>
+            </label>
+
+            <label class="choice">
+                <input type="radio" name="text_size" value="large" {{if eq .TextSize "large"}}checked{{end}}>
+                <span>
+                    <span class="title">Larger</span><br>
+                    <span class="detail">About a fifth bigger, everywhere in the portal.</span>
+                </span>
+            </label>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+
+    <h2 style="margin-top: 32px;">What it looks like</h2>
+    <div class="sample">
+        <p style="margin-top:0;">Dues are currently paid through December 31, 2025 &mdash; expired.
+        The club year always ends December 31.</p>
+        <p style="margin-bottom:0;"><span class="callsign">W3ABC</span> &middot;
+        <span class="badge badge-green">Paid through 2027</span></p>
+    </div>
+</main>
+</body>
+</html>

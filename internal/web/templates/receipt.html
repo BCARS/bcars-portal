@@ -6,7 +6,7 @@
 <div class="card">
     <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Receipt {{.Receipt.ReceiptCode}}</h2>
     {{if .Receipt.Superseded}}
-    <p role="status" style="margin: 0 0 12px; color: #8a4b00;">
+    <p role="status" style="margin: 0 0 12px; color: var(--caution);">
         This entry was later corrected. It is kept for the record and is not the current amount.
     </p>
     {{end}}

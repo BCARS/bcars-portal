@@ -6,7 +6,7 @@
 <h2 style="margin: 0 0 16px; font-size: 1.25rem; font-weight: 600;">Renewal worksheets</h2>
 
 {{if .Error}}
-<div class="card" role="alert" style="border-left: 4px solid #c62828;">
+<div class="card" role="alert" style="border-left: 4px solid var(--danger);">
     <p style="margin: 0;">{{.Error}}</p>
 </div>
 {{end}}
@@ -20,7 +20,7 @@
         <label for="as_of">Judge dues standing as of</label>
         <input type="date" id="as_of" name="as_of" value="{{.AsOf}}">
 
-        <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 12px 0;">
+        <fieldset style="border: 1px solid var(--card-border); padding: 12px; margin: 12px 0;">
             <legend>Who should be listed?</legend>
             <label><input type="radio" name="filter_kind" value="owes" {{if eq .FilterKind "owes"}}checked{{end}}> Everyone who owes</label><br>
             <label><input type="radio" name="filter_kind" value="active" {{if eq .FilterKind "active"}}checked{{end}}> All active members</label><br>
@@ -33,18 +33,18 @@
             </select>
         </fieldset>
 
-        <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 12px 0;">
+        <fieldset style="border: 1px solid var(--card-border); padding: 12px; margin: 12px 0;">
             <legend>Order</legend>
             <label><input type="radio" name="sort_order" value="last_name" {{if eq .SortOrder "last_name"}}checked{{end}}> Last name</label><br>
             <label><input type="radio" name="sort_order" value="call_sign" {{if eq .SortOrder "call_sign"}}checked{{end}}> Call sign</label><br>
             <label><input type="radio" name="sort_order" value="longest_overdue" {{if eq .SortOrder "longest_overdue"}}checked{{end}}> Longest overdue first</label>
         </fieldset>
 
-        <fieldset style="border: 1px solid #ddd; padding: 12px; margin: 12px 0;">
+        <fieldset style="border: 1px solid var(--card-border); padding: 12px; margin: 12px 0;">
             <legend>Optional columns</legend>
             <label><input type="checkbox" name="include_email" value="yes" {{if .IncludeEmail}}checked{{end}}> Email</label><br>
             <label><input type="checkbox" name="include_phone" value="yes" {{if .IncludePhone}}checked{{end}}> Phone</label>
-            <p style="margin: 8px 0 0; color: #555;">
+            <p style="margin: 8px 0 0; color: var(--text-secondary);">
                 Contact details are included only if you are allowed to see them, and the sheet
                 records when they were good as of.
             </p>

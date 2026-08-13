@@ -92,7 +92,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, password_algo_params, person_id)
 VALUES (?, ?, ?, ?)
-RETURNING id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version
+RETURNING id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version, text_size
 `
 
 type CreateUserParams struct {
@@ -124,6 +124,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.TextSize,
 	)
 	return i, err
 }
@@ -181,7 +182,7 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version FROM users WHERE id = ?
+SELECT id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version, text_size FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -201,12 +202,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.TextSize,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version FROM users WHERE email = ?
+SELECT id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version, text_size FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -226,8 +228,20 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.TextSize,
 	)
 	return i, err
+}
+
+const getUserTextSize = `-- name: GetUserTextSize :one
+SELECT text_size FROM users WHERE id = ?
+`
+
+func (q *Queries) GetUserTextSize(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserTextSize, id)
+	var text_size string
+	err := row.Scan(&text_size)
+	return text_size, err
 }
 
 const incrementFailedLogin = `-- name: IncrementFailedLogin :exec
@@ -331,6 +345,23 @@ func (q *Queries) RevokeSession(ctx context.Context, id string) error {
 	return err
 }
 
+const setUserTextSize = `-- name: SetUserTextSize :exec
+UPDATE users
+SET text_size = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ?
+`
+
+type SetUserTextSizeParams struct {
+	TextSize string
+	ID       int64
+}
+
+func (q *Queries) SetUserTextSize(ctx context.Context, arg SetUserTextSizeParams) error {
+	_, err := q.db.ExecContext(ctx, setUserTextSize, arg.TextSize, arg.ID)
+	return err
+}
+
 const touchSession = `-- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = ? WHERE id = ?
 `
@@ -366,7 +397,7 @@ SET password_hash = ?, password_algo_params = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version
+RETURNING id, email, email_verified_at, password_hash, password_algo_params, person_id, is_active, last_login_at, failed_login_count, locked_until, created_at, updated_at, version, text_size
 `
 
 type UpdateUserPasswordParams struct {
@@ -398,6 +429,7 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.TextSize,
 	)
 	return i, err
 }

@@ -5,12 +5,12 @@
 {{define "content"}}
 <div class="card" role="dialog" aria-modal="true" aria-labelledby="fix-title" id="fix-dialog">
     <h2 id="fix-title" style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">Fix this entry</h2>
-    <p style="margin: 0 0 16px; color: #555;">
+    <p style="margin: 0 0 16px; color: var(--text-secondary);">
         {{.Payment.MemberName}} &mdash; receipt {{.Payment.ReceiptCode}}
     </p>
 
     {{if .Error}}
-    <div role="alert" style="border-left: 4px solid #c62828; padding-left: 12px; margin-bottom: 16px;">
+    <div role="alert" style="border-left: 4px solid var(--danger); padding-left: 12px; margin-bottom: 16px;">
         <p style="margin: 0;">{{.Error}}</p>
     </div>
     {{end}}
@@ -39,7 +39,7 @@
 
         <label for="paid_through">Dues paid through</label>
         <input type="date" id="paid_through" name="paid_through" value="{{.PaidThrough}}" required>
-        <p style="margin: 4px 0 12px; color: #555;">
+        <p style="margin: 4px 0 12px; color: var(--text-secondary);">
             Leave this as it is unless the coverage was wrong too. Changing the amount on its own
             does not change how long the member is covered.
         </p>

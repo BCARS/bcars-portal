@@ -168,7 +168,7 @@ func (h *Handler) directoryPage(w http.ResponseWriter, r *http.Request) {
 		data.NextURL = RouteMemberDirectory + "?" + directoryQuery(q, page.Offset+page.Limit)
 	}
 
-	h.render.RenderHTTP(w, "directory.html", http.StatusOK, data)
+	h.renderPage(w, r, "directory.html", http.StatusOK, data)
 }
 
 // directoryPrint renders the whole filtered roster on one sheet.
@@ -194,7 +194,7 @@ func (h *Handler) directoryPrint(w http.ResponseWriter, r *http.Request) {
 	for _, e := range page.Entries {
 		data.Rows = append(data.Rows, directoryRowFrom(e))
 	}
-	h.render.RenderHTTP(w, "directory_print.html", http.StatusOK, data)
+	h.renderPage(w, r, "directory_print.html", http.StatusOK, data)
 }
 
 // loadDirectory reads one page for the caller, or renders the refusal.

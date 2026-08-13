@@ -91,7 +91,7 @@ func (h *Handler) treasuryHome(w http.ResponseWriter, r *http.Request) {
 	for _, s := range statusOrder {
 		data.Counts = append(data.Counts, statusCount{Status: s, Label: statusLabels[s], Count: counts[s]})
 	}
-	h.render.RenderHTTP(w, "treasury_home.html", http.StatusOK, data)
+	h.renderPage(w, r, "treasury_home.html", http.StatusOK, data)
 }
 
 type standingListData struct {
@@ -155,7 +155,7 @@ func (h *Handler) treasuryStanding(w http.ResponseWriter, r *http.Request) {
 	for _, s := range statusOrder {
 		data.StatusNav = append(data.StatusNav, statusCount{Status: s, Label: statusLabels[s]})
 	}
-	h.render.RenderHTTP(w, "treasury_standing.html", http.StatusOK, data)
+	h.renderPage(w, r, "treasury_standing.html", http.StatusOK, data)
 }
 
 // paymentFormData is everything the payment screen needs. Amount and
@@ -219,7 +219,7 @@ func (h *Handler) treasuryPaymentForm(w http.ResponseWriter, r *http.Request) {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	h.render.RenderHTTP(w, "treasury_payment.html", http.StatusOK, data)
+	h.renderPage(w, r, "treasury_payment.html", http.StatusOK, data)
 }
 
 // paymentFormBase loads the standing, suggestions, and prior history a payment
@@ -314,7 +314,7 @@ func (h *Handler) treasuryPaymentSubmit(w http.ResponseWriter, r *http.Request) 
 	cents, err := parseAmountCents(data.Amount)
 	if err != nil {
 		data.Error = formMessage(err)
-		h.render.RenderHTTP(w, "treasury_payment.html", http.StatusUnprocessableEntity, data)
+		h.renderPage(w, r, "treasury_payment.html", http.StatusUnprocessableEntity, data)
 		return
 	}
 
@@ -336,7 +336,7 @@ func (h *Handler) treasuryPaymentSubmit(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		if msg, ok := paymentFormMessage(err); ok {
 			data.Error = msg
-			h.render.RenderHTTP(w, "treasury_payment.html", http.StatusUnprocessableEntity, data)
+			h.renderPage(w, r, "treasury_payment.html", http.StatusUnprocessableEntity, data)
 			return
 		}
 		h.renderDomainError(w, r, err)
@@ -355,7 +355,7 @@ func (h *Handler) treasuryPaymentSubmit(w http.ResponseWriter, r *http.Request) 
 		fresh.ReceiptCode = result.Payments[0].ReceiptCode
 	}
 	fresh.Consequence = consequenceSentence(cents, result.Coverage)
-	h.render.RenderHTTP(w, "treasury_payment.html", http.StatusOK, fresh)
+	h.renderPage(w, r, "treasury_payment.html", http.StatusOK, fresh)
 }
 
 // consequenceSentence states, in plain language, what was just recorded. It
