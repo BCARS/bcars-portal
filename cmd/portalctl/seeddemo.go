@@ -154,6 +154,18 @@ func seedDemo(d *sql.DB) error {
 		fmt.Printf("  %-28s  role=%-15s  password=%s\n", u.Email, u.Role, u.Password)
 	}
 
-	fmt.Println("\nDemo users seeded. Sign in at /login")
+	// Members are seeded against the administrator account, which is the
+	// closest thing this tool has to an actor: coverage events and honorary
+	// grants both record who decided them, and a NULL there would be a row no
+	// officer could have created.
+	var adminID int64
+	if err := d.QueryRow(`SELECT id FROM users WHERE email = ?`, demoUsers[0].Email).Scan(&adminID); err != nil {
+		return fmt.Errorf("lookup seeding actor: %w", err)
+	}
+	if err := seedDemoMembers(d, adminID); err != nil {
+		return err
+	}
+
+	fmt.Println("\nDemo users and members seeded. Sign in at /login")
 	return nil
 }
