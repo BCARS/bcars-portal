@@ -117,6 +117,7 @@ API-first Go application targeting SQLite + Goose migrations + sqlc for type-saf
 - `internal/obs/` — Observability (structured logging)
 - `internal/version/` — Build metadata
 - `docs/adr/` — Architecture Decision Records
+- `docs/lessons-learned.md` — How work here has produced confident wrong answers; read before writing a test or a gate
 - `docs/phase-1-plan.md` — Full task breakdown by workstream
 - `docs/phase-1-progress.md` — Current implementation status
 - `PLANNING.md` — Full product & technical design (~800 lines); read before starting new features
