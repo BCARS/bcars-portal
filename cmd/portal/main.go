@@ -39,6 +39,11 @@ Flags:
 		fs.PrintDefaults()
 		fmt.Fprintf(fs.Output(), `
 Environment:
+  Flags take precedence over these; an unset or empty variable leaves the
+  flag's default in place.
+
+%s
+Secrets are read from the environment only, never from a flag:
   PORTAL_SMTP_PASSWORD      password for -smtp-user (never passed as a flag)
   PORTAL_PASSWORD_PEPPER    secret mixed into every password hash; required
                             unless -allow-empty-pepper is set. Minimum 16
@@ -48,33 +53,11 @@ Environment:
                             sign-in as a bad password. It also keys the client
                             address hashes stored on sessions and email links;
                             without it those are recorded as unknown.
-`)
+`, envUsage())
 	}
 
-	showVersion := fs.Bool("version", false, "print version and exit")
-	showVersionLong := fs.Bool("version-long", false, "print detailed build info and exit")
-	addr := fs.String("addr", ":8080", "listen address")
-	logLevel := fs.String("log-level", "info", "log level (debug|info|warn|error)")
-	dbPath := fs.String("db", "bcars.db", "path to SQLite database file")
-	migrate := fs.Bool("migrate", false, "apply pending migrations at startup")
-	migrateOnly := fs.Bool("migrate-only", false, "apply migrations and exit")
-	dumpOpenAPI := fs.String("dump-openapi", "", "write OpenAPI JSON to `path` and exit (used by make openapi)")
-	dumpCatalog := fs.String("dump-catalog", "", "write capability catalog JSON to `path` and exit (used by make openapi)")
-	baseURL := fs.String("base-url", "http://localhost:8080", "public base URL used to build recovery and invitation links")
-	mailTransport := fs.String("mail-transport", "filelog", "outbound mail transport: filelog (writes JSON files, for dev) or smtp")
-	mailDir := fs.String("mail-dir", "mail-outbox", "directory for the filelog mail transport (created if missing)")
-	smtpHost := fs.String("smtp-host", "", "SMTP relay host (required when -mail-transport=smtp)")
-	smtpPort := fs.Int("smtp-port", 587, "SMTP relay port")
-	smtpUser := fs.String("smtp-user", "", "SMTP username; empty means no authentication")
-	smtpFrom := fs.String("smtp-from", "", "From address for outbound mail (required when -mail-transport=smtp)")
-	trustedProxyHeader := fs.String("trusted-proxy-header", "",
-		"`header` carrying the real client address (e.g. X-Forwarded-For); leftmost entry is used. "+
-			"Set this ONLY when a reverse proxy you control overwrites the header — otherwise any "+
-			"client can forge its own recorded source address")
-	allowEmptyPepper := fs.Bool("allow-empty-pepper", false,
-		"start without "+authn.PepperEnvVar+" (DEVELOPMENT ONLY; passwords are hashed without a pepper)")
-	allowInsecureCookies := fs.Bool("allow-insecure-cookies", false,
-		"issue session cookies without the Secure attribute (DEVELOPMENT ONLY; required to sign in over plaintext http://localhost)")
+	o := registerFlags(fs)
+
 	// The SMTP password is read from the environment so it never appears in
 	// process listings or shell history.
 	smtpPassword := os.Getenv("PORTAL_SMTP_PASSWORD")
@@ -85,21 +68,31 @@ Environment:
 		}
 		os.Exit(2)
 	}
-	if *showVersionLong {
+
+	// Environment variables fill in whatever the command line did not set. This
+	// runs before the logger is built so that PORTAL_LOG_LEVEL affects the
+	// logger, and reports to stderr because there is no logger yet to report
+	// through.
+	if err := applyEnv(fs, osGetenv); err != nil {
+		fmt.Fprintf(os.Stderr, "portal: %v\n", err)
+		os.Exit(2)
+	}
+
+	if *o.showVersionLong {
 		fmt.Print(version.Get().Long())
 		return
 	}
-	if *showVersion {
+	if *o.showVersion {
 		fmt.Println(version.Get().Short())
 		return
 	}
 
-	logger := obs.NewLogger(os.Stderr, *logLevel)
+	logger := obs.NewLogger(os.Stderr, *o.logLevel)
 
 	// Generate artifacts and exit (used by make openapi). No DB needed.
 	// Use the base version without git SHA so the output is deterministic
 	// across commits and openapi-diff stays clean.
-	if *dumpOpenAPI != "" || *dumpCatalog != "" {
+	if *o.dumpOpenAPI != "" || *o.dumpCatalog != "" {
 		_, api := httpapi.NewRouter(httpapi.Config{
 			Logger:  logger,
 			Version: version.Get().Version,
@@ -109,7 +102,7 @@ Environment:
 			logger.Error("startup check failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		if err := dumpArtifacts(api, *dumpOpenAPI, *dumpCatalog); err != nil {
+		if err := dumpArtifacts(api, *o.dumpOpenAPI, *o.dumpCatalog); err != nil {
 			logger.Error("dump failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
@@ -117,34 +110,34 @@ Environment:
 	}
 
 	// Open the database.
-	database, err := db.Open(*dbPath)
+	database, err := db.Open(*o.dbPath)
 	if err != nil {
-		logger.Error("failed to open database", slog.String("path", *dbPath), slog.String("error", err.Error()))
+		logger.Error("failed to open database", slog.String("path", *o.dbPath), slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	defer database.Close()
 
 	// Run migrations if requested.
-	if *migrate || *migrateOnly {
-		logger.Info("running migrations", slog.String("path", *dbPath))
+	if *o.migrate || *o.migrateOnly {
+		logger.Info("running migrations", slog.String("path", *o.dbPath))
 		if err := db.Migrate(database); err != nil {
 			logger.Error("migration failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
 		logger.Info("migrations complete")
-		if *migrateOnly {
+		if *o.migrateOnly {
 			return
 		}
 	}
 
 	// Build the outbound mail transport.
 	mailer, err := newMailSender(mailConfig{
-		Transport:    *mailTransport,
-		FilelogDir:   *mailDir,
-		SMTPHost:     *smtpHost,
-		SMTPPort:     *smtpPort,
-		SMTPUser:     *smtpUser,
-		SMTPFrom:     *smtpFrom,
+		Transport:    *o.mailTransport,
+		FilelogDir:   *o.mailDir,
+		SMTPHost:     *o.smtpHost,
+		SMTPPort:     *o.smtpPort,
+		SMTPUser:     *o.smtpUser,
+		SMTPFrom:     *o.smtpFrom,
 		SMTPPassword: smtpPassword,
 	})
 	if err != nil {
@@ -156,15 +149,15 @@ Environment:
 	// session-cookie authentication).
 	handler, err := buildHandler(database, assemblyConfig{
 		Pepper:           []byte(os.Getenv(authn.PepperEnvVar)),
-		AllowEmptyPepper: *allowEmptyPepper,
+		AllowEmptyPepper: *o.allowEmptyPepper,
 
-		AllowInsecureCookies: *allowInsecureCookies,
-		TrustedProxyHeader:   *trustedProxyHeader,
+		AllowInsecureCookies: *o.allowInsecureCookies,
+		TrustedProxyHeader:   *o.trustedProxyHeader,
 		Logger:               logger,
 		Version:              version.Get().Short(),
 		CookieName:           authn.DefaultSessionCookieName,
 		SessionTTL:           24 * time.Hour,
-		BaseURL:              *baseURL,
+		BaseURL:              *o.baseURL,
 		EmailLinkTTL:         24 * time.Hour,
 		Mailer:               mailer,
 	})
@@ -175,7 +168,7 @@ Environment:
 
 	// Start server.
 	srv := &http.Server{
-		Addr:         *addr,
+		Addr:         *o.addr,
 		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -184,7 +177,7 @@ Environment:
 	}
 
 	logger.Info("starting portal",
-		slog.String("addr", *addr),
+		slog.String("addr", *o.addr),
 		slog.String("version", version.Get().Short()),
 	)
 
@@ -208,6 +201,65 @@ Environment:
 		os.Exit(1)
 	}
 	logger.Info("stopped")
+}
+
+// options holds every flag the server accepts. It exists so tests can build
+// the real flag set — with the real names, defaults and parsers — rather than a
+// reconstruction of it, which is what makes the environment-variable bindings
+// in env.go testable against the flags they actually name.
+type options struct {
+	showVersion          *bool
+	showVersionLong      *bool
+	addr                 *string
+	logLevel             *string
+	dbPath               *string
+	migrate              *bool
+	migrateOnly          *bool
+	dumpOpenAPI          *string
+	dumpCatalog          *string
+	baseURL              *string
+	mailTransport        *string
+	mailDir              *string
+	smtpHost             *string
+	smtpPort             *int
+	smtpUser             *string
+	smtpFrom             *string
+	trustedProxyHeader   *string
+	allowEmptyPepper     *bool
+	allowInsecureCookies *bool
+}
+
+// registerFlags defines every flag on fs and returns the values they will hold
+// after fs.Parse.
+func registerFlags(fs *flag.FlagSet) *options {
+	o := &options{}
+	o.showVersion = fs.Bool("version", false, "print version and exit")
+	o.showVersionLong = fs.Bool("version-long", false, "print detailed build info and exit")
+	o.addr = fs.String("addr", ":8080", "listen address")
+	o.logLevel = fs.String("log-level", "info", "log level (debug|info|warn|error)")
+	o.dbPath = fs.String("db", "bcars.db", "path to SQLite database file")
+	o.migrate = fs.Bool("migrate", false, "apply pending migrations at startup")
+	o.migrateOnly = fs.Bool("migrate-only", false, "apply migrations and exit")
+	o.dumpOpenAPI = fs.String("dump-openapi", "", "write OpenAPI JSON to `path` and exit (used by make openapi)")
+	o.dumpCatalog = fs.String("dump-catalog", "", "write capability catalog JSON to `path` and exit (used by make openapi)")
+	o.baseURL = fs.String("base-url", "http://localhost:8080", "public base URL used to build recovery and invitation links")
+	o.mailTransport = fs.String("mail-transport", "filelog", "outbound mail transport: filelog (writes JSON files, for dev) or smtp")
+	o.mailDir = fs.String("mail-dir", "mail-outbox", "directory for the filelog mail transport (created if missing)")
+	o.smtpHost = fs.String("smtp-host", "", "SMTP relay host (required when -mail-transport=smtp)")
+	o.smtpPort = fs.Int("smtp-port", 587, "SMTP relay port")
+	o.smtpUser = fs.String("smtp-user", "", "SMTP username; empty means no authentication")
+	o.smtpFrom = fs.String("smtp-from", "", "From address for outbound mail (required when -mail-transport=smtp)")
+	o.trustedProxyHeader = fs.String("trusted-proxy-header", "",
+		"`header` carrying the real client address (e.g. X-Forwarded-For); leftmost entry is used. "+
+			"Set this ONLY when a reverse proxy you control overwrites the header — otherwise any "+
+			"client can forge its own recorded source address")
+	o.allowEmptyPepper = fs.Bool("allow-empty-pepper", false,
+		"start without "+authn.PepperEnvVar+" (DEVELOPMENT ONLY; passwords are hashed without a pepper)")
+	o.allowInsecureCookies = fs.Bool("allow-insecure-cookies", false,
+		"issue session cookies without the Secure attribute (DEVELOPMENT ONLY; required to sign in over plaintext http://localhost)")
+	// The SMTP password is read from the environment so it never appears in
+	// process listings or shell history.
+	return o
 }
 
 // dumpArtifacts writes OpenAPI JSON and/or capability catalog JSON for CI diffing.

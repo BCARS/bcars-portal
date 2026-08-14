@@ -20,6 +20,9 @@ LDFLAGS      := -s -w -X $(VERSION_PKG).version=$(VERSION)
 GOLANGCI     := $(BIN_DIR)/golangci-lint
 STATICCHECK  := $(BIN_DIR)/staticcheck
 SQLC         := $(BIN_DIR)/sqlc
+DOCKER       ?= docker
+IMAGE        ?= bcars-portal
+IMAGE_TAG    ?= $(VERSION)
 RUN_DB       ?= bcars.db
 RUN_MAIL_DIR ?= mail-outbox
 
@@ -37,7 +40,7 @@ DEMO_MAIL    ?= $(DEMO_DIR)/mail-outbox
 DEMO_ADDR    ?= :8080
 DEMO_PEPPER  ?= bcars-local-demo-pepper-not-for-any-real-data
 
-.PHONY: all build build-demo test test-demoseed smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run run-demo seed-demo demo-reset tools clean check-secrets check-ci-paths install-hooks migration-updown
+.PHONY: all build build-demo test test-demoseed smoke docker docker-smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run run-demo seed-demo demo-reset tools clean check-secrets check-ci-paths install-hooks migration-updown
 
 all: build
 
@@ -60,6 +63,16 @@ test-demoseed:
 # package tests structurally cannot — every other test builds its own router.
 smoke:
 	$(GO) test -count=1 -v ./internal/smoke/
+
+# Container image (bcars-portal-fmc.8). `docker` builds it; `docker-smoke` runs
+# it the way a deployment does — secrets from the environment, migrations on a
+# fresh volume, readiness before traffic — because a build that succeeds proves
+# only that the image assembles.
+docker:
+	$(DOCKER) build --build-arg VERSION=$(VERSION) -t $(IMAGE):$(IMAGE_TAG) .
+
+docker-smoke: docker
+	./scripts/docker-smoke.sh $(IMAGE):$(IMAGE_TAG)
 
 fmt:
 	$(GO) fmt $(PKGS)

@@ -126,6 +126,20 @@ jobs:
       - name: Production-assembly smoke test
         run: make smoke
 
+  # The deployment artifact. `make docker` proves the image assembles; the
+  # container smoke starts it the documented way — secrets from the environment,
+  # migrations on a fresh volume — and asserts it reaches ready and serves its
+  # own front-end assets (bcars-portal-fmc.8).
+  container:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build image and run the container smoke
+        run: make docker-smoke
+
   sqlc-diff:
     needs: changes
     if: needs.changes.outputs.code == 'true'

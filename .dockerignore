@@ -1,0 +1,41 @@
+# Keep the build context to source. Anything listed here either cannot affect
+# the build or must never reach an image layer — a build context is copied into
+# the daemon whole, and a layer that once held member data holds it forever.
+
+# Real or seeded club data, backups, uploads, mail spools.
+data/
+backups/
+uploads/
+extracted/
+transcripts/
+demo-data/
+mail-outbox/
+scratch/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Local secrets.
+.env
+.env.*
+!.env.sample
+
+# Build output and screenshots — rebuilt in the image, never copied into it.
+bin/
+dist/
+ui-shots/
+coverage.out
+coverage.html
+*.test
+*.out
+
+# Repository machinery the build does not read.
+.git/
+.github/
+.dolt/
+.beads/
+.claude/
+.idea/
+.vscode/
