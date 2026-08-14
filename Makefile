@@ -23,7 +23,21 @@ SQLC         := $(BIN_DIR)/sqlc
 RUN_DB       ?= bcars.db
 RUN_MAIL_DIR ?= mail-outbox
 
-.PHONY: all build test test-demoseed smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run tools clean check-secrets check-ci-paths install-hooks migration-updown
+# Seeded demo portal (bcars-portal-bql). DEVELOPMENT ONLY.
+#
+# The pepper is defined here, once, and handed to both the seeding step and the
+# server. That is the whole point of the target: the pepper must be identical in
+# both places or seeding produces accounts whose passwords can never verify,
+# which is the failure bcars-portal-fmc.14 fixed and which a hand-typed sequence
+# reintroduces every time. It is a fixed development string on purpose and is
+# published here; nothing that uses it is reachable from a shipped binary.
+DEMO_DIR     ?= $(CURDIR)/demo-data
+DEMO_DB      ?= $(DEMO_DIR)/demo.db
+DEMO_MAIL    ?= $(DEMO_DIR)/mail-outbox
+DEMO_ADDR    ?= :8080
+DEMO_PEPPER  ?= bcars-local-demo-pepper-not-for-any-real-data
+
+.PHONY: all build build-demo test test-demoseed smoke lint fmt vet staticcheck golangci sqlc sqlc-diff openapi openapi-diff migrate run run-demo seed-demo demo-reset tools clean check-secrets check-ci-paths install-hooks migration-updown
 
 all: build
 
@@ -108,6 +122,48 @@ migrate: build
 run: build
 	# Development only: production must supply a pepper and use Secure cookies.
 	$(BIN_DIR)/portal --allow-empty-pepper --allow-insecure-cookies --migrate --db $(RUN_DB) --mail-dir $(RUN_MAIL_DIR)
+
+# --- Seeded demo portal. DEVELOPMENT ONLY. ---
+#
+# `make run-demo` takes a clean checkout to a portal with members in it. Without
+# it, standing one up means building two binaries, migrating a throwaway
+# database, exporting a pepper, seeding with that pepper, and starting the
+# server with the same pepper again -- five steps, none of them written down,
+# with one value that has to match in three places.
+#
+# `make run` is deliberately NOT this: it uses a default build with no
+# seed-demo, an empty pepper, and a database with no members, so every figure on
+# every screen reads 0.
+
+# The demo portalctl is built to its own name. Writing a demoseed binary to
+# bin/portalctl would leave a binary containing seed-demo and its published
+# passwords sitting where every other target expects the shipped one.
+build-demo: build
+	$(GO) build -trimpath -tags demoseed -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/portalctl-demo ./cmd/portalctl
+
+seed-demo: build-demo
+	@mkdir -p $(DEMO_DIR)
+	$(BIN_DIR)/portal --migrate-only --db $(DEMO_DB)
+	@PORTAL_PASSWORD_PEPPER=$(DEMO_PEPPER) $(BIN_DIR)/portalctl-demo seed-demo --db $(DEMO_DB)
+
+# Re-running is safe: seeding is idempotent and will not duplicate members.
+# Secure cookies are dropped because sign-in over plaintext http://localhost
+# needs it, exactly as `run` already does. Nothing else is relaxed -- unlike
+# `run`, this target supplies a real pepper rather than allowing an empty one.
+run-demo: seed-demo
+	@echo
+	@echo "  Seeded demo portal on http://localhost$(DEMO_ADDR)"
+	@echo "  DEVELOPMENT ONLY. Sign-in details are printed by the seeding step above."
+	@echo "  Database $(DEMO_DB) -- delete it or run 'make demo-reset' to start over."
+	@echo
+	@PORTAL_PASSWORD_PEPPER=$(DEMO_PEPPER) $(BIN_DIR)/portal \
+		--allow-insecure-cookies --db $(DEMO_DB) --mail-dir $(DEMO_MAIL) --addr $(DEMO_ADDR)
+
+# Throw the demo database away. Scoped to the demo directory so it cannot be
+# pointed at a real one by overriding a variable.
+demo-reset:
+	rm -rf $(DEMO_DIR)
+	@echo "demo data removed; 'make run-demo' will build a fresh one"
 
 # Migration up/down/up round-trip. Used in CI to verify every migration
 # has a matching Down that leaves the schema consistent for a second Up.
