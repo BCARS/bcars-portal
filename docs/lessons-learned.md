@@ -167,6 +167,28 @@ unauthorised content is served — the dashboard gates on capability and redirec
 a member to their own landing — but a mistyped or renamed route gives no signal,
 and a broken link looks like it works.
 
+## 12. Two commits that differ is not the same question as what a branch changed
+
+The CI path classifier asked `git diff <base-tip> <head-tip>`, which answers
+"how do these two commits differ". The question it needed answering was "what
+did this branch introduce". Those agree only while the base branch stands still.
+Once `main` gained an unrelated commit after a branch point, a documentation-only
+PR carried every base-side code change in its comparison and ran the full code
+pipeline (`8cm`, first seen on PR #75).
+
+The fix is one character wider — `git diff base...head` starts at the merge base
+— but the failure is worth remembering because it was invisible from the inside:
+the classifier's own unit cases all passed, since they tested how a *list of
+paths* is classified and never how that list is produced. The bug lived in the
+inline YAML above the script, where nothing could reach it. Logic that decides
+whether gates run belongs somewhere a test can call it.
+
+This one also shows what a reproduction has to prove. The new self-test builds a
+git history where the base has advanced, and before asserting the new comparison
+says "docs-only", it asserts the *old* comparison still gets it wrong. Without
+that, a later change could quietly make the scenario stop reproducing and the
+test would keep passing while guarding nothing (see §1).
+
 ---
 
 ## The short version
