@@ -132,17 +132,23 @@ can sign into.
 
 ## 6. Deployment Upgrade
 
-Supported production packaging and its exact upgrade/rollback commands are
-deferred to `bcars-portal-fmc.8`. There is currently no checked-in systemd unit
-or Dockerfile, so do not assume a particular process manager or install path.
+Packaging is a checked-in [`Dockerfile`](../../Dockerfile) plus an example
+Kubernetes manifest, or the plain binaries on a host; see
+[deployment.md](../deployment.md#production-packaging). No service unit is
+shipped, so do not assume a particular process manager or install path.
+
+Whichever shape is in use, an upgrade is: take an encrypted backup, run
+`portal -migrate-only` against the database with the **new** binary or image,
+then start the new version and confirm readiness. Migrations run before the new
+server serves traffic, never implicitly during it.
 
 Before any upgrade, the technical contact must take an encrypted backup, retain
-the previously deployed binary, and follow the procedure for the actual host.
+the previously deployed binary or image tag, and follow the procedure for the
+actual host.
 After restart, verify `GET /healthz` and `GET /readyz`; if either fails, restore
 the previous binary and, if a data rollback is required, follow
 [backup-restore.md](backup-restore.md#restoring) using the matching `.db.age`
-artifact. Replace this section with concrete operator commands when `fmc.8`
-lands.
+artifact.
 
 ## 7. Logs
 

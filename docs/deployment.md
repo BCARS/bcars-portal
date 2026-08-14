@@ -82,13 +82,91 @@ make run RUN_DB=/tmp/bcars-portal.db RUN_MAIL_DIR=/tmp/bcars-mail
 `make run` passes `--allow-empty-pepper` and `--allow-insecure-cookies`; never
 copy those flags into a production service.
 
-## Production packaging is deferred
+## Production packaging
 
-There is no supported checked-in Dockerfile or systemd unit yet. Packaging,
-service supervision, and environment-variable equivalents for non-secret flags
-belong to deferred Bead `bcars-portal-fmc.8`. The configuration and security
-notes below describe the runtime invariants that packaging must preserve; they
-are not a complete production deployment recipe.
+Two supported shapes: a container image, or the plain binary on a host. Both are
+built from this repository; both take every secret from the environment at run
+time.
+
+No service unit is shipped. Deployments are expected to be a container platform
+or a plain process on a host that may not offer systemd, and a unit file that
+nothing here exercises would be documentation pretending to be an artifact. If
+you do supervise it with systemd, the invariants below are what the unit has to
+preserve: a dedicated non-root user, an `EnvironmentFile` at mode `0600` for the
+secrets, and migrations before the health check is expected to pass.
+
+### Container image
+
+```bash
+make docker                    # builds bcars-portal:<version>
+make docker-smoke              # builds, then starts the image and asserts it works
+make docker IMAGE=ghcr.io/bcars/bcars-portal IMAGE_TAG=v1.2.3
+```
+
+The image is built by the checked-in [`Dockerfile`](../Dockerfile): a Go build
+stage, then a distroless runtime holding only `portal` and `portalctl`. The
+binaries are static, the container runs as `nonroot` (uid 65532), and the
+front-end assets are compiled into the binary — there is no asset directory to
+mount or copy.
+
+`make docker-smoke` runs [`scripts/docker-smoke.sh`](../scripts/docker-smoke.sh),
+which starts the image with a mounted data directory, waits for `/readyz`,
+confirms the database landed on the volume, confirms the container serves its
+own assets, and fails if the image carries a secret in its environment. It runs
+in CI on every change to code or packaging.
+
+Run it:
+
+```bash
+docker run -d --name portal \
+  -p 8080:8080 \
+  -v /srv/bcars/data:/data \
+  -e PORTAL_PASSWORD_PEPPER="$(cat /run/secrets/portal-pepper)" \
+  -e PORTAL_BASE_URL=https://portal.yourclub.org \
+  -e PORTAL_MIGRATE=true \
+  ghcr.io/bcars/bcars-portal:v1.2.3
+```
+
+`PORTAL_DB=/data/portal.db` and `PORTAL_ADDR=:8080` are the image defaults.
+
+**Startup order matters.** `/readyz` returns 503 with `schema version mismatch`
+until migrations have run, so a fresh volume needs either `PORTAL_MIGRATE=true`
+on the server, or a separate `portal -migrate-only` run before it — an init
+container, or a one-shot `docker run` with the same volume. A deployment whose
+health check is expected to pass before migrations have run will crash-loop.
+Nothing runs migrations implicitly.
+
+### Kubernetes
+
+[`deploy/k8s/portal.example.yaml`](../deploy/k8s/portal.example.yaml) is a
+worked example: PVC, Secret placeholders, ConfigMap of the environment
+variables, an init container that runs `-migrate-only`, and liveness/readiness
+probes on `/healthz` and `/readyz`. It is an example to adapt, not a supported
+artifact. Two things in it are not adjustable: `replicas: 1` with the `Recreate`
+strategy, and a `ReadWriteOnce` volume. SQLite admits one writer, and a rolling
+update would briefly run two pods against one database file.
+
+### Plain binary on a host
+
+```bash
+make build
+install -m 0755 bin/portal bin/portalctl /opt/bcars-portal/bin/
+
+# Secrets in a file only the service user can read.
+install -m 0600 /dev/null /etc/bcars-portal.env
+# PORTAL_PASSWORD_PEPPER=...
+# PORTAL_SMTP_PASSWORD=...
+
+set -a; . /etc/bcars-portal.env; set +a
+/opt/bcars-portal/bin/portal -migrate-only -db /srv/bcars/data/portal.db
+/opt/bcars-portal/bin/portal \
+  -db /srv/bcars/data/portal.db \
+  -base-url https://portal.yourclub.org
+```
+
+Put TLS in front of it either way; session cookies carry `Secure`, so a portal
+reached over plaintext HTTP accepts a sign-in and then never sees the cookie
+again.
 
 ## Backup & Restore
 
@@ -106,23 +184,45 @@ drill instructions.
 
 ## Configuration
 
+Every non-secret setting can be given as a flag or as the environment variable
+bound to it. **Precedence is flag, then environment, then default** — a flag
+passed on the command line wins even when its value equals the default, and a
+variable that is unset or empty leaves the default in place. An environment
+variable the server cannot parse (`PORTAL_SMTP_PORT=eight`) stops startup with a
+message naming both the variable and the flag; it is never silently ignored.
+
+The bindings live in `cmd/portal/env.go`, and `portal -help` prints them.
+`TestDocumentedEnvironmentVariablesMatchTheCode` fails if this table and that
+list disagree — the table described `PORTAL_DB`, `PORTAL_ADDR` and
+`PORTAL_LOG_LEVEL` for months while nothing read any of them
+(`bcars-portal-fmc.8`).
+
 | Flag | Env var | Default | Description |
 |------|---------|---------|-------------|
-| `--db` | — | `portal.db` | Path to SQLite database |
+| `--db` | `PORTAL_DB` | `bcars.db` | Path to SQLite database |
 | — | `PORTAL_PASSWORD_PEPPER` | *(none)* | **Required.** Secret mixed into every password hash. Minimum 16 bytes. |
-| `--allow-empty-pepper` | — | `false` | Development only. Start without a pepper. |
-| `--allow-insecure-cookies` | — | `false` | Development only. Issue session cookies without `Secure`. |
-| `--addr` | — | `:8080` | Listen address |
-| `--log-level` | — | `info` | Log level (debug/info/warn/error) |
-| `--base-url` | — | `http://localhost:8080` | Public base URL used to build recovery/invitation links |
-| `--mail-transport` | — | `filelog` | Outbound mail transport: `filelog` (JSON files, dev) or `smtp` |
-| `--mail-dir` | — | `mail-outbox` | Directory for the `filelog` transport (created if missing) |
-| `--smtp-host` | — | — | SMTP relay host (required for `--mail-transport=smtp`) |
-| `--smtp-port` | — | `587` | SMTP relay port |
-| `--smtp-user` | — | — | SMTP username; empty means no authentication |
-| `--smtp-from` | — | — | From address (required for `--mail-transport=smtp`) |
+| `--allow-empty-pepper` | — | `false` | Development only. Start without a pepper. Deliberately has no env var. |
+| `--allow-insecure-cookies` | — | `false` | Development only. Issue session cookies without `Secure`. Deliberately has no env var. |
+| `--addr` | `PORTAL_ADDR` | `:8080` | Listen address |
+| `--log-level` | `PORTAL_LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
+| `--base-url` | `PORTAL_BASE_URL` | `http://localhost:8080` | Public base URL used to build recovery/invitation links |
+| `--migrate` | `PORTAL_MIGRATE` | `false` | Apply pending migrations at startup, then serve |
+| `--migrate-only` | — | `false` | Apply migrations and exit. Flag-only: it is a one-shot command, not a mode a running service should be configured into. |
+| `--mail-transport` | `PORTAL_MAIL_TRANSPORT` | `filelog` | Outbound mail transport: `filelog` (JSON files, dev) or `smtp` |
+| `--mail-dir` | `PORTAL_MAIL_DIR` | `mail-outbox` | Directory for the `filelog` transport (created if missing) |
+| `--smtp-host` | `PORTAL_SMTP_HOST` | — | SMTP relay host (required for `--mail-transport=smtp`) |
+| `--smtp-port` | `PORTAL_SMTP_PORT` | `587` | SMTP relay port |
+| `--smtp-user` | `PORTAL_SMTP_USER` | — | SMTP username; empty means no authentication |
+| `--smtp-from` | `PORTAL_SMTP_FROM` | — | From address (required for `--mail-transport=smtp`) |
 | — | `PORTAL_SMTP_PASSWORD` | — | SMTP password; env-only so it never appears in process listings |
-| `--trusted-proxy-header` | — | *(none)* | Header carrying the real client address behind a reverse proxy, e.g. `X-Forwarded-For`. See below. |
+| — | `PORTAL_BACKUP_PASSPHRASE` | — | Passphrase for `portalctl backup`/`restore`; env-only. Minimum 12 characters. |
+| `--trusted-proxy-header` | `PORTAL_TRUSTED_PROXY_HEADER` | *(none)* | Header carrying the real client address behind a reverse proxy, e.g. `X-Forwarded-For`. See below. |
+
+The three secrets — `PORTAL_PASSWORD_PEPPER`, `PORTAL_SMTP_PASSWORD` and
+`PORTAL_BACKUP_PASSPHRASE` — have no flag at all, and no flag will be added: a
+flag is visible in the process table and in shell history. The two
+development-only switches have no environment variable, so relaxing production
+security takes an explicit command line rather than a copied manifest.
 
 ### Client addresses behind a proxy
 

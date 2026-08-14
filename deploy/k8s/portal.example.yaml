@@ -1,0 +1,175 @@
+# Example Kubernetes deployment for the BCARS portal.
+#
+# This is a worked example, not a supported artifact: adjust the image
+# reference, storage class, ingress and host name for your cluster. What it is
+# meant to get right is the handful of things the portal is strict about, each
+# marked below — one writer, migrations before readiness, secrets from the
+# secret store, and a persistent volume for the database.
+#
+# Apply with:
+#   kubectl apply -f deploy/k8s/portal.example.yaml
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: portal-data
+spec:
+  accessModes:
+    # ReadWriteOnce on purpose. The database is SQLite: one process writes it,
+    # and the volume must not be shared between nodes.
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+# The three runtime secrets. NEVER commit real values — create the Secret out of
+# band and delete this block, or replace it with your external-secrets manifest:
+#
+#   kubectl create secret generic portal-secrets \
+#     --from-literal=password-pepper="$(openssl rand -base64 32)" \
+#     --from-literal=backup-passphrase='<from the password manager>' \
+#     --from-literal=smtp-password='<from the password manager>'
+#
+# The pepper is bound to the data: once accounts exist, deploying a different
+# pepper is a startup failure, not a login failure, and losing it means every
+# member must go through password recovery. Back it up separately from the
+# database — a backup holding both defeats the point of having it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: portal-secrets
+type: Opaque
+stringData:
+  password-pepper: "REPLACE-ME-at-least-16-bytes"
+  backup-passphrase: "REPLACE-ME-at-least-12-characters"
+  smtp-password: "REPLACE-ME"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: portal-config
+data:
+  # Non-secret configuration. Every key here is read by the server as an
+  # environment variable; flags, if any are added to the pod spec, win.
+  PORTAL_ADDR: ":8080"
+  PORTAL_LOG_LEVEL: "info"
+  PORTAL_DB: "/data/portal.db"
+  PORTAL_BASE_URL: "https://portal.example.org"
+  PORTAL_MAIL_TRANSPORT: "smtp"
+  PORTAL_SMTP_HOST: "smtp.example.org"
+  PORTAL_SMTP_PORT: "587"
+  PORTAL_SMTP_USER: "REPLACE-ME@your-club-domain"
+  PORTAL_SMTP_FROM: "REPLACE-ME@your-club-domain"
+  # Set this ONLY if an ingress you control overwrites the header on every
+  # request. Honouring it on a directly reachable deployment lets any caller
+  # forge the source address that abuse limiting groups on.
+  PORTAL_TRUSTED_PROXY_HEADER: "X-Forwarded-For"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal
+spec:
+  # One replica, and Recreate rather than RollingUpdate. SQLite admits a single
+  # writer, and a rolling update would briefly run two pods against one volume.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: portal
+  template:
+    metadata:
+      labels:
+        app: portal
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+      # Migrations run to completion before the server starts. /readyz reports
+      # 503 while the schema does not match the binary, so a pod that skipped
+      # this on a fresh volume would never pass its readiness probe.
+      initContainers:
+        - name: migrate
+          image: ghcr.io/bcars/bcars-portal:latest
+          args: ["-migrate-only"]
+          envFrom:
+            - configMapRef:
+                name: portal-config
+          env:
+            - name: PORTAL_PASSWORD_PEPPER
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secrets
+                  key: password-pepper
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: portal
+          image: ghcr.io/bcars/bcars-portal:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: portal-config
+          env:
+            - name: PORTAL_PASSWORD_PEPPER
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secrets
+                  key: password-pepper
+            - name: PORTAL_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secrets
+                  key: smtp-password
+          # Liveness is "the process is up"; readiness additionally checks the
+          # database and the schema version. Keep them on their own endpoints:
+          # a liveness probe pointed at /readyz would restart a pod that is
+          # merely waiting on a migration.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: portal-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal
+spec:
+  selector:
+    app: portal
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+# TLS terminates at your ingress. Session cookies carry Secure, so the browser
+# must reach the portal over HTTPS: served over plaintext, sign-in appears to
+# succeed and the session cookie is never sent back.
