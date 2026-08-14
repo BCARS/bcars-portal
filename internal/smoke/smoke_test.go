@@ -17,6 +17,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,8 +82,44 @@ func TestProductionAssemblySmoke(t *testing.T) {
 	resp = e.do(http.MethodGet, "/api/v1/audit-events", nil, "")
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
-	// 5. Password recovery round trip, end to end through the running server.
+	// 5. The shipped binary serves its own front-end assets. A deployment on a
+	//    firewalled host must render the admin UI without reaching a CDN.
+	e.requireSelfContainedAssets(adminCookie)
+
+	// 6. Password recovery round trip, end to end through the running server.
 	e.recoveryRoundTrip(officerEmail)
+}
+
+// scriptSrc matches the src of every <script> element in a served page.
+var scriptSrc = regexp.MustCompile(`<script[^>]+src="([^"]+)"`)
+
+// requireSelfContainedAssets loads a real page from the running server, takes
+// every script the page tells a browser to fetch, and fetches each one back
+// from the same server. Nothing here is asserted against the source tree: the
+// question is whether the deployed process can dress its own pages with no
+// outbound network, which is exactly what the CDN reference cost it
+// (bcars-portal-chp).
+func (e *env) requireSelfContainedAssets(cookie *http.Cookie) {
+	e.t.Helper()
+
+	resp := e.do(http.MethodGet, "/admin/", cookie, "")
+	require.Equal(e.t, http.StatusOK, resp.StatusCode, "admin dashboard: %s", readBody(resp))
+
+	matches := scriptSrc.FindAllStringSubmatch(readBody(resp), -1)
+	require.NotEmpty(e.t, matches, "the dashboard loads no script; this check would assert nothing")
+
+	for _, m := range matches {
+		src := m[1]
+		require.Truef(e.t, strings.HasPrefix(src, "/") && !strings.HasPrefix(src, "//"),
+			"the dashboard loads %q from another origin; assets must ship in the binary", src)
+
+		// Anonymous on purpose: the sign-in page is rendered before any session
+		// exists and must be able to load the same assets.
+		asset := e.do(http.MethodGet, src, nil, "")
+		require.Equalf(e.t, http.StatusOK, asset.StatusCode,
+			"the running binary does not serve %s", src)
+		require.NotEmptyf(e.t, readBody(asset), "%s served empty", src)
+	}
 }
 
 // --- flow steps ---

@@ -210,6 +210,10 @@ func NewHandler(database *sql.DB, cfg HandlerConfig) (*Handler, error) {
 
 // RegisterRoutes registers all admin UI routes on the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	// Vendored assets. Public and unauthenticated: the sign-in page needs them
+	// too, and they contain nothing a signed-out caller may not see.
+	mux.Handle("GET "+RouteStatic+"{path...}", staticHandler())
+
 	// Public: login/logout, recovery, invitation.
 	mux.Handle("GET "+RouteLogin, h.logged(h.loginPage))
 	mux.Handle("POST "+RouteLogin, h.logged(h.loginSubmit))
