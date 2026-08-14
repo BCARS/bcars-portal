@@ -22,6 +22,8 @@ The portal should:
   another person without directly changing official records or receiving management
   authority over that record.
 - Provide a permissioned alternative to the unrestricted Groups.io file area.
+- Keep the club's records severable from the portal's runtime: a readable export
+  must outlive any particular host, maintainer, or hosting account.
 - Add an optional conversational AI assistant that can use portal tools with exactly
   the logged-in user's authority.
 - Keep Groups.io as the initial calendar and mailing-list integration point.
@@ -68,7 +70,8 @@ No feature is complete if it can only be performed by clicking through the UI.
 
 ## Proposed Technical Shape
 
-- A private BCARS repository and a single deployable Go application.
+- A public BCARS repository (public since August 2026) containing no club data,
+  and a single deployable Go application.
 - Server-rendered HTML with HTMX or similarly small progressive enhancements.
 - Huma or standard Go HTTP handlers for typed application and tool APIs.
 - sqlc for reviewed queries and Goose for ordered migrations.
@@ -309,6 +312,52 @@ member. Until a formal policy is approved:
 - do not automatically erase payment history, approvals, or audit events;
 - require an authorized, auditable manual decision for anonymization or deletion.
 
+## Export, Continuity, and Succession
+
+BCARS has watched club records fail to survive officer turnover: spreadsheets
+that were never handed off, and a Groups.io member database the incoming
+treasurer did not know how to export. The portal must not become the next
+version of that problem. The guiding analogy is the club's repeaters: two
+people understand them, the rest is documented, and if both walked away the
+repeaters would keep operating for years. Hosted software cannot match that
+fully — someone must keep the domain registered, the hosting paid, and the
+sending account alive — but the club's records can be made severable from the
+running service, so a lapse in any of those costs the club a service rather
+than its history.
+
+Three mechanisms with distinct jobs:
+
+- **Backup and restore** (implemented) is the full-fidelity, same-instance
+  path. It is age-encrypted, requires the backup passphrase, and a restored
+  instance also needs the original password pepper. Moving hosts with the
+  secrets in hand picks up exactly where the backup left off, users and
+  passwords included. It is a disaster-recovery tool, not a succession tool:
+  if the secrets leave with a departing webmaster, every backup is unreadable,
+  and that is an accepted property of this mechanism.
+- **Takeout export and fresh-instance import** (planned, `bcars-portal-rf5`)
+  is the succession path, in the spirit of Google Takeout. `portalctl`
+  produces a plaintext, self-describing archive — JSONL per table plus a
+  manifest recording schema version, row counts, checksums, and format
+  documentation — readable by a person in twenty years even if no portal
+  binary runs. The identity and authorization layer is deliberately excluded:
+  users, password hashes, sessions, tokens, role grants, and record-access
+  grants do not transfer. A new instance bootstraps its own administrator and
+  re-provisions officers and members through the existing invitation and
+  recovery flows; asking people to set up accounts again is an accepted cost.
+  Audit history is included as a readable artifact with the actor denormalized
+  to a name and call sign or email, and is never re-imported — a new instance
+  starts its own audit chain. Optional encryption uses a passphrase chosen at
+  export time, never a server-held secret; custody of the file belongs to the
+  exporting officer, like a paper ledger. The schema and the archive are two
+  places obliged to agree, so a mechanical gate requires every table to be
+  classified importable, excluded, or readable-only before a migration that
+  adds one can merge.
+- **Durable one-way outputs** serve treasurer rotation specifically. The
+  existing member and treasury exports are bundled into a year-end officer
+  packet — membership list, payment log, dues standing — that an outgoing
+  treasurer files with the club's records, plus a dashboard reminder when the
+  most recent export has gone stale.
+
 ## Permissioned Files and Document Library
 
 Groups.io supports uploads but does not provide the permissions needed for club records.
@@ -469,12 +518,22 @@ content must not be treated as an authorization cache or used to bypass current 
 
 1. Conversational search across authorized meeting minutes, policies, forms, and
    calendar information with citations to source records.
-2. Agenda suggestions based on prior minutes, incomplete actions, and upcoming events.
-3. An annual recurring tracker identifying activities from prior years and whether they
-   have been addressed this year.
-4. Member assistance that explains permitted information and prepares a correction
+2. Attendance tracking extracted from minutes: call-sign and name pairs, with
+   iterative resolution so a later "John KB3DFZ" resolves earlier bare call-sign
+   references retroactively.
+3. Agenda suggestions based on prior minutes, incomplete actions, and upcoming events.
+4. An annual recurring tracker for the club's standing events — ARRL Summer Field
+   Day, Winter Field Day, the Lost Turkey Trail Race, the Everett Bloody Run
+   Classic, and the roughly quarterly workshop and VE sessions — flagging what has
+   not yet been planned for the current year, such as reserving the pavilion or
+   scheduling the VE session.
+5. Member assistance that explains permitted information and prepares a correction
    request for officer approval.
-5. Treasurer questions and reports using authorized, deterministic tools.
+6. Treasurer questions and reports using authorized, deterministic tools, including
+   treasurer report tables parsed from historical minutes.
+7. Net report digests (future): extraction from emailed reports of varied
+   per-operator formats into a normalized schema — date, net control, check-ins,
+   comments — bootstrapped from the most consistent reporters.
 
 Financial totals and membership counts come from reviewed database queries, not model
 memory or arithmetic. Answers distinguish sourced facts from suggestions and inferences.
@@ -529,6 +588,10 @@ those additions open.
 | Backup ownership | Decided | The appointed webmaster owns backup monitoring and restore tests; currently John Hogenmiller. |
 | Retention | Deferred with interim rule | Informal practice removes former members from the contact list after two years. Do not automatically destroy canonical, payment, or audit records until a formal retention policy distinguishes those datasets. |
 | Files and AI providers | Deferred | Preserve architectural seams now; select storage and model endpoints in later phases. |
+| Data portability | Decided | Takeout export carries club records, not identities: users, password hashes, sessions, and grants never transfer, and a fresh instance re-provisions accounts through the existing flows. Backup/restore remains the full-fidelity same-instance path. Audit history exports readable-only. |
+| Repository visibility | Decided | The portal repository is public as of August 2026. No club data, credentials, or member-derived fixtures may ever be committed; synthetic fixtures are the only member-like data allowed. |
+| Delivery resequencing | Decided | Deployment, the real Groups.io import, and takeout precede Phase 4, targeting a live portal before the fall renewal season. |
+| AI delivery order | Decided in principle | Pilot AI through an external tool adapter (for example MCP) over the same authorized operations before building any embedded chat UI. |
 
 Phase 1 may start with the decided architecture above. The exact Google sending method
 and precise executive/treasury capability matrix should be resolved before email recovery
@@ -759,18 +822,70 @@ truth for story status and dependencies.
 - Add optional informational family relationships as context only; they are not
   required for correction submission and grant no record access.
 
+### Deployment Milestone - Live Before Fall Renewals
+
+Decided at the 2026-08-14 review. Phases 1-3 are complete but undeployed, and
+the club's two core needs — the membership list and dues tracking — deliver
+nothing until the portal is hosted and holding real data. Dues run on a
+December 31 year, so renewal season is the deadline that matters: live by
+early fall means the treasurer works the coming renewal cycle in the portal,
+using the worksheet and batch tools built for exactly that. This milestone
+precedes Phase 4.
+
+Ordered work, tracked in Beads:
+
+1. `fmc.8` — runnable deployment packaging and documented environment
+   variables (promoted from hardening to the critical path).
+2. `8ou` — validate production SMTP with owner-supplied credentials
+   (interactive, owner-driven).
+3. `eet` — deploy to the owner-selected production host (interactive,
+   owner-driven).
+4. `g21` — human-supervised reconciliation and import of the real Groups.io
+   export.
+5. `rf5` — takeout export and fresh-instance import, which doubles as the
+   rehearsal for moving an instance between hosts.
+
+Pre-deployment hardening worth folding in: `chp` (vendor htmx rather than
+loading it from a CDN) and `fmc.22` (diagnose Secure cookies over a plaintext
+base URL — the silent login loop most likely to burn the first deployment).
+After go-live, real officer use, not the design epic's original order,
+prioritizes the remaining `6pz` polish work; `6pz.2`, the plain-language label
+pass, comes first given the club's audience.
+
 ### Phase 4 - Permissioned Files
 
-- Implement private storage, metadata, authorization, versioning, archive, and audit.
-- Import and classify existing meeting minutes and selected Groups.io files.
+Sized at the 2026-08-14 review for a club of under thirty members. The
+minimum lovable version is upload, a visibility level (public, active
+members, officers, role-restricted), list, download, and audit — plus text
+extraction, because extracted minutes are the substrate for the AI phases.
+Version history, malware scanning, retention machinery, and staged Groups.io
+file import are deferred until real use demands them; the file-lifecycle
+section earlier in this document remains the long-term shape, not the entry
+bar.
+
+- Implement private storage, metadata, authorization, and audit.
+- Import and classify existing meeting minutes (2023-present Markdown in the
+  public website repository, 2014-2022 PDFs) and the repeater documentation
+  currently in the Groups.io file area.
+- Extract text from supported files for authorized search and later AI use.
 - Add authorized full-text search and source links.
 - Test permission changes, revocation, direct URL access, and restricted downloads.
 
 ### Phase 5 - Read-Only AI Pilot
 
-- Configure the OpenAI-compatible adapter and endpoint capability checks.
-- Implement permission-aware read tools and cited search.
-- Pilot agenda suggestions and the annual recurring tracker with officers.
+The first pilot rides an external assistant rather than an embedded chat UI:
+expose curated read tools through a standard tool adapter (for example MCP)
+over the same authorized operations, acting with exactly the signed-in user's
+authority. The primary early users are the three or four officers who already
+use AI tooling; the in-portal chat button is built only if the pilot shows
+members would use it. The capability backlog is tracked in `bcars-portal-ywc`.
+
+- Implement permission-aware read tools and cited search behind the external
+  tool adapter.
+- Pilot attendance extraction from minutes, agenda suggestions, and the annual
+  recurring tracker with officers.
+- Configure the OpenAI-compatible adapter and endpoint capability checks only
+  once an embedded chat surface is justified.
 - Test prompt injection, excessive data disclosure, role changes during conversations,
   unavailable sources, provider failure, tool retries, and transcript retention.
 - Keep the pilot read-only except for drafts that have no authoritative effect.
