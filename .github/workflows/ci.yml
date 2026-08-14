@@ -38,12 +38,11 @@ jobs:
             head="$PUSH_HEAD_SHA"
           fi
 
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            code=true
-          else
-            code=$(git diff --name-only --diff-filter=ACDMRTUXB "$base" "$head" -- \
-              | ./scripts/ci-code-changed.sh)
-          fi
+          # The script measures from the merge base, so commits that landed on
+          # the base branch after the branch point are not attributed to this
+          # change (bcars-portal-8cm). It handles missing, empty and unusable
+          # refs itself, and every such case runs the jobs.
+          code=$(./scripts/ci-code-changed.sh --range "$base" "$head")
 
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
