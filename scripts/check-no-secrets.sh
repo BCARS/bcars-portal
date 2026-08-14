@@ -55,6 +55,18 @@ if [ "${1:-}" = "--self-test" ]; then
   }
   trap cleanup_selftest EXIT
 
+  # Establish that the tree is clean BEFORE planting anything. Without this,
+  # any pre-existing violation makes the second phase fail and get reported as
+  # "an ignored private data file was read", sending the reader to look at
+  # .gitignore when the real problem is somewhere else entirely. That misfired
+  # the first time this self-test met an unrelated violation.
+  if ! "$0" >/dev/null 2>&1; then
+    echo "check-no-secrets: SELF-TEST INCONCLUSIVE — the working tree already fails the scan;" >&2
+    echo "  fix that first, then re-run. Details:" >&2
+    "$0" >&2 || true
+    exit 1
+  fi
+
   printf 'package internal\n\nconst probe = "someone@example.com"\n' >"$probe_code"
   if "$0" >/dev/null 2>&1; then
     echo "check-no-secrets: SELF-TEST FAILED — an untracked file with an email literal was not rejected" >&2

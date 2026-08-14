@@ -23,6 +23,14 @@
 /extracted/
 /transcripts/
 
+# Screenshots from scripts/ui-walkthrough.sh. Regenerated on demand; they are
+# pictures of a seeded development portal and do not belong in history.
+/ui-shots/
+
+# Seeded development portal built by `make run-demo`. Throwaway synthetic data,
+# but it is still a database and a mail spool, so it never belongs in git.
+/demo-data/
+
 # Design mockups and working material supplied out of band. CLAUDE.md already
 # describes this directory as ignored, but nothing enforced it, and the copy
 # in use holds a real contact-database export.
