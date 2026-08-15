@@ -243,6 +243,28 @@ case "$sheet_url" in
     failures=$((failures + 1)) ;;
 esac
 
+# The payment grid needs an open batch, and the grid only shows its entry
+# controls once a member has been found — so the walk opens a batch and searches
+# in it, which is what a treasurer does at a meeting. Without this the screen
+# carrying the amount suggestion, the labelled date fields, the defaults block
+# and the totals beside the attestation was never captured at all
+# (bcars-portal-yec).
+if act treasurer "open the batches page" open "$BASE_URL/admin/treasury/batches" \
+  && act treasurer "name the batch" fill 'input[name=label]' 'Walkthrough meeting' \
+  && act treasurer "open the batch" click 'form[action="/admin/treasury/batches"] button[type=submit]'
+then
+  batch_url="$(ab treasurer get url 2>/dev/null | tail -1 || true)"
+else
+  batch_url=""
+fi
+case "$batch_url" in
+  *"/batches/"*)
+    shot treasurer batch-entry "${batch_url#"$BASE_URL"}?member=e" "Add a row" ;;
+  *)
+    echo "  !! could not open a payment batch; the entry grid was not captured" >&2
+    failures=$((failures + 1)) ;;
+esac
+
 # --- Member ----------------------------------------------------------------
 sign_in member "joe@$DEMO_DOMAIN" joe
 shot member landing           "/member/"                 "Your records"
