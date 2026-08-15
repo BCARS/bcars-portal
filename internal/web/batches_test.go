@@ -481,3 +481,137 @@ func TestTheSuggestionFollowsTheCoverageYear(t *testing.T) {
 	assert.Contains(t, body, `placeholder="25.00"`,
 		"a batch covering next year should suggest next year's rate")
 }
+
+// Four findings from a treasurer's walkthrough of the payment grid, all on the
+// same screen (bcars-portal-yec).
+
+// TestAddingFromTheSheetReturnsToThatRow is the one worth a test rather than an
+// eyeball: working down a printed sheet used to bounce the treasurer to the
+// foot of the page after every single entry, because every add redirected to
+// the add-a-row card at the bottom.
+func TestAddingFromTheSheetReturnsToThatRow(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	m := seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+	batchID := openBatch(t, e, "Meeting night")
+
+	w := e.postForm(t, "/admin/treasury/batches/"+itoa(batchID)+"/entries", url.Values{
+		"membership_id":   {itoa(m)},
+		"amount":          {"20.00"},
+		"method":          {"cash"},
+		"received_on":     {"2026-08-15"},
+		"paid_through":    {"2026-12-31"},
+		"idempotency_key": {"sheet-row-1"},
+		"return_to":       {"member-" + itoa(m)},
+	})
+
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Equal(t,
+		"/admin/treasury/batches/"+itoa(batchID)+"#member-"+itoa(m),
+		w.Header().Get("Location"),
+		"the treasurer should land back on the row they just entered")
+}
+
+// TestAddingFromTheSearchStillReturnsToTheSearch keeps the other half: a row
+// added by searching has no grid row to go back to.
+func TestAddingFromTheSearchStillReturnsToTheSearch(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	m := seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+	batchID := openBatch(t, e, "Meeting night")
+
+	w := e.postForm(t, "/admin/treasury/batches/"+itoa(batchID)+"/entries", url.Values{
+		"membership_id":   {itoa(m)},
+		"amount":          {"20.00"},
+		"method":          {"cash"},
+		"received_on":     {"2026-08-15"},
+		"paid_through":    {"2026-12-31"},
+		"idempotency_key": {"search-row-1"},
+	})
+
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Equal(t, "/admin/treasury/batches/"+itoa(batchID)+"#add-row",
+		w.Header().Get("Location"))
+}
+
+// TestTheReturnAnchorIsNotReflected: the anchor comes from the form, so it is
+// validated rather than echoed into the redirect.
+func TestTheReturnAnchorIsNotReflected(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	m := seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+	batchID := openBatch(t, e, "Meeting night")
+
+	for i, bad := range []string{
+		"member-notanumber",
+		"add-row\nLocation: https://example.invalid",
+		"../../admin/members",
+		"https://example.invalid",
+	} {
+		w := e.postForm(t, "/admin/treasury/batches/"+itoa(batchID)+"/entries", url.Values{
+			"membership_id":   {itoa(m)},
+			"amount":          {"20.00"},
+			"method":          {"cash"},
+			"received_on":     {"2026-08-15"},
+			"paid_through":    {"2026-12-31"},
+			"idempotency_key": {"bad-anchor-" + itoa(int64(i))},
+			"return_to":       {bad},
+		})
+		loc := w.Header().Get("Location")
+		assert.Equalf(t, "/admin/treasury/batches/"+itoa(batchID)+"#add-row", loc,
+			"a return_to of %q must fall back to the add-row anchor", bad)
+	}
+}
+
+// TestTheGridLabelsBothDatesVisibly covers the complaint directly: the two date
+// boxes carried aria-labels only, so a screen reader was told which was which
+// and a sighted treasurer was not.
+func TestTheGridLabelsBothDatesVisibly(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+	batchID := openBatch(t, e, "Meeting night")
+
+	body := e.body(t, "GET", "/admin/treasury/batches/"+itoa(batchID)+"?member=Plain", "")
+
+	// Visible text, not an attribute: an aria-label satisfies neither the
+	// complaint nor a sighted user.
+	assert.Contains(t, body, "<span>Received</span>")
+	assert.Contains(t, body, "<span>Dues paid through</span>")
+}
+
+// TestTheDefaultsBlockComesBeforeTheRowsItSeeds: a default discovered after
+// entering half a sheet has already missed the rows it was meant to fill in.
+func TestTheDefaultsBlockComesBeforeTheRowsItSeeds(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+	batchID := openBatch(t, e, "Meeting night")
+
+	body := e.body(t, "GET", "/admin/treasury/batches/"+itoa(batchID)+"?member=Plain", "")
+
+	defaults := strings.Index(body, "Defaults for new rows")
+	addRow := strings.Index(body, "Add a row")
+	require.NotEqual(t, -1, defaults)
+	require.NotEqual(t, -1, addRow)
+	assert.Less(t, defaults, addRow,
+		"the defaults must appear before the rows they prefill")
+}
+
+// TestTheTotalsAreVisibleAtTheAttestation: the checkbox asks the treasurer to
+// confirm they counted the cash against the totals, which were a page away.
+func TestTheTotalsAreVisibleAtTheAttestation(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	m := seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+	batchID := openBatch(t, e, "Meeting night")
+	addRow(t, e, batchID, m, "20.00", "cash", "row-1")
+
+	body := e.body(t, "GET", "/admin/treasury/batches/"+itoa(batchID), "")
+
+	attestation := strings.Index(body, "I have counted the cash")
+	require.NotEqual(t, -1, attestation)
+
+	// The totals table is rendered twice: once at the top, once beside the
+	// attestation. The second must be between the post heading and the
+	// checkbox, or the two still cannot be read together.
+	postHeading := strings.Index(body, "Post this batch")
+	require.NotEqual(t, -1, postHeading)
+	totalsNearby := strings.Index(body[postHeading:attestation], "All rows")
+	assert.NotEqualf(t, -1, totalsNearby,
+		"the totals must be on screen where the treasurer attests to having counted them")
+}

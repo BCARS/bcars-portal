@@ -456,8 +456,34 @@ func (h *Handler) batchAddEntry(w http.ResponseWriter, r *http.Request) {
 		h.renderDomainError(w, r, err)
 		return
 	}
-	// Back to the grid with the search box cleared and ready for the next row.
-	http.Redirect(w, r, fmt.Sprintf("/admin/treasury/batches/%d#add-row", id), http.StatusSeeOther)
+	// Back to where the treasurer was, not to the foot of the page.
+	//
+	// A row added from the worksheet grid returns to that member's row, which
+	// now reads "Yes" under Entered and has lost its inputs — the row itself is
+	// the acknowledgement. Sending every add to #add-row meant working down a
+	// printed sheet bounced the treasurer to the bottom of the page after every
+	// single entry (bcars-portal-yec). A row added from the search results has
+	// no row to return to, so it still lands on the search box, cleared and
+	// ready for the next member.
+	http.Redirect(w, r, fmt.Sprintf("/admin/treasury/batches/%d#%s", id, addEntryAnchor(r)),
+		http.StatusSeeOther)
+}
+
+// addEntryAnchor is the fragment to return to after adding a row. It is read
+// from the form rather than guessed, and validated rather than reflected: an
+// unchecked value here would be an open redirect into the page's own markup.
+func addEntryAnchor(r *http.Request) string {
+	want := strings.TrimSpace(r.FormValue("return_to"))
+	if want == "" {
+		return "add-row"
+	}
+	// The only shape a row anchor takes is member-<id>.
+	if id, ok := strings.CutPrefix(want, "member-"); ok {
+		if _, err := strconv.ParseInt(id, 10, 64); err == nil {
+			return want
+		}
+	}
+	return "add-row"
 }
 
 // batchDeleteEntry removes a draft row.

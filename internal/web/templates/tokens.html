@@ -252,6 +252,11 @@
     .breadcrumb a { color: var(--text-secondary); }
     .breadcrumb span { margin: 0 var(--space-1); }
 
+    /* Dense grid date fields: the label sits above its input so the two dates a
+       payment row carries are distinguishable without reading the markup. */
+    .date-field { display: inline-flex; flex-direction: column; font-size: .8em; color: var(--text-secondary); }
+    .date-field > span { margin-bottom: 2px; }
+
     /* Error pages. Centred, quiet, and readable at either text size. */
     .error-page { max-width: 34rem; margin: var(--space-7) auto; text-align: center; }
     .error-page .error-code { font-size: 3rem; font-weight: 700; color: var(--text-muted); margin: 0 0 var(--space-2); line-height: 1; }

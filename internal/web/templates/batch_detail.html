@@ -18,18 +18,28 @@
 
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">What this batch adds up to</h3>
-    <table>
-        <thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead>
-        <tbody>
-            <tr><td>Cash</td><td>{{.Totals.CashCount}}</td><td>${{.Totals.CashTotal}}</td></tr>
-            <tr><td>Checks</td><td>{{.Totals.CheckCount}}</td><td>${{.Totals.CheckTotal}}</td></tr>
-            <tr><td>Other</td><td>{{.Totals.OtherCount}}</td><td>${{.Totals.OtherTotal}}</td></tr>
-            <tr><th scope="row">All rows</th><th>{{.Totals.Entries}}</th><th>${{.Totals.NetTotal}}</th></tr>
-        </tbody>
-    </table>
+    {{template "batch_totals" .Totals}}
     <p style="margin: 8px 0 0; color: var(--text-secondary);">
         These totals are calculated by the server. Count the cash and the checks against them before posting.
     </p>
+</div>
+
+<div class="card">
+    <h3 style="margin: 0 0 8px; font-size: 1rem;">Defaults for new rows</h3>
+    <p style="margin: 0 0 8px; color: var(--text-secondary);">
+        These prefill each new row. Every row still records its own amount and its own
+        Dues paid through date.
+    </p>
+    <form action="/admin/treasury/batches/{{.Batch.ID}}/defaults" method="post">
+        <input type="hidden" name="version" value="{{.Version}}">
+        <label for="label">Batch name</label>
+        <input type="text" id="label" name="label" value="{{.Batch.Label}}" required>
+        <label for="default_amount">Default amount</label>
+        <input type="text" id="default_amount" name="default_amount" value="{{.Defaults.Amount}}" inputmode="decimal">
+        <label for="default_paid_through">Default dues paid through</label>
+        <input type="date" id="default_paid_through" name="default_paid_through" value="{{.Defaults.PaidThrough}}">
+        <button type="submit" class="btn btn-secondary">Save defaults</button>
+    </form>
 </div>
 
 {{if .WorksheetRows}}
@@ -46,7 +56,7 @@
         </thead>
         <tbody>
             {{range .WorksheetRows}}
-            <tr>
+            <tr id="member-{{.MembershipID}}">
                 <td>{{.Ordinal}}</td>
                 <td>{{.DisplayName}}</td>
                 <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
@@ -65,10 +75,21 @@
                             <option value="other">Other</option>
                         </select>
                         <input type="text" name="reference" placeholder="Check no." aria-label="Reference for {{.DisplayName}}">
-                        <input type="date" name="received_on" value="{{$.Today}}"
-                               aria-label="Date received for {{.DisplayName}}" required>
-                        <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}"
-                               aria-label="Dues paid through for {{.DisplayName}}" required>
+                        {{/*
+                            Both dates were previously distinguishable only by
+                            their aria-label, so a screen reader was told which
+                            was which and a sighted treasurer was not
+                            (bcars-portal-yec).
+                        */}}
+                        <label class="date-field">
+                            <span>Received</span>
+                            <input type="date" name="received_on" value="{{$.Today}}" required>
+                        </label>
+                        <label class="date-field">
+                            <span>Dues paid through</span>
+                            <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}" required>
+                        </label>
+                        <input type="hidden" name="return_to" value="member-{{.MembershipID}}">
                         <button type="submit" class="btn btn-primary btn-sm">Add row</button>
                     </form>
                     {{end}}
@@ -150,10 +171,14 @@
                             <option value="other">Other</option>
                         </select>
                         <input type="text" name="reference" placeholder="Check no." aria-label="Reference">
-                        <input type="date" name="received_on" value="{{$.Today}}"
-                               aria-label="Date received" required>
-                        <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}"
-                               aria-label="Dues paid through" required>
+                        <label class="date-field">
+                            <span>Received</span>
+                            <input type="date" name="received_on" value="{{$.Today}}" required>
+                        </label>
+                        <label class="date-field">
+                            <span>Dues paid through</span>
+                            <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}" required>
+                        </label>
                         <button type="submit" class="btn btn-primary btn-sm">Add row</button>
                     </form>
                 </td>
@@ -166,24 +191,6 @@
     {{end}}
 </div>
 
-<div class="card">
-    <h3 style="margin: 0 0 8px; font-size: 1rem;">Defaults for new rows</h3>
-    <p style="margin: 0 0 8px; color: var(--text-secondary);">
-        These prefill each new row. Every row still records its own amount and its own
-        Dues paid through date.
-    </p>
-    <form action="/admin/treasury/batches/{{.Batch.ID}}/defaults" method="post">
-        <input type="hidden" name="version" value="{{.Version}}">
-        <label for="label">Batch name</label>
-        <input type="text" id="label" name="label" value="{{.Batch.Label}}" required>
-        <label for="default_amount">Default amount</label>
-        <input type="text" id="default_amount" name="default_amount" value="{{.Defaults.Amount}}" inputmode="decimal">
-        <label for="default_paid_through">Default dues paid through</label>
-        <input type="date" id="default_paid_through" name="default_paid_through" value="{{.Defaults.PaidThrough}}">
-        <button type="submit" class="btn btn-secondary">Save defaults</button>
-    </form>
-</div>
-
 {{if .CanPost}}
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Post this batch</h3>
@@ -191,6 +198,14 @@
         Posting records {{.Totals.Entries}} payments totalling ${{.Totals.NetTotal}} and updates
         Dues paid through for each member. It cannot be undone, only corrected.
     </p>
+    {{/*
+        The totals again, here rather than only at the top of the page. The
+        attestation below asks the treasurer to confirm they have counted the
+        cash against these figures, and until now the figures were a page away —
+        the one moment the two must be read together was the one moment they
+        could not both be on screen (bcars-portal-yec).
+    */}}
+    {{template "batch_totals" .Totals}}
     <form action="/admin/treasury/batches/{{.Batch.ID}}/post" method="post">
         <input type="hidden" name="version" value="{{.Version}}">
         <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
@@ -283,4 +298,16 @@ if (window.location.hash === '#add-row') {
     if (search) { search.focus(); }
 }
 </script>
+{{end}}
+
+{{define "batch_totals"}}
+<table>
+    <thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead>
+    <tbody>
+        <tr><td>Cash</td><td>{{.CashCount}}</td><td>${{.CashTotal}}</td></tr>
+        <tr><td>Checks</td><td>{{.CheckCount}}</td><td>${{.CheckTotal}}</td></tr>
+        <tr><td>Other</td><td>{{.OtherCount}}</td><td>${{.OtherTotal}}</td></tr>
+        <tr><th scope="row">All rows</th><th>{{.Entries}}</th><th>${{.NetTotal}}</th></tr>
+    </tbody>
+</table>
 {{end}}

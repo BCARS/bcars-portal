@@ -61,21 +61,22 @@ another's screens.
 | 10 | Single payment entry | [`10-treasurer-payment-entry.png`](10-treasurer-payment-entry.png) |
 | 11 | Renewal worksheet options | [`11-treasurer-worksheet-opts.png`](11-treasurer-worksheet-opts.png) |
 | 12 | Printable renewal worksheet | [`12-treasurer-worksheet-sheet.png`](12-treasurer-worksheet-sheet.png) |
+| 13 | Payment batch entry — defaults, grid and totals | [`13-treasurer-batch-entry.png`](13-treasurer-batch-entry.png) |
 
 ### Member
 
 | | Screen | File |
 |---|---|---|
-| 13 | Member landing — your own records | [`13-member-landing.png`](13-member-landing.png) |
-| 14 | Member directory | [`14-member-directory.png`](14-member-directory.png) |
-| 15 | Directory print view | [`15-member-directory-print.png`](15-member-directory-print.png) |
-| 16 | Text size preference | [`16-member-text-size.png`](16-member-text-size.png) |
+| 14 | Member landing — your own records | [`14-member-landing.png`](14-member-landing.png) |
+| 15 | Member directory | [`15-member-directory.png`](15-member-directory.png) |
+| 16 | Directory print view | [`16-member-directory-print.png`](16-member-directory-print.png) |
+| 17 | Text size preference | [`17-member-text-size.png`](17-member-text-size.png) |
 
 ### Signed out
 
 | | Screen | File |
 |---|---|---|
-| 17 | Not found, as a signed-out visitor sees it — no navigation, one way back | [`17-public-not-found.png`](17-public-not-found.png) |
+| 18 | Not found, as a signed-out visitor sees it — no navigation, one way back | [`18-public-not-found.png`](18-public-not-found.png) |
 
 These show the functional MVP layouts. Visual design and polish are the subject
 of the `6pz` design beads, so treat them as evidence of what each screen *does*
