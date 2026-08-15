@@ -182,8 +182,7 @@ func TestMemberSuggestsCorrectionToOwnRecord(t *testing.T) {
 		"the member picks which of their own details is wrong")
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"kind":           {"contact_method.update"},
-		"contact_id":     {fmt.Sprint(contactID)},
+		"target":         {fmt.Sprintf("contact:%d", contactID)},
 		"proposed_value": {"dale.new@example.test"},
 		"summary":        {"My email address changed last month."},
 	}, cookie)
@@ -226,7 +225,7 @@ func TestMemberCannotAimOwnFormAtAnotherRecord(t *testing.T) {
 	require.NoError(t, err)
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"kind":           {"contact_method.update"},
+		"target":         {"contact_method.update"},
 		"contact_id":     {fmt.Sprint(strangerContact)},
 		"proposed_value": {"+15555550199"},
 		"summary":        {"Fix this number."},
@@ -339,7 +338,7 @@ func TestMemberPagesSpeakToAPerson(t *testing.T) {
 		"'approved' is database vocabulary; the ordinary state needs no announcement")
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"kind":           {"person.call_sign.set"},
+		"target":         {"person.call_sign.set"},
 		"proposed_value": {"W3NEW"},
 		"summary":        {"My call sign changed."},
 	}, cookie)
@@ -362,7 +361,7 @@ func TestMemberTracksAndWithdrawsOwnSuggestions(t *testing.T) {
 	theirs := e.grantTo(t, assocEmail, 0)
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"kind":           {"person.display_name.set"},
+		"target":         {"person.display_name.set"},
 		"proposed_value": {"Dale Rutherforde"},
 		"summary":        {"My name is spelled wrong."},
 	}, mine)
@@ -410,7 +409,7 @@ func TestWithdrawalPageHidesTheButtonOnceDecided(t *testing.T) {
 	cookie := e.signInMember(t)
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"kind":           {"person.display_name.set"},
+		"target":         {"person.display_name.set"},
 		"proposed_value": {"Dale Rutherforde"},
 		"summary":        {"My name is spelled wrong."},
 	}, cookie)
@@ -633,4 +632,112 @@ func formControlIDs(body string) []string {
 		}
 	}
 	return ids
+}
+
+// seedContact gives a person one contact detail and returns its id.
+func (e *memberTestEnv) seedContact(t *testing.T, personID int64, kind, value string) int64 {
+	t.Helper()
+	res, err := e.h.db.Exec(
+		`INSERT INTO contact_methods (person_id, kind, value_raw, value_norm, is_primary)
+		 VALUES (?, ?, ?, ?, 1)`, personID, kind, value, value)
+	require.NoError(t, err)
+	id, err := res.LastInsertId()
+	require.NoError(t, err)
+	return id
+}
+
+// The correction form asks one question (bcars-portal-245). It used to ask two
+// and only mean one: radios chose what needs correcting, and a separate
+// "which contact detail?" dropdown sat below them, always visible and governed
+// by nothing — so a member choosing "My name is wrong" was shown a live list of
+// their own telephone numbers to pick from.
+
+func TestTheCorrectionFormAsksOneQuestion(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, personID := e.eligibleMember(t)
+	contactID := e.seedContact(t, personID, "email", "dale.old@example.test")
+
+	body := e.getAs(t, fmt.Sprintf("/member/records/%d/suggest", personID), cookie).Body.String()
+
+	// Each contact detail is one of the choices, named and shown.
+	assert.Contains(t, body, fmt.Sprintf(`value="contact:%d"`, contactID),
+		"the member's email should be one of the things they can say is wrong")
+	assert.Contains(t, body, "dale.old@example.test",
+		"a choice about a contact detail should show which detail it means")
+
+	// And there is no second, ungoverned chooser.
+	assert.NotContains(t, body, `name="contact_id"`,
+		"the contact dropdown should be gone; the radio carries which detail it is")
+	assert.NotContains(t, body, "only for a contact correction",
+		"a hint apologising for a control that does not apply means the control is wrong")
+}
+
+func TestANoteIsOptionalOnAnOrdinaryCorrection(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, personID := e.eligibleMember(t)
+
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"target":         {"person.call_sign.set"},
+		"proposed_value": {"W3NEW"},
+		// No summary: "my call sign should be W3NEW" says everything.
+	}, cookie)
+
+	require.Equal(t, http.StatusSeeOther, w.Code,
+		"a correction with a value and no note must be accepted: %s", w.Body.String())
+
+	// And it reaches an officer intact.
+	var value, summary string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT i.proposed_value, COALESCE(r.summary, '')
+		   FROM member_change_request_items i
+		   JOIN member_change_requests r ON r.id = i.request_id
+		  ORDER BY i.id DESC LIMIT 1`).Scan(&value, &summary))
+	assert.Equal(t, "W3NEW", value)
+	// The member wrote no note, so the form composed the line an officer
+	// triages from rather than storing a blank one.
+	assert.Contains(t, summary, "W3NEW")
+	assert.Contains(t, strings.ToLower(summary), "call sign")
+}
+
+// TestSomethingElseStillNeedsItsNote is the other half. The catch-all carries no
+// value, so the note is the whole of what an officer would read.
+func TestSomethingElseStillNeedsItsNote(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, personID := e.eligibleMember(t)
+
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"target": {changerequests.OpOther},
+	}, cookie)
+
+	require.Equal(t, http.StatusBadRequest, w.Code,
+		"a submission saying nothing at all must be refused")
+	assert.Contains(t, w.Body.String(), "Tell the officers what should change",
+		"the refusal must name what to supply")
+}
+
+// TestAMemberCannotCorrectSomeoneElsesContactThroughTheirOwnForm asserts the
+// outcome, and deliberately not which layer produces it.
+//
+// Two independent checks refuse this: the form maps the posted target against
+// the contacts the member actually holds, and the domain refuses an item naming
+// a contact that is not the target person's. Removing the form's check leaves
+// this test passing, which is worth knowing — the form's check exists to give
+// an ordinary "choose what needs correcting" rather than a domain error, not to
+// be the thing standing between a member and someone else's telephone number.
+func TestAMemberCannotCorrectSomeoneElsesContactThroughTheirOwnForm(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, personID := e.eligibleMember(t)
+
+	stranger := e.dirPerson(t, "Someone Else", "W3SEL", "full")
+	strangerContact := e.seedContact(t, stranger, "phone", "540-555-0199")
+
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"target":         {fmt.Sprintf("contact:%d", strangerContact)},
+		"proposed_value": {"540-555-0000"},
+	}, cookie)
+
+	require.Equal(t, http.StatusBadRequest, w.Code,
+		"a contact the member does not hold is not theirs to correct here")
+	assert.NotContains(t, w.Body.String(), "540-555-0199",
+		"the refusal must not echo a stranger's telephone number back")
 }
