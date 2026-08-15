@@ -58,7 +58,7 @@
                         <input type="hidden" name="membership_id" value="{{.MembershipID}}">
                         <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
                         <input type="text" name="amount" value="{{$.Defaults.Amount}}"
-                               inputmode="decimal" placeholder="40.00" aria-label="Amount for {{.DisplayName}}" required>
+                               inputmode="decimal" placeholder="{{$.Suggested}}" aria-label="Amount for {{.DisplayName}}" required>
                         <select name="method" aria-label="Method for {{.DisplayName}}">
                             <option value="cash">Cash</option>
                             <option value="check">Check</option>
@@ -143,7 +143,7 @@
                         <input type="hidden" name="membership_id" value="{{.MembershipID}}">
                         <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
                         <input type="text" name="amount" value="{{$.Defaults.Amount}}"
-                               inputmode="decimal" placeholder="40.00" aria-label="Amount" required>
+                               inputmode="decimal" placeholder="{{$.Suggested}}" aria-label="Amount" required>
                         <select name="method" aria-label="Method">
                             <option value="cash">Cash</option>
                             <option value="check">Check</option>

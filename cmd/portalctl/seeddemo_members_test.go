@@ -297,3 +297,20 @@ func TestSeededOfficersAreMembers(t *testing.T) {
 		})
 	}
 }
+
+// TestSeedDemoConfiguresTheClubDuesRate keeps the demo showing the two features
+// that read a rate. Without one the payment grid offers no suggested amount and
+// the printed worksheet says "$not set", so a reviewer looking at either sees a
+// blank where the feature should be (bcars-portal-i95).
+func TestSeedDemoConfiguresTheClubDuesRate(t *testing.T) {
+	d := newMigratedDB(t)
+	t.Setenv(authn.PepperEnvVar, testPepper)
+	_ = captureStdout(t, func() { require.NoError(t, seedDemo(d)) })
+
+	var cents int64
+	require.NoError(t, d.QueryRow(
+		`SELECT amount_cents FROM dues_rates WHERE year = ?`,
+		time.Now().UTC().Year()).Scan(&cents),
+		"the current year needs a configured rate or the treasury screens read blank")
+	assert.Equal(t, int64(2000), cents, "BCARS dues are $20")
+}
