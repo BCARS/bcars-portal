@@ -741,3 +741,113 @@ func TestAMemberCannotCorrectSomeoneElsesContactThroughTheirOwnForm(t *testing.T
 	assert.NotContains(t, w.Body.String(), "540-555-0199",
 		"the refusal must not echo a stranger's telephone number back")
 }
+
+// seedPerson inserts a bare person for an officer-side form test.
+func seedPerson(t *testing.T, e *testEnv, name string) int64 {
+	t.Helper()
+	res, err := e.h.db.Exec(
+		`INSERT INTO persons (display_name, sort_name) VALUES (?, ?)`, name, name)
+	require.NoError(t, err)
+	id, err := res.LastInsertId()
+	require.NoError(t, err)
+	return id
+}
+
+// A mailing address is recorded in parts (bcars-portal-a9w). The columns and
+// the Groups.io import have always written them; the officer UI offered one
+// free-text box, so an address typed by an officer was a single line while an
+// imported one was structured.
+
+func TestAnAddressIsStoredInParts(t *testing.T) {
+	e := setupHandlerWithRoles(t, "administrator")
+	personID := seedPerson(t, e, "Ada Lovelace")
+
+	w := e.postForm(t, fmt.Sprintf("/admin/members/%d/address/new", personID), url.Values{
+		"label":       {"Home"},
+		"line1":       {"1234 Any Street"},
+		"city":        {"Everett"},
+		"state":       {"PA"},
+		"postal_code": {"15537"},
+		"country":     {"United States"},
+		"is_primary":  {"1"},
+	})
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var line1, city, state, postal, country, raw string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT COALESCE(postal_line1,''), COALESCE(postal_city,''), COALESCE(postal_state,''),
+		        COALESCE(postal_postal_code,''), COALESCE(postal_country,''), value_raw
+		   FROM contact_methods WHERE person_id = ? AND kind = 'postal'`, personID).
+		Scan(&line1, &city, &state, &postal, &country, &raw))
+
+	assert.Equal(t, "1234 Any Street", line1)
+	assert.Equal(t, "Everett", city)
+	assert.Equal(t, "PA", state)
+	assert.Equal(t, "15537", postal)
+	assert.Equal(t, "United States", country)
+
+	// The one-line reading is what existing surfaces render, and it omits the
+	// default country rather than ending every Pennsylvania address with it.
+	assert.Equal(t, "1234 Any Street, Everett, PA, 15537", raw)
+}
+
+func TestTheCountryBoxStartsOnTheClubsOwn(t *testing.T) {
+	e := setupHandlerWithRoles(t, "administrator")
+	personID := seedPerson(t, e, "Ada Lovelace")
+
+	body := e.body(t, "GET", fmt.Sprintf("/admin/members/%d/address/new", personID), "")
+
+	assert.Contains(t, body, `value="United States"`,
+		"the country should arrive filled in, since almost every member is here")
+}
+
+// TestAPartialAddressIsAccepted covers the case the club's own export contains:
+// a member with a town and no street. A form that refused those could not
+// record what the club knows.
+func TestAPartialAddressIsAccepted(t *testing.T) {
+	e := setupHandlerWithRoles(t, "administrator")
+	personID := seedPerson(t, e, "Ada Lovelace")
+
+	w := e.postForm(t, fmt.Sprintf("/admin/members/%d/address/new", personID), url.Values{
+		"city":    {"Bedford"},
+		"state":   {"PA"},
+		"country": {"United States"},
+	})
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var raw string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT value_raw FROM contact_methods WHERE person_id = ? AND kind = 'postal'`, personID).Scan(&raw))
+	assert.Equal(t, "Bedford, PA", raw,
+		"a town with no street must not read as a leading comma")
+}
+
+// TestAnEmptyAddressIsRefused: the country arrives pre-filled, so a form
+// submitted untouched would otherwise store "United States" as an address.
+func TestAnEmptyAddressIsRefused(t *testing.T) {
+	e := setupHandlerWithRoles(t, "administrator")
+	personID := seedPerson(t, e, "Ada Lovelace")
+
+	w := e.postForm(t, fmt.Sprintf("/admin/members/%d/address/new", personID), url.Values{
+		"country": {"United States"},
+	})
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), "Give at least a street")
+
+	var count int
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT COUNT(*) FROM contact_methods WHERE person_id = ?`, personID).Scan(&count))
+	assert.Zero(t, count, "nothing should have been stored")
+}
+
+// TestTheContactFormNoLongerOffersPostal: an address typed into a single value
+// box is the state this bead exists to end, so the box must stop offering it.
+func TestTheContactFormNoLongerOffersPostal(t *testing.T) {
+	e := setupHandlerWithRoles(t, "administrator")
+	personID := seedPerson(t, e, "Ada Lovelace")
+
+	body := e.body(t, "GET", fmt.Sprintf("/admin/members/%d/contacts/new", personID), "")
+
+	assert.NotContains(t, body, `value="postal"`,
+		"a postal address has its own form; offering it here records one unstructured line")
+}
