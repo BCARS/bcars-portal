@@ -3,7 +3,10 @@ package web
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -123,9 +126,26 @@ func TestWithheldAndAbsentAreIndistinguishable(t *testing.T) {
 
 	// Only the identifying cells may differ. Everything downstream of them --
 	// which is to say every contact cell -- must be byte-identical.
+	// The identifying cells, and the row's correction link, carry the member's
+	// name and call sign — the link in URL-encoded form. Both are already on
+	// the page in plain sight, so blanking them keeps this test comparing what
+	// it exists to compare: every CONTACT cell, byte for byte.
+	// forms lists every way a value can appear in the row: as text, as a query
+	// parameter in the correction link, and as that parameter after the
+	// template escaper has had it — html/template writes "+" as "&#43;" inside
+	// an attribute.
+	forms := func(v string) []string {
+		q := url.QueryEscape(v)
+		return []string{v, q, strings.ReplaceAll(q, "+", "&#43;")}
+	}
 	normalise := func(row, name, callSign string) string {
-		row = strings.ReplaceAll(row, name, "NAME")
-		return strings.ReplaceAll(row, callSign, "CALLSIGN")
+		for _, form := range forms(name) {
+			row = strings.ReplaceAll(row, form, "NAME")
+		}
+		for _, form := range forms(callSign) {
+			row = strings.ReplaceAll(row, form, "CALLSIGN")
+		}
+		return row
 	}
 	assert.Equal(t,
 		normalise(bobRow, "Bob Withholds", "W3BOB"),
@@ -478,4 +498,75 @@ func TestALinkedOfficerReadsTheDirectory(t *testing.T) {
 		assert.Equalf(t, http.StatusOK, w.Code,
 			"%s must open for an officer who is also a member", path)
 	}
+}
+
+// A directory row used to be a dead end (bcars-portal-tsj). A member who spotted
+// a wrong call sign while reading the roster had to leave the page, find the
+// correction form, and identify the person again by typing their name from
+// memory — with the roster no longer in front of them.
+
+func TestEachDirectoryRowOffersACorrection(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, _ := e.eligibleMember(t)
+	e.dirPerson(t, "Alice Shares", "W3ALS", "full")
+
+	body := e.getAs(t, RouteMemberDirectory, cookie).Body.String()
+
+	require.Contains(t, body, "Suggest a correction",
+		"every row should offer the correction the page's own footer describes")
+
+	// Parse the link rather than matching the raw markup: the query string is
+	// HTML-escaped in the attribute, so a literal comparison would be asserting
+	// on Go's escaping rather than on what the browser will request.
+	var found url.Values
+	for _, m := range regexp.MustCompile(`href="([^"]*suggest[^"]*)"`).FindAllStringSubmatch(body, -1) {
+		u, err := url.Parse(html.UnescapeString(m[1]))
+		require.NoError(t, err)
+		if u.Query().Get("about_name") == "Alice Shares" {
+			found = u.Query()
+		}
+	}
+	require.NotNil(t, found, "no row linked to the correction form naming Alice Shares")
+	assert.Equal(t, "W3ALS", found.Get("about_call_sign"),
+		"the link should carry the call sign as well as the name")
+}
+
+// TestTheCorrectionFormArrivesKnowingWhoItIsAbout follows the link, which is the
+// half that matters: a link carrying a name means nothing if the form drops it.
+func TestTheCorrectionFormArrivesKnowingWhoItIsAbout(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, _ := e.eligibleMember(t)
+
+	w := e.getAs(t, RouteMemberSuggest+"?about_name=Alice+Shares&about_call_sign=W3ALS", cookie)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	body := w.Body.String()
+	assert.Contains(t, body, `value="Alice Shares"`,
+		"the form should arrive with the member already named")
+	assert.Contains(t, body, `value="W3ALS"`)
+}
+
+// TestTheSubjectIsThesendersToChange keeps the model honest. This form consults
+// no record — an officer decides during triage which member a suggestion is
+// about — so a prefilled name is a starting point, not an identification the
+// portal has made, and the sender may correct it.
+func TestTheSubjectIsTheSendersToChange(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, _ := e.eligibleMember(t)
+
+	w := e.post(t, RouteMemberSuggest, url.Values{
+		"kind":            {"person.call_sign.set"},
+		"proposed_value":  {"W3NEW"},
+		"about_name":      {"Someone The Directory Did Not Name"},
+		"about_call_sign": {"W3XXX"},
+		"summary":         {"I typed this myself."},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var about string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT COALESCE(supplied_name, '') FROM member_change_requests ORDER BY id DESC LIMIT 1`).
+		Scan(&about))
+	assert.Equal(t, "Someone The Directory Did Not Name", about,
+		"what the sender typed is what is stored, prefill or not")
 }

@@ -611,8 +611,20 @@ func findContact(profile memberprofile.Profile, id int64) (memberprofile.Contact
 }
 
 func (h *Handler) memberSuggestOtherForm(w http.ResponseWriter, r *http.Request) {
+	// The subject can arrive from the directory, so a member who spots a wrong
+	// call sign while reading the roster does not have to leave, find this
+	// page, and type the person's name again from memory (bcars-portal-tsj).
+	//
+	// These prefill the member's own words and nothing else. No lookup happens
+	// here and none may: this form deliberately consults no record, so what
+	// arrives is a starting point the sender can correct, not an identification
+	// the portal has made.
 	h.renderPage(w, r, "member_suggest_other.html", http.StatusOK, memberSuggestData{
 		Kinds: otherKinds(),
+		Submitted: memberSuggestForm{
+			AboutName:     strings.TrimSpace(r.URL.Query().Get("about_name")),
+			AboutCallSign: strings.TrimSpace(r.URL.Query().Get("about_call_sign")),
+		},
 	})
 }
 
