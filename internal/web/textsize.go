@@ -56,7 +56,7 @@ func (h *Handler) textSizeFor(r *http.Request) string {
 // goes through here rather than calling the renderer directly, so a new page
 // inherits the preference without its author having to remember it.
 func (h *Handler) renderPage(w http.ResponseWriter, r *http.Request, name string, status int, data any) {
-	h.render.RenderPage(w, name, status, data, h.textSizeFor(r))
+	h.render.RenderPage(w, name, status, data, h.textSizeFor(r), navFor(h.principalFromRequest(r)))
 }
 
 // setTextSize stores the caller's text size preference.
@@ -121,13 +121,13 @@ func backFor(p *authz.Principal) (href, label string) {
 // standalone today: if it ever grows a base layout, the renderer wraps it and
 // this keeps working, where a direct RenderHTTP would quietly hand the layout a
 // struct with no .Page and fail at execution.
-func (h *Handler) renderTextSize(w http.ResponseWriter, status int, data textSizeData) {
-	h.render.RenderPage(w, "text_size.html", status, data, data.TextSize)
+func (h *Handler) renderTextSize(w http.ResponseWriter, r *http.Request, status int, data textSizeData) {
+	h.render.RenderPage(w, "text_size.html", status, data, data.TextSize, navFor(h.principalFromRequest(r)))
 }
 
 func (h *Handler) textSizePage(w http.ResponseWriter, r *http.Request) {
 	href, label := backFor(h.principal(r))
-	h.renderTextSize(w, http.StatusOK, textSizeData{
+	h.renderTextSize(w, r, http.StatusOK, textSizeData{
 		TextSize:  h.textSizeFor(r),
 		BackHref:  href,
 		BackLabel: label,
@@ -143,7 +143,7 @@ func (h *Handler) textSizeSubmit(w http.ResponseWriter, r *http.Request) {
 		// The stored preference is left alone: a form post naming a size the
 		// portal does not render is not a reason to reset the one the caller
 		// already chose.
-		h.renderTextSize(w, http.StatusUnprocessableEntity, textSizeData{
+		h.renderTextSize(w, r, http.StatusUnprocessableEntity, textSizeData{
 			TextSize:  h.textSizeFor(r),
 			BackHref:  href,
 			BackLabel: label,
@@ -156,7 +156,7 @@ func (h *Handler) textSizeSubmit(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("save text size preference failed",
 			slog.Int64("user_id", p.UserID),
 			slog.String("error", err.Error()))
-		h.renderTextSize(w, http.StatusInternalServerError, textSizeData{
+		h.renderTextSize(w, r, http.StatusInternalServerError, textSizeData{
 			TextSize:  h.textSizeFor(r),
 			BackHref:  href,
 			BackLabel: label,
@@ -165,7 +165,7 @@ func (h *Handler) textSizeSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderTextSize(w, http.StatusOK, textSizeData{
+	h.renderTextSize(w, r, http.StatusOK, textSizeData{
 		TextSize:  size,
 		BackHref:  href,
 		BackLabel: label,

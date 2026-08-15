@@ -60,6 +60,8 @@
             <a href="/member/">Your records</a>
             <a href="/member/requests">Your suggestions</a>
             <a href="/preferences/text-size">Text size</a>
+            {{/* The officer surface, offered only to a caller who can reach it. */}}
+            {{if .Nav.AnyOfficer}}<a href="/admin/">Officer view</a>{{end}}
             <form method="post" action="/logout">
                 <button type="submit">Sign out</button>
             </form>

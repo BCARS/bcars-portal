@@ -598,6 +598,10 @@ type dashboardData struct {
 // always shown Members and Imports to everyone, which sends officers to a
 // permission error to discover what they cannot do.
 type navLinks struct {
+	// Member reports whether the caller has a member surface of their own to
+	// visit. Officers are members (PLANNING.md), so for most officers this is
+	// true and the two surfaces need a way across (bcars-portal-62d).
+	Member     bool
 	Members    bool
 	Imports    bool
 	Standing   bool
@@ -610,6 +614,7 @@ type navLinks struct {
 // navFor reads the routes a principal may follow.
 func navFor(p *authz.Principal) navLinks {
 	return navLinks{
+		Member:     hasCap(p, "profile.self.read"),
 		Members:    hasCap(p, "member.read"),
 		Imports:    hasCap(p, "import.upload"),
 		Standing:   hasCap(p, "dues.read"),

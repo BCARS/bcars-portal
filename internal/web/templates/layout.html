@@ -58,6 +58,19 @@
             <a href="/admin/treasury">Treasury</a>
             <a href="/admin/imports">Imports</a>
             <a href="/preferences/text-size">Text size</a>
+            {{/*
+                The way across to the member surface, shown only to an officer
+                who has one. Officers are members, so most officers do — and
+                before this the two surfaces had no link between them at all:
+                whichever one you landed on was the one you stayed in
+                (bcars-portal-62d).
+
+                The two layouts stay separate. A single header that asked which
+                caller it was rendering for would be one forgotten condition
+                away from advertising officer pages to a member, which is the
+                reason they were split in the first place.
+            */}}
+            {{if .Nav.Member}}<a href="/member/">Your member view</a>{{end}}
             <form method="post" action="/logout">
                 <button type="submit">Sign Out</button>
             </form>
