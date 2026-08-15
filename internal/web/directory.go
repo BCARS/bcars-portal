@@ -104,6 +104,9 @@ type directoryRow struct {
 
 	Email string
 	Phone string
+	// SuggestURL opens the correction form with this member already named, so
+	// a reader who spots something wrong does not re-identify them by hand.
+	SuggestURL string
 	// EmailShared and PhoneShared drive the muted styling only. They say
 	// whether the cell holds a value, which the cell already shows; they carry
 	// no value themselves.
@@ -305,7 +308,11 @@ func directoryTypeOptions() []labelledValue {
 // happens. Everything below the return value is a string a template prints.
 func directoryRowFrom(e directory.Entry) directoryRow {
 	return directoryRow{
-		PersonID:    e.PersonID,
+		PersonID: e.PersonID,
+		SuggestURL: RouteMemberSuggest + "?" + url.Values{
+			"about_name":      {e.DisplayName},
+			"about_call_sign": {e.CallSign},
+		}.Encode(),
 		DisplayName: e.DisplayName,
 		CallSign:    e.CallSign,
 		BaseType:    e.BaseType,

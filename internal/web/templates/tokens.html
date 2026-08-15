@@ -252,6 +252,14 @@
     .breadcrumb a { color: var(--text-secondary); }
     .breadcrumb span { margin: 0 var(--space-1); }
 
+    /* Available to a screen reader, absent from the page. Used for a column
+       heading that exists only to name what the cells below it do. */
+    .visually-hidden {
+        position: absolute; width: 1px; height: 1px;
+        margin: -1px; padding: 0; overflow: hidden;
+        clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+
     /* Dense grid date fields: the label sits above its input so the two dates a
        payment row carries are distinguishable without reading the markup. */
     .date-field { display: inline-flex; flex-direction: column; font-size: .8em; color: var(--text-secondary); }
