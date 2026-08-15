@@ -25,6 +25,9 @@ documents are the human-readable completion records. See:
 - `docs/phase-3-design.md` — reviewed member requests, optional access, and directory design.
 - `docs/phase-3-plan.md` — focused Phase 3 dependency and execution map.
 - `docs/adr/` — architecture decision records.
+- `docs/screenshots/` — every portal screen, captured from the seeded demo
+  portal. The quickest way to see what the application looks like without
+  running it.
 
 ## Prerequisites
 
