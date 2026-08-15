@@ -223,6 +223,14 @@ type memberRecordRow struct {
 // URL, or a matching contact address, so revoking a grant removes the record
 // from the very next page load of a session that is already open (ADR-0010).
 func (h *Handler) memberHome(w http.ResponseWriter, r *http.Request) {
+	// RouteMemberHome is a prefix pattern, so an unclaimed path under /member/
+	// lands here. Rendering the member landing for it would report a wrong URL
+	// as a working page, the same way /admin/ did (bcars-portal-i4a).
+	if r.URL.Path != RouteMemberHome {
+		h.renderError(w, r, http.StatusNotFound, "That page does not exist.")
+		return
+	}
+
 	ctx := r.Context()
 	p := h.principalFromRequest(r)
 

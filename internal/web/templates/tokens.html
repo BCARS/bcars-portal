@@ -252,7 +252,44 @@
     .breadcrumb a { color: var(--text-secondary); }
     .breadcrumb span { margin: 0 var(--space-1); }
 
+    /* Error pages. Centred, quiet, and readable at either text size. */
+    .error-page { max-width: 34rem; margin: var(--space-7) auto; text-align: center; }
+    .error-page .error-code { font-size: 3rem; font-weight: 700; color: var(--text-muted); margin: 0 0 var(--space-2); line-height: 1; }
+    .error-page h1 { margin: 0 0 var(--space-3); font-size: 1.25rem; font-weight: 600; }
+    .error-page .error-message { color: var(--text-helper); margin: 0 0 var(--space-5); }
+    .error-page .error-request-id { font-size: .75em; color: var(--text-muted); margin: 0 0 var(--space-5); }
+    .error-page .error-actions { margin: 0; }
+
     .flash { animation: flash-fade 0.3s ease-in; }
     @keyframes flash-fade { from { background: var(--badge-warning-bg); } to { background: transparent; } }
 </style>
+{{end}}
+
+{{/*
+    The body of every error page, defined once.
+
+    Three pages embed it because an error has to be dressed in the chrome of
+    whoever hit it: the officer error page carries the officer navigation, the
+    member one carries the member navigation, and the public one carries none.
+    Before this, every error rendered the officer layout — so a signed-out
+    visitor who mistyped a URL was shown an officer header advertising Members,
+    Treasury and Imports, with a Sign Out button and a Dashboard link they
+    could not use (bcars-portal-i4a).
+
+    The caller-appropriate destination arrives as .ActionHref/.ActionLabel
+    rather than being decided here, because the template cannot see the
+    principal and a guess would be exactly the wrong link again.
+*/}}
+{{define "error_body"}}
+<div class="error-page">
+    <p class="error-code">{{.Code}}</p>
+    <h1>{{.Title}}</h1>
+    <p class="error-message">{{.Message}}</p>
+    {{if .RequestID}}
+    <p class="error-request-id">Request ID: {{.RequestID}}</p>
+    {{end}}
+    <p class="error-actions">
+        <a href="{{.ActionHref}}" class="btn btn-primary">{{.ActionLabel}}</a>
+    </p>
+</div>
 {{end}}

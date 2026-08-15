@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -298,4 +299,148 @@ func TestTheRootPathIsAFrontDoor(t *testing.T) {
 				"%s must be a not-found, not a redirect", path)
 		}
 	})
+}
+
+// The not-found page is the one screen every wrong URL reaches, so it is the
+// screen most likely to be seen by someone who is lost — including someone not
+// signed in. These tests pin what it says and, more importantly, what chrome it
+// wears (bcars-portal-i4a).
+
+func TestUnknownPathsUnderAPrefixAreNotFound(t *testing.T) {
+	officer := setupHandlerWithRoles(t, "administrator")
+
+	// "GET /admin/" and "GET /member/" are net/http prefix patterns: without an
+	// explicit check they answer for everything beneath them, so a mistyped
+	// path renders a real page with a 200 and looks like it worked.
+	for _, path := range []string{
+		"/admin/nonexistent",
+		"/admin/nope/deeper",
+		"/admin/treasury-typo",
+		"/member/nonexistent",
+		"/member/records-typo",
+	} {
+		w := httptest.NewRecorder()
+		officer.mux.ServeHTTP(w, officer.authedRequest("GET", path))
+		assert.Equalf(t, http.StatusNotFound, w.Code,
+			"%s renders a page instead of reporting that it does not exist", path)
+		assert.NotContainsf(t, w.Body.String(), "Active Memberships",
+			"%s served the dashboard's content under its status", path)
+	}
+
+	// A path with dot segments is cleaned and redirected by net/http before any
+	// handler sees it; following that redirect is what reaches the check above.
+	// Asserted here so the 307 is understood as ServeMux behaviour rather than
+	// mistaken for a route answering.
+	w0 := httptest.NewRecorder()
+	officer.mux.ServeHTTP(w0, officer.authedRequest("GET", "/admin/members/../nope"))
+	assert.Equal(t, http.StatusTemporaryRedirect, w0.Code)
+	assert.Equal(t, "/admin/nope", w0.Header().Get("Location"))
+
+	// The prefixes themselves still work.
+	w := httptest.NewRecorder()
+	officer.mux.ServeHTTP(w, officer.authedRequest("GET", "/admin/"))
+	assert.Equal(t, http.StatusOK, w.Code, "the dashboard itself must still render")
+
+	member := setupDirectoryEligibleMember(t)
+	w = member.getAs(t, RouteMemberHome, member.testEnv.cookie)
+	assert.Equal(t, http.StatusOK, w.Code, "the member landing itself must still render")
+}
+
+// TestAMemberReachingTheOfficerDashboardIsStillRedirected guards the behaviour
+// the not-found check sits in front of: the redirect is chosen before the path
+// check would matter, and a member must not receive a 404 for /admin/ when what
+// they should get is their own landing.
+func TestAMemberReachingTheOfficerDashboardIsStillRedirected(t *testing.T) {
+	e := setupDirectoryEligibleMember(t)
+
+	w := e.getAs(t, "/admin/", e.testEnv.cookie)
+
+	require.Equal(t, http.StatusSeeOther, w.Code, "a member must be redirected, not refused")
+	assert.Equal(t, RouteMemberHome, w.Header().Get("Location"))
+}
+
+func TestTheNotFoundPageWearsTheCallersChrome(t *testing.T) {
+	t.Run("a signed-out visitor gets no navigation at all", func(t *testing.T) {
+		e := setupHandler(t)
+
+		w := httptest.NewRecorder()
+		e.mux.ServeHTTP(w, httptest.NewRequest("GET", "/nope", nil))
+		require.Equal(t, http.StatusNotFound, w.Code)
+
+		body := w.Body.String()
+		// The officer header advertises screens this caller is not signed in
+		// to, and offers a Sign Out button to someone who is not signed in.
+		for _, leaked := range []string{
+			`href="/admin/members"`, `href="/admin/treasury"`, `href="/admin/imports"`, "Sign Out",
+		} {
+			assert.NotContainsf(t, body, leaked,
+				"the public not-found page shows %q from the officer navigation", leaked)
+		}
+		assert.Contains(t, body, `href="`+RouteLogin+`"`,
+			"the only way out offered to a signed-out visitor must be the sign-in page")
+	})
+
+	t.Run("an officer keeps the officer navigation", func(t *testing.T) {
+		e := setupHandlerWithRoles(t, "administrator")
+
+		w := httptest.NewRecorder()
+		e.mux.ServeHTTP(w, e.authedRequest("GET", "/nope"))
+		require.Equal(t, http.StatusNotFound, w.Code)
+
+		body := w.Body.String()
+		assert.Contains(t, body, `href="/admin/members"`, "an officer should still be able to navigate")
+		assert.Contains(t, body, `href="/admin/"`)
+	})
+
+	t.Run("a member gets the member navigation and their own landing", func(t *testing.T) {
+		e := setupDirectoryEligibleMember(t)
+
+		w := e.getAs(t, "/nope", e.testEnv.cookie)
+		require.Equal(t, http.StatusNotFound, w.Code)
+
+		body := w.Body.String()
+		assert.NotContains(t, body, `href="/admin/members"`,
+			"a member must not be shown officer navigation on an error page")
+		assert.Contains(t, body, `href="`+RouteMemberHome+`"`,
+			"the way out offered to a member must be their own landing")
+	})
+}
+
+// TestAnUnknownAPIPathAnswersAsAnAPI covers a regression introduced with the
+// front door: the catch-all that gave browsers a real page also began handing
+// HTML to API clients, which cannot tell a missing endpoint from a broken
+// deployment when the body is a web page.
+func TestAnUnknownAPIPathAnswersAsAnAPI(t *testing.T) {
+	e := setupHandler(t)
+
+	for _, tc := range []struct{ name, path, accept string }{
+		{"an api path", "/api/v1/nope", ""},
+		{"a json client", "/nope", "application/json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tc.path, nil)
+			if tc.accept != "" {
+				req.Header.Set("Accept", tc.accept)
+			}
+			w := httptest.NewRecorder()
+			e.mux.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusNotFound, w.Code)
+			assert.Equal(t, "application/problem+json", w.Header().Get("Content-Type"))
+			assert.NotContains(t, w.Body.String(), "<!DOCTYPE html>",
+				"an API client received a web page")
+
+			var problem map[string]any
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &problem),
+				"the body must be a problem document")
+			assert.Equal(t, float64(http.StatusNotFound), problem["status"])
+		})
+	}
+
+	// A browser asking for HTML still gets the page.
+	req := httptest.NewRequest("GET", "/nope", nil)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	w := httptest.NewRecorder()
+	e.mux.ServeHTTP(w, req)
+	assert.Contains(t, w.Body.String(), "<!DOCTYPE html>", "a browser must still get the page")
 }

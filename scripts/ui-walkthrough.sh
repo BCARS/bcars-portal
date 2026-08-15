@@ -250,6 +250,12 @@ shot member directory         "/member/directory"        "Zeller"
 shot member directory-print   "/member/directory/print"  "Zeller"
 shot member text-size         "/preferences/text-size"   "Text size"
 
+# The screen a lost visitor sees, captured signed OUT. The session name is new
+# on purpose: the walk's other sessions hold a cookie, and the public not-found
+# page is precisely the one that must carry no navigation to screens the caller
+# is not signed in to (bcars-portal-i4a).
+shot public not-found         "/no-such-page"            "Not Found"
+
 echo
 if [ "$failures" -gt 0 ]; then
   echo "ui-walkthrough: $step screens attempted, $failures failed" >&2
