@@ -395,3 +395,59 @@ func TestWorksheetAsOfIsValidatedNotRepaired(t *testing.T) {
 		assert.Equal(t, "2026-07-01", asOf)
 	})
 }
+
+// TestAnOfficerSeesContactDetailsAMemberDidNotShare pins a rule that is easy to
+// break by being helpful (bcars-portal-6ug).
+//
+// A member's sharing preference governs what the GENERAL MEMBERSHIP sees in the
+// directory. It has never governed what an officer sees: officers approve
+// members, answer their corrections and post their dues, and a treasurer who
+// could not read a telephone number because its owner kept it out of the
+// directory could not do the job. Nothing asserted that until now, so a future
+// change that filtered an officer surface by the same preference — an obvious
+// thing to reach for — would have looked like consistency.
+func TestAnOfficerSeesContactDetailsAMemberDidNotShare(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+
+	personID := seedMember(t, e, "Private Member", "W3PRV", "2020-12-31")
+
+	// A contact with NO visibility event: nothing was shared with anybody.
+	_, err := e.h.db.Exec(
+		`INSERT INTO contact_methods (person_id, kind, value_raw, value_norm, is_primary)
+		 VALUES (?, 'email', 'private.member@example.test', 'private.member@example.test', 1)`,
+		personID)
+	require.NoError(t, err)
+	_, err = e.h.db.Exec(
+		`INSERT INTO contact_methods (person_id, kind, value_raw, value_norm, is_primary)
+		 VALUES (?, 'phone', '540-555-0177', '540-555-0177', 1)`,
+		personID)
+	require.NoError(t, err)
+
+	id := generateSheet(t, e, url.Values{
+		"label": {"July meeting"}, "filter_kind": {"owes"},
+		"sort_order": {"last_name"}, "as_of": {"2026-07-01"},
+		"include_email": {"yes"}, "include_phone": {"yes"},
+	})
+
+	body := e.body(t, "GET", "/admin/treasury/worksheets/"+itoa(id), "")
+
+	assert.Contains(t, body, "private.member@example.test",
+		"an officer's worksheet must carry the member's email even though it is not in the directory")
+	assert.Contains(t, body, "540-555-0177",
+		"and the telephone number, for the same reason")
+}
+
+// TestTheWorksheetSaysWhatTheContactColumnsDependOn is the copy half. The page
+// used to say the columns appear "only if you are allowed to see them", which
+// reads as a per-member consent gate and is what prompted the report that
+// officers might be missing contact details they need.
+func TestTheWorksheetSaysWhatTheContactColumnsDependOn(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+
+	body := e.body(t, "GET", "/admin/treasury/worksheets", "")
+
+	assert.Contains(t, body, "depend on your own permission",
+		"the options page should name the officer's permission as the condition")
+	assert.NotContains(t, body, "only if you are allowed to see them",
+		"the old wording reads as a consent gate that does not exist")
+}
