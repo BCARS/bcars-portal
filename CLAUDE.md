@@ -72,6 +72,14 @@ fixtures are the only member-like data allowed in tests. Real exports,
 databases, credentials, uploads, backups, and logs with member data are supplied
 out of band, remain under ignored paths such as `data/`, and are never committed.
 
+The portal's screenshots in `docs/screenshots/` are committed and are refreshed
+by `scripts/ui-walkthrough.sh`. Generate them **only** against a portal started
+with `make run-demo`. No gate in this repository can read an image — the secrets
+scan greps text and skips binaries — so a walkthrough run against real member
+data would commit names, addresses and telephone numbers to history permanently,
+with nothing to catch it. This rule is enforced by the person running the script
+and the person reviewing the pull request.
+
 For Phase 2 treasury work, read `docs/phase-2-design.md` and
 `docs/phase-2-plan.md` before claiming a story. The ignored `scratch/` mockups
 are not a dependency or acceptance authority.

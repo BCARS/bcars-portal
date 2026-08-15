@@ -19,20 +19,31 @@
 #   make run-demo            # in one terminal
 #   ./scripts/ui-walkthrough.sh
 #
-# Screenshots land in ui-shots/ (git-ignored), numbered in walk order.
+# Screenshots land in docs/screenshots/, numbered in walk order, and are
+# COMMITTED (bcars-portal-jeo). Re-running overwrites them, so `git diff --stat`
+# after a walk shows which screens a change altered. See that directory's
+# README.md for the index.
 #
-# SAFETY
+# SAFETY — read this before running it anywhere but a demo portal.
 #
-# Two things keep this off real data. It refuses any host but localhost, and it
-# authenticates only as demo accounts, which exist solely in a seeded
-# development database. A screenshot tool pointed at a deployment would write
-# member names, addresses and telephone numbers to disk as image files, which
-# no secrets gate inspects.
+# The output of this script is committed to the repository, and an image cannot
+# be un-committed from history. GENERATE SCREENSHOTS ONLY FROM `make run-demo`.
+# A walk against a database holding real members would write their names,
+# addresses and telephone numbers into git permanently, as image files that no
+# secrets gate can read — grep skips binaries, so nothing downstream will catch
+# it. There is no automated check here; this rule is held by the person running
+# the script and the person reviewing the pull request.
+#
+# Two things keep the script itself off real data. It refuses any host but
+# localhost, and it authenticates only as demo accounts, which exist solely in a
+# seeded development database. Neither helps if a real database is served on
+# localhost with demo credentials, which is why the rule above is the one that
+# matters.
 
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
-OUT_DIR="${OUT_DIR:-ui-shots}"
+OUT_DIR="${OUT_DIR:-docs/screenshots}"
 # Every browser call is wrapped in this. A hung call otherwise stalls the whole
 # walk with no output, which is how a two-minute pause got mistaken for a slow
 # page during the 6pz session.
@@ -65,6 +76,10 @@ curl -sf -o /dev/null --max-time 5 "$BASE_URL/login" \
   || die "no portal at $BASE_URL — start one with 'make run-demo'"
 
 mkdir -p "$OUT_DIR"
+# These are tracked files. Clearing them first means a screen that stops being
+# captured shows up as a deletion in `git status` rather than leaving a stale
+# image behind that still looks current. A failed walk is recoverable with
+# `git checkout -- "$OUT_DIR"`.
 rm -f "$OUT_DIR"/*.png
 
 # ab runs one browser command in the named session, under a timeout.

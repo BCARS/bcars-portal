@@ -23,8 +23,11 @@
 /extracted/
 /transcripts/
 
-# Screenshots from scripts/ui-walkthrough.sh. Regenerated on demand; they are
-# pictures of a seeded development portal and do not belong in history.
+# The walkthrough's screenshots are committed under docs/screenshots/ (see that
+# directory's README). This rule covers the old default output directory, and
+# any run that overrides OUT_DIR back to it: a stray copy outside the reviewed
+# location should not be committable, because no gate can read a PNG and an
+# image taken against real member data cannot be removed from history.
 /ui-shots/
 
 # Seeded development portal built by `make run-demo`. Throwaway synthetic data,
