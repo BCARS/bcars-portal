@@ -1,7 +1,12 @@
 # Example Kubernetes deployment for the BCARS portal.
 #
 # This is a worked example, not a supported artifact: adjust the image
-# reference, storage class, ingress and host name for your cluster. What it is
+# reference, storage class, ingress and host name for your cluster.
+#
+# The image below is :latest, which follows the most recent released tag. That
+# makes this file work as written, and means a pod restarting after a later
+# release comes back on the newer image. Name an explicit version
+# (ghcr.io/bcars/bcars-portal:v1.2.3) for a deployment where that matters. What it is
 # meant to get right is the handful of things the portal is strict about, each
 # marked below — one writer, migrations before readiness, secrets from the
 # secret store, and a persistent volume for the database.
