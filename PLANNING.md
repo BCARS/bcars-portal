@@ -118,7 +118,11 @@ results, and similar club records.
   visibility per contact method even if the initial UI offers one simple overall choice.
 - Officers with the appropriate capability may view contact information for club
   administration regardless of directory-sharing preference. Administrative access is
-  audited and does not change what other members can see.
+  audited and does not change what other members can see. Asserted by
+  `TestAnOfficerSeesContactDetailsAMemberDidNotShare`: filtering an officer surface by a
+  member's sharing preference is the obvious thing to reach for in the name of
+  consistency, and it would break the treasurer (`bcars-portal-6ug`). The member-facing
+  directory is the only surface that preference governs.
 - Directory and contact APIs filter fields on the server for both list and detail
   results; hiding fields only in the UI is insufficient.
 
