@@ -272,6 +272,22 @@ shot member directory         "/member/directory"        "Zeller"
 shot member directory-print   "/member/directory/print"  "Zeller"
 shot member text-size         "/preferences/text-size"   "Text size"
 
+# The correction form: one question, with each of the member's own contact
+# details as a choice rather than a dropdown nothing governed
+# (bcars-portal-245). The record id comes from the landing page, so the walk
+# does not depend on a fixture's row numbering.
+if act member "open the landing" open "$BASE_URL/member/"; then
+  own_record="$(ab member get html '#main' 2>/dev/null | grep -o '/member/records/[0-9]*' | head -1 || true)"
+else
+  own_record=""
+fi
+if [ -n "$own_record" ]; then
+  shot member suggest "${own_record}/suggest" "What needs correcting"
+else
+  echo "  !! could not find the member's own record; the correction form was not captured" >&2
+  failures=$((failures + 1))
+fi
+
 # The screen a lost visitor sees, captured signed OUT. The session name is new
 # on purpose: the walk's other sessions hold a cookie, and the public not-found
 # page is precisely the one that must carry no navigation to screens the caller

@@ -369,6 +369,9 @@ type memberSuggestData struct {
 	About    memberRecordRow
 	Contacts []memberContactRow
 	Kinds    []suggestionKind
+	// Targets is the own-record form's single question: name, call sign, each
+	// contact detail, or something else.
+	Targets []suggestTarget
 	// Submitted holds what the member typed, so a rejected submission comes
 	// back with their words rather than an empty form.
 	Submitted memberSuggestForm
@@ -383,6 +386,9 @@ type suggestionKind struct {
 }
 
 type memberSuggestForm struct {
+	// Target is what the radio posted, kept so a rejected form comes back with
+	// the member's choice still selected.
+	Target          string
 	Kind            string
 	ProposedValue   string
 	ContactID       int64
@@ -414,11 +420,79 @@ func (h *Handler) memberSuggestOwnForm(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	contacts := contactRows(profile)
+	kinds := kindsFor(profile.AccessKind)
 	h.renderPage(w, r, "member_suggest_own.html", http.StatusOK, memberSuggestData{
 		About:    memberRecordRowFrom(profile),
-		Contacts: contactRows(profile),
-		Kinds:    kindsFor(profile.AccessKind),
+		Contacts: contacts,
+		Kinds:    kinds,
+		Targets:  ownTargets(kinds, contacts),
 	})
+}
+
+// suggestTarget is one thing a member can say is wrong about their own record.
+//
+// Contacts are entries in this list rather than a separate dropdown. The form
+// previously offered radios for what needs correcting AND an always-visible
+// "which contact detail?" chooser that no radio governed, so a member choosing
+// "My name is wrong" was shown a live list of their telephone numbers to pick
+// from (bcars-portal-245). One question with one answer is the whole fix.
+type suggestTarget struct {
+	// Value is what the radio posts. "contact:<id>" carries which detail; the
+	// rest are operation codes. The server maps it back, so a form cannot name
+	// an operation the review path has no adapter for.
+	Value      string
+	Label      string
+	ValueLabel string
+}
+
+// ownTargets lists the member's name, call sign, each contact detail they hold,
+// and the catch-all.
+func ownTargets(kinds []suggestionKind, contacts []memberContactRow) []suggestTarget {
+	out := make([]suggestTarget, 0, len(kinds)+len(contacts))
+	for _, k := range kinds {
+		if k.Operation == "contact_method.update" {
+			// Replaced below by one entry per contact the member actually has.
+			for _, c := range contacts {
+				label := c.Kind
+				if c.Label != "" {
+					label += " (" + c.Label + ")"
+				}
+				out = append(out, suggestTarget{
+					Value:      "contact:" + strconv.FormatInt(c.ID, 10),
+					Label:      "My " + label + " is wrong — " + c.Value,
+					ValueLabel: "What it should be",
+				})
+			}
+			continue
+		}
+		out = append(out, suggestTarget{Value: k.Operation, Label: k.Label, ValueLabel: k.ValueLabel})
+	}
+	return out
+}
+
+// targetToKind maps a posted target back to an operation and, for a contact, to
+// which one. ok is false for anything not offered.
+func targetToKind(target string, contacts []memberContactRow) (kind string, contactID int64, ok bool) {
+	if id, found := strings.CutPrefix(target, "contact:"); found {
+		parsed, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			return "", 0, false
+		}
+		for _, c := range contacts {
+			if c.ID == parsed {
+				return "contact_method.update", parsed, true
+			}
+		}
+		// A contact the member does not hold is not theirs to correct here.
+		return "", 0, false
+	}
+	for _, k := range suggestionKinds {
+		if k.Operation == target && k.Operation != "contact_method.update" {
+			return target, 0, true
+		}
+	}
+	return "", 0, false
 }
 
 func contactRows(profile memberprofile.Profile) []memberContactRow {
@@ -432,18 +506,51 @@ func contactRows(profile memberprofile.Profile) []memberContactRow {
 	return out
 }
 
+// summaryFor is what an officer reads first when the member wrote no note.
+//
+// Every change request carries a plain-language summary, because that is the
+// line an officer triages from (changerequests.ErrSummaryRequired). Requiring
+// the MEMBER to write it turned "my call sign should be W3XYZ" into a short
+// essay before the form would accept it, so the form composes one from the
+// choice they made instead of demanding prose (bcars-portal-245). A member who
+// does write a note keeps their own words.
+func summaryFor(form memberSuggestForm, targets []suggestTarget) string {
+	if form.Summary != "" {
+		return form.Summary
+	}
+	for _, t := range targets {
+		if t.Value != form.Target {
+			continue
+		}
+		// The target's own label already names the thing in the member's terms
+		// ("My phone (Mobile) is wrong — 814-555-0113"); the part before the
+		// dash is the subject, which is what an officer needs on one line.
+		subject := t.Label
+		if i := strings.Index(subject, " — "); i > 0 {
+			subject = subject[:i]
+		}
+		return subject + ". Should be: " + form.ProposedValue
+	}
+	return form.ProposedValue
+}
+
 func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request) {
 	profile, ok := h.loadMemberRecord(w, r)
 	if !ok {
 		return
 	}
 
-	form, problem := readSuggestForm(r)
+	ownContacts := contactRows(profile)
+	ownKindList := kindsFor(profile.AccessKind)
+	form, problem := readSuggestForm(r, true, ownContacts)
 	render := func(msg string) {
+		contacts := ownContacts
+		kinds := ownKindList
 		h.renderPage(w, r, "member_suggest_own.html", http.StatusBadRequest, memberSuggestData{
 			About:     memberRecordRowFrom(profile),
-			Contacts:  contactRows(profile),
-			Kinds:     kindsFor(profile.AccessKind),
+			Contacts:  contacts,
+			Kinds:     kinds,
+			Targets:   ownTargets(kinds, contacts),
 			Submitted: form,
 			Error:     msg,
 		})
@@ -480,7 +587,7 @@ func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request)
 		Source:          changerequests.SourceMember,
 		RequesterUserID: p.UserID,
 		TargetPersonID:  profile.PersonID,
-		Summary:         form.Summary,
+		Summary:         summaryFor(form, ownTargets(ownKindList, ownContacts)),
 		SourceIPHash:    h.clientIP.HashRequest(r),
 		Items:           []changerequests.ItemInput{item},
 	}, idempotencyKeyFor(r), time.Now())
@@ -518,7 +625,7 @@ func (h *Handler) memberSuggestOtherForm(w http.ResponseWriter, r *http.Request)
 // records are not consulted at all, so there is nothing here that could answer
 // "is this person a member".
 func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Request) {
-	form, problem := readSuggestForm(r)
+	form, problem := readSuggestForm(r, false, nil)
 	render := func(msg string, status int) {
 		h.renderPage(w, r, "member_suggest_other.html", status, memberSuggestData{
 			Kinds:     otherKinds(),
@@ -573,12 +680,13 @@ func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Reques
 // The operation is matched against the allowlist rather than passed through, so
 // a hand-built form cannot propose an operation the review path has no adapter
 // for — and cannot smuggle one the UI deliberately does not offer.
-func readSuggestForm(r *http.Request) (memberSuggestForm, string) {
+func readSuggestForm(r *http.Request, own bool, contacts []memberContactRow) (memberSuggestForm, string) {
 	if err := r.ParseForm(); err != nil {
 		return memberSuggestForm{}, "Please check your entries and try again."
 	}
 
 	form := memberSuggestForm{
+		Target:        r.FormValue("target"),
 		Kind:          r.FormValue("kind"),
 		ProposedValue: strings.TrimSpace(r.FormValue("proposed_value")),
 		AboutName:     strings.TrimSpace(r.FormValue("about_name")),
@@ -586,22 +694,43 @@ func readSuggestForm(r *http.Request) (memberSuggestForm, string) {
 		Relationship:  strings.TrimSpace(r.FormValue("relationship")),
 		Summary:       strings.TrimSpace(r.FormValue("summary")),
 	}
-	form.ContactID, _ = strconv.ParseInt(r.FormValue("contact_id"), 10, 64)
-	form.ContactSelected = r.FormValue("contact_id")
 
-	known := false
-	for _, k := range suggestionKinds {
-		if k.Operation == form.Kind {
-			known = true
+	if own {
+		// The own-record form asks one question, and each answer carries which
+		// contact detail it means. Nothing is read from a separate chooser.
+		kind, contactID, ok := targetToKind(form.Target, contacts)
+		if !ok {
+			return form, "Choose what needs correcting."
+		}
+		form.Kind = kind
+		form.ContactID = contactID
+		form.ContactSelected = strconv.FormatInt(contactID, 10)
+	} else {
+		known := false
+		for _, k := range suggestionKinds {
+			if k.Operation == form.Kind {
+				known = true
+			}
+		}
+		if !known {
+			return form, "Choose what needs correcting."
 		}
 	}
-	if !known {
-		return form, "Choose what needs correcting."
+
+	// The note is optional. It was required, which turned an ordinary
+	// correction — "my call sign should be W3XYZ" — into a short essay before
+	// the form would accept it (bcars-portal-245).
+	//
+	// What a submission may never be is empty of content. A specific kind
+	// carries its value; the catch-all carries only the note, so there the note
+	// is the whole of it.
+	if form.Kind == changerequests.OpOther {
+		if form.Summary == "" {
+			return form, "Tell the officers what should change."
+		}
+		return form, ""
 	}
-	if form.Summary == "" {
-		return form, "Describe what should change, so an officer knows what you are asking for."
-	}
-	if form.Kind != changerequests.OpOther && form.ProposedValue == "" {
+	if form.ProposedValue == "" {
 		return form, "Give the corrected value."
 	}
 	return form, ""
