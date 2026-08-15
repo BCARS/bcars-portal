@@ -1,6 +1,13 @@
 # Build output
 /bin/
 /dist/
+# Binaries built at the repository root, which is what `go build ./cmd/...`
+# produces when it is run without -o. One of these was committed by an `git add
+# -A` and reached main (13 MB), so the pattern is named rather than relying on
+# remembering to clean up.
+/portal
+/portalctl
+/portalctl-demo
 *.test
 *.out
 
