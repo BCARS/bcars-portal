@@ -255,6 +255,18 @@ func seedDemoMembers(d *sql.DB, actorUserID int64) error {
 		}
 	}
 
+	// The club's annual dues. Without a configured rate the payment grid offers
+	// no suggested amount and the printed worksheet says "$not set", so a
+	// reviewer sees neither feature working (bcars-portal-i95, and the symptom
+	// bcars-portal-2za describes). $20 is BCARS's actual rate.
+	if _, err := d.Exec(
+		`INSERT INTO dues_rates (year, amount_cents, note, set_by, set_at)
+		 VALUES (?, 2000, 'seed-demo: development rate', ?, ?)
+		 ON CONFLICT(year) DO NOTHING`,
+		time.Now().UTC().Year(), actorUserID, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return fmt.Errorf("seed dues rate: %w", err)
+	}
+
 	fmt.Printf("\n  %d synthetic members seeded (Bedford County, PA — all invented).\n", len(demoMembers))
 	for _, m := range demoMembers {
 		if m.LinkUserEmail != "" {

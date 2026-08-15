@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -399,4 +400,84 @@ func visibleProse(html string) string {
 		}
 	}
 	return out.String()
+}
+
+// The amount box's placeholder is read as "the usual amount". It used to be a
+// literal 40.00 in the template, which no configuration produced: a club whose
+// annual dues are $20 was shown $40 in every empty box on the grid and on the
+// add-a-row form (bcars-portal-i95).
+
+// setDuesRate configures the club's annual rate for a year, the way the rate
+// screen does.
+func setDuesRate(t *testing.T, e *testEnv, year int64, cents int64) {
+	t.Helper()
+	_, err := e.h.db.Exec(
+		`INSERT INTO dues_rates (year, amount_cents, set_by, set_at)
+		 VALUES (?, ?, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+		 ON CONFLICT(year) DO UPDATE SET amount_cents = excluded.amount_cents`,
+		year, cents)
+	require.NoError(t, err)
+}
+
+func TestTheAmountPlaceholderIsTheConfiguredDuesRate(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cents int64
+		want  string
+	}{
+		{"a twenty dollar club", 2000, "20.00"},
+		{"a thirty-five dollar club", 3500, "35.00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := setupHandlerWithRoles(t, "treasurer")
+			setDuesRate(t, e, int64(time.Now().UTC().Year()), tc.cents)
+			seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+			id := openBatch(t, e, "Meeting night")
+
+			// Searched, because the amount box only exists once the treasurer
+			// has found the member they are recording a payment for.
+			body := e.body(t, "GET", "/admin/treasury/batches/"+itoa(id)+"?member=Plain", "")
+
+			assert.Containsf(t, body, `placeholder="`+tc.want+`"`,
+				"the grid should suggest the configured rate")
+			assert.NotContains(t, body, `placeholder="40.00"`,
+				"the grid is still advertising a rate nobody configured")
+		})
+	}
+}
+
+func TestNoDuesRateMeansNoSuggestion(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+	id := openBatch(t, e, "Meeting night")
+
+	body := e.body(t, "GET", "/admin/treasury/batches/"+itoa(id)+"?member=Plain", "")
+
+	assert.Contains(t, body, `placeholder=""`,
+		"an unconfigured club should be asked for the amount, not given a made-up one")
+	assert.NotContains(t, body, `placeholder="40.00"`)
+}
+
+// TestTheSuggestionFollowsTheCoverageYear covers the December case: a batch made
+// up at the last meeting of the year collects next year's dues, and next year's
+// rate is the one the treasurer is taking.
+func TestTheSuggestionFollowsTheCoverageYear(t *testing.T) {
+	e := setupHandlerWithRoles(t, "treasurer")
+	seedMember(t, e, "Plain Member", "W3PLN", "2020-12-31")
+
+	thisYear := int64(time.Now().UTC().Year())
+	setDuesRate(t, e, thisYear, 2000)
+	setDuesRate(t, e, thisYear+1, 2500)
+
+	id := openBatch(t, e, "December meeting")
+	w := e.postForm(t, "/admin/treasury/batches/"+itoa(id)+"/defaults", url.Values{
+		"version":              {batchVersion(t, e, id)},
+		"label":                {"December meeting"},
+		"default_paid_through": {strconv.FormatInt(thisYear+1, 10) + "-12-31"},
+	})
+	require.Equal(t, http.StatusSeeOther, w.Code)
+
+	body := e.body(t, "GET", "/admin/treasury/batches/"+itoa(id)+"?member=Plain", "")
+	assert.Contains(t, body, `placeholder="25.00"`,
+		"a batch covering next year should suggest next year's rate")
 }

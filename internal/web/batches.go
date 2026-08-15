@@ -119,11 +119,17 @@ type totalsView struct {
 }
 
 type batchDetailData struct {
-	Batch      batchView
-	Version    int64
-	Totals     totalsView
-	Entries    []entryView
+	Batch   batchView
+	Version int64
+	Totals  totalsView
+	Entries []entryView
+	// Defaults.Amount and PaidThrough are the batch's own saved defaults, which
+	// prefill each new row as a VALUE. Suggested is the club's configured annual
+	// dues rate and is only ever a placeholder: the grid used to advertise a
+	// literal "40.00" that no configuration produced, so a club whose dues are
+	// $20 was shown $40 in every empty amount box (bcars-portal-i95).
 	Defaults   struct{ Amount, PaidThrough string }
+	Suggested  string
 	Search     string
 	Candidates []dues.Standing
 	CanPost    bool
@@ -217,6 +223,7 @@ func (h *Handler) batchDetailData(r *http.Request, p *authz.Principal, id int64)
 		data.Defaults.Amount = treasury.Cents(b.DefaultAmountCents)
 	}
 	data.Defaults.PaidThrough = b.DefaultPaidThrough
+	data.Suggested = h.suggestedDuesAmount(r, p, b.DefaultPaidThrough)
 
 	names := map[int64]string{}
 	for _, e := range b.Entries {
@@ -336,6 +343,39 @@ func (h *Handler) loadPostedReview(r *http.Request, p *authz.Principal, batchID 
 		data.Payments = append(data.Payments, view)
 	}
 	return nil
+}
+
+// suggestedDuesAmount is the club's configured annual dues rate, formatted for
+// the amount box's placeholder, or "" when no rate is configured.
+//
+// Empty is the right answer for an unconfigured club: a placeholder is read as
+// "the usual amount", and inventing one is how the grid came to advertise $40
+// to a club whose dues are $20 (bcars-portal-i95). Showing nothing asks the
+// treasurer to type what they actually took.
+//
+// The year is taken from the coverage the batch is prefilling, falling back to
+// today. A batch made up at a December meeting for next year's dues is covering
+// next year, and next year's rate is the one a treasurer is collecting.
+func (h *Handler) suggestedDuesAmount(r *http.Request, p *authz.Principal, defaultPaidThrough string) string {
+	years := []int64{int64(time.Now().UTC().Year())}
+	if len(defaultPaidThrough) >= 4 {
+		if y, err := strconv.ParseInt(defaultPaidThrough[:4], 10, 64); err == nil && y != years[0] {
+			years = append([]int64{y}, years...)
+		}
+	}
+
+	for _, year := range years {
+		rate, err := h.dues.GetRate(r.Context(), p, year)
+		if err != nil {
+			// A missing rate for one year is ordinary; a caller who may not
+			// read rates gets no suggestion at all, which is the same answer.
+			continue
+		}
+		if rate.AmountCents > 0 {
+			return treasury.Cents(rate.AmountCents)
+		}
+	}
+	return ""
 }
 
 // batchUpdateDefaults persists the values the grid prefills into a new row.
