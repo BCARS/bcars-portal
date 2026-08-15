@@ -301,6 +301,8 @@ func (h *Handler) AdminRoutes() []GuardedRoute {
 
 		{Pattern: "GET /admin/members/{id}/contacts/new", Capability: "contact_method.write", ResourceKind: "contact_method", handler: h.contactNew},
 		{Pattern: "POST /admin/members/{id}/contacts/new", Capability: "contact_method.write", AuditAction: "contact_method.create", ResourceKind: "contact_method", handler: h.contactCreate},
+		{Pattern: "GET /admin/members/{id}/address/new", Capability: "contact_method.write", ResourceKind: "contact_method", handler: h.addressNew},
+		{Pattern: "POST /admin/members/{id}/address/new", Capability: "contact_method.write", AuditAction: "contact_method.create", ResourceKind: "contact_method", handler: h.addressCreate},
 
 		{Pattern: "GET /admin/imports", Capability: "import.upload", ResourceKind: "import_run", handler: h.importList},
 		{Pattern: "POST /admin/imports/upload", Capability: "import.upload", AuditAction: "import.upload", ResourceKind: "import_run", handler: h.importUpload},
@@ -1122,6 +1124,142 @@ func (h *Handler) contactCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Contact+added", id), http.StatusSeeOther)
+}
+
+// --- Mailing address ---
+
+// addressForm is what the officer typed, kept so a rejected submission comes
+// back with their words rather than an empty form.
+type addressForm struct {
+	Label      string
+	Line1      string
+	Line2      string
+	City       string
+	State      string
+	PostalCode string
+	Country    string
+	IsPrimary  bool
+}
+
+type addressFormData struct {
+	PersonID   int64
+	PersonName string
+	Error      string
+	Submitted  addressForm
+}
+
+// defaultCountry is what the country box starts on.
+//
+// The club has had three out-of-country members ever and none currently, so an
+// empty box would be retyped for every member while being wrong for none
+// (bcars-portal-a9w). It is a default, not a constraint: the field is editable
+// and stored as typed.
+const defaultCountry = "United States"
+
+func (h *Handler) addressNew(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := h.principal(r)
+	id := parseID(r, "id")
+
+	person, err := h.members.GetPerson(ctx, p, id)
+	if err != nil {
+		h.log.Error("get person for address form failed", slog.Int64("id", id), slog.String("error", err.Error()))
+		h.renderError(w, r, http.StatusNotFound, "Member not found.")
+		return
+	}
+
+	h.renderPage(w, r, "address_form.html", http.StatusOK, addressFormData{
+		PersonID:   id,
+		PersonName: person.DisplayName,
+		Submitted:  addressForm{Label: "Home", Country: defaultCountry},
+	})
+}
+
+func (h *Handler) addressCreate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := h.principal(r)
+	id := parseID(r, "id")
+
+	if err := r.ParseForm(); err != nil {
+		h.renderError(w, r, http.StatusBadRequest, "Invalid form data. Please check your input and try again.")
+		return
+	}
+
+	form := addressForm{
+		Label:      strings.TrimSpace(r.FormValue("label")),
+		Line1:      strings.TrimSpace(r.FormValue("line1")),
+		Line2:      strings.TrimSpace(r.FormValue("line2")),
+		City:       strings.TrimSpace(r.FormValue("city")),
+		State:      strings.TrimSpace(r.FormValue("state")),
+		PostalCode: strings.TrimSpace(r.FormValue("postal_code")),
+		Country:    strings.TrimSpace(r.FormValue("country")),
+		IsPrimary:  r.FormValue("is_primary") == "1",
+	}
+
+	render := func(msg string) {
+		person, _ := h.members.GetPerson(ctx, p, id)
+		h.renderPage(w, r, "address_form.html", http.StatusUnprocessableEntity, addressFormData{
+			PersonID:   id,
+			PersonName: person.DisplayName,
+			Error:      msg,
+			Submitted:  form,
+		})
+	}
+
+	// Every part is optional, but an address that says nothing is not a record
+	// of anything. A country alone is the case this catches: it arrives
+	// pre-filled, so a form submitted untouched would otherwise store "United
+	// States" as somebody's address.
+	if form.Line1 == "" && form.Line2 == "" && form.City == "" &&
+		form.State == "" && form.PostalCode == "" {
+		render("Give at least a street, a city, a state or a postal code.")
+		return
+	}
+
+	// value_raw carries the address on one line, because that is what every
+	// existing surface renders and what search reads. The parts are the record;
+	// this is the reading of it.
+	oneLine := formatAddress(form)
+
+	_, err := h.members.CreateContactMethod(ctx, p, members.CreateContactMethodParams{
+		PersonID:         id,
+		Kind:             "postal",
+		Label:            form.Label,
+		ValueRaw:         oneLine,
+		ValueNorm:        oneLine,
+		IsPrimary:        form.IsPrimary,
+		PostalLine1:      form.Line1,
+		PostalLine2:      form.Line2,
+		PostalCity:       form.City,
+		PostalState:      form.State,
+		PostalPostalCode: form.PostalCode,
+		PostalCountry:    form.Country,
+	})
+	if err != nil {
+		h.log.Error("create address failed", slog.Int64("person_id", id), slog.String("error", err.Error()))
+		render(err.Error())
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Address+added", id), http.StatusSeeOther)
+}
+
+// formatAddress renders the parts as one line, skipping the ones left empty so
+// a member with a town and no street does not read as ", Bedford, PA".
+func formatAddress(f addressForm) string {
+	parts := make([]string, 0, 6)
+	for _, part := range []string{f.Line1, f.Line2, f.City, f.State, f.PostalCode} {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	// The country is omitted from the one-line reading when it is the default:
+	// a club roster of Pennsylvania members does not need every address to end
+	// in "United States".
+	if f.Country != "" && f.Country != defaultCountry {
+		parts = append(parts, f.Country)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // --- Imports ---

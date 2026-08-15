@@ -1,0 +1,78 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Add Address - {{.PersonName}} - BCARS Portal{{end}}
+
+{{define "content"}}
+<div class="breadcrumb">
+    <a href="/admin/members">Members</a>
+    <span>&rsaquo;</span> <a href="/admin/members/{{.PersonID}}">{{.PersonName}}</a>
+    <span>&rsaquo;</span> Add Address
+</div>
+
+{{/*
+    A postal address has its own form rather than extra boxes on the contact
+    form. Six address fields shown while someone adds a telephone number is the
+    ungoverned-control problem the correction form had (bcars-portal-245): the
+    page asks for things that do not apply to the answer being given.
+
+    Every field is optional, including the street: the club's export has members
+    with a town and no street, and a form that refused those could not record
+    what the club actually knows (bcars-portal-a9w).
+*/}}
+<div class="card" style="max-width: 600px;">
+    <h2>Add Mailing Address</h2>
+
+    {{if .Error}}
+    <div class="alert alert-error">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/admin/members/{{.PersonID}}/address/new">
+        <div class="form-group">
+            <label for="label">Label</label>
+            <input type="text" id="label" name="label" value="{{.Submitted.Label}}" placeholder="e.g. Home, Mailing">
+        </div>
+
+        <div class="form-group">
+            <label for="line1">Street address</label>
+            <input type="text" id="line1" name="line1" value="{{.Submitted.Line1}}" maxlength="200">
+        </div>
+
+        <div class="form-group">
+            <label for="line2">Address line 2</label>
+            <input type="text" id="line2" name="line2" value="{{.Submitted.Line2}}" maxlength="200"
+                   placeholder="Apartment, PO box, or similar">
+        </div>
+
+        <div class="form-group">
+            <label for="city">City</label>
+            <input type="text" id="city" name="city" value="{{.Submitted.City}}" maxlength="100">
+        </div>
+
+        <div class="form-group">
+            <label for="state">State or province</label>
+            <input type="text" id="state" name="state" value="{{.Submitted.State}}" maxlength="100">
+        </div>
+
+        <div class="form-group">
+            <label for="postal_code">Postal code</label>
+            <input type="text" id="postal_code" name="postal_code" value="{{.Submitted.PostalCode}}" maxlength="20">
+        </div>
+
+        <div class="form-group">
+            <label for="country">Country</label>
+            <input type="text" id="country" name="country" value="{{.Submitted.Country}}" maxlength="100">
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="is_primary" value="1"{{if .Submitted.IsPrimary}} checked{{end}}> Set as primary
+            </label>
+        </div>
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <a href="/admin/members/{{.PersonID}}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Add Address</button>
+        </div>
+    </form>
+</div>
+{{end}}
