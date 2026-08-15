@@ -214,6 +214,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// too, and they contain nothing a signed-out caller may not see.
 	mux.Handle("GET "+RouteStatic+"{path...}", staticHandler())
 
+	// The entry point. Without it the portal had no front door at all: "/"
+	// returned net/http's plaintext "404 page not found", so reaching the
+	// application meant knowing to type /login (bcars-portal-8yj).
+	mux.Handle("GET /", h.logged(h.root))
+
 	// Public: login/logout, recovery, invitation.
 	mux.Handle("GET "+RouteLogin, h.logged(h.loginPage))
 	mux.Handle("POST "+RouteLogin, h.logged(h.loginSubmit))
@@ -634,6 +639,31 @@ func (n navLinks) AnyOfficer() bool {
 // page reports club-wide counts and recent audit events. A caller who can reach
 // no officer surface and holds member self-service goes to the member landing
 // instead.
+// root is the portal's front door. It holds no content of its own: it sends the
+// caller where they belong, which is the sign-in page when nobody is signed in
+// and otherwise the same landing every other session-issuing surface uses.
+//
+// The redirect is deliberately not permanent. Where "/" leads depends on who is
+// asking, so a 301 cached by the browser would send a signed-in officer to the
+// sign-in page, or an anonymous visitor to a page they cannot see.
+func (h *Handler) root(w http.ResponseWriter, r *http.Request) {
+	// "GET /" is net/http's catch-all: it matches every path no other pattern
+	// claims. Only the root itself is a front door. Anything else that lands
+	// here is genuinely not found, and redirecting it would turn every typo and
+	// stale link into a silent bounce to the dashboard.
+	if r.URL.Path != "/" {
+		h.renderError(w, r, http.StatusNotFound, "That page does not exist.")
+		return
+	}
+
+	p := h.principalFromRequest(r)
+	if p == nil {
+		http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, landingFor(p), http.StatusSeeOther)
+}
+
 func landingFor(p *authz.Principal) string {
 	if navFor(p).AnyOfficer() {
 		return "/admin/"

@@ -67,5 +67,24 @@
     <main id="main" class="container">
         {{block "content" .Page}}{{end}}
     </main>
+
+{{/*
+    The treasury section's own navigation. Payment batches and renewal
+    worksheets were previously linked only from the dashboard, so clicking
+    Treasury led to a page with no way onward to either — reaching a worksheet
+    meant going back to the dashboard first (bcars-portal-8yj).
+
+    Defined here rather than repeated in each treasury page: a section nav
+    copied four times is a section nav that gains a link in three of them. The
+    argument is the active key, so the page a caller is on is marked rather than
+    offered again as a link to itself.
+*/}}
+{{define "treasury_nav"}}
+<nav class="nav-tabs" aria-label="Treasury sections">
+    <a href="/admin/treasury"{{if eq . "summary"}} class="active" aria-current="page"{{end}}>Dues standing</a>
+    <a href="/admin/treasury/batches"{{if eq . "batches"}} class="active" aria-current="page"{{end}}>Payment batches</a>
+    <a href="/admin/treasury/worksheets"{{if eq . "worksheets"}} class="active" aria-current="page"{{end}}>Renewal worksheets</a>
+</nav>
+{{end}}
 </body>
 </html>

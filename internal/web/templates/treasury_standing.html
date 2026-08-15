@@ -3,6 +3,8 @@
 {{define "title"}}{{.Label}} - BCARS Portal{{end}}
 
 {{define "content"}}
+{{template "treasury_nav" "summary"}}
+
 <h2 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 600;">{{.Label}}</h2>
 <p style="margin: 0 0 16px; color: var(--text-secondary);">Dues standing as of {{.AsOf}}.</p>
 
