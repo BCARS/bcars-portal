@@ -126,9 +126,26 @@ func TestWithheldAndAbsentAreIndistinguishable(t *testing.T) {
 
 	// Only the identifying cells may differ. Everything downstream of them --
 	// which is to say every contact cell -- must be byte-identical.
+	// The identifying cells, and the row's correction link, carry the member's
+	// name and call sign — the link in URL-encoded form. Both are already on
+	// the page in plain sight, so blanking them keeps this test comparing what
+	// it exists to compare: every CONTACT cell, byte for byte.
+	// forms lists every way a value can appear in the row: as text, as a query
+	// parameter in the correction link, and as that parameter after the
+	// template escaper has had it — html/template writes "+" as "&#43;" inside
+	// an attribute.
+	forms := func(v string) []string {
+		q := url.QueryEscape(v)
+		return []string{v, q, strings.ReplaceAll(q, "+", "&#43;")}
+	}
 	normalise := func(row, name, callSign string) string {
-		row = strings.ReplaceAll(row, name, "NAME")
-		return strings.ReplaceAll(row, callSign, "CALLSIGN")
+		for _, form := range forms(name) {
+			row = strings.ReplaceAll(row, form, "NAME")
+		}
+		for _, form := range forms(callSign) {
+			row = strings.ReplaceAll(row, form, "CALLSIGN")
+		}
+		return row
 	}
 	assert.Equal(t,
 		normalise(bobRow, "Bob Withholds", "W3BOB"),
