@@ -71,6 +71,12 @@ another's screens.
 | 15 | Directory print view | [`15-member-directory-print.png`](15-member-directory-print.png) |
 | 16 | Text size preference | [`16-member-text-size.png`](16-member-text-size.png) |
 
+### Signed out
+
+| | Screen | File |
+|---|---|---|
+| 17 | Not found, as a signed-out visitor sees it — no navigation, one way back | [`17-public-not-found.png`](17-public-not-found.png) |
+
 These show the functional MVP layouts. Visual design and polish are the subject
 of the `6pz` design beads, so treat them as evidence of what each screen *does*
 rather than of how it should finally look.

@@ -652,7 +652,7 @@ func (h *Handler) root(w http.ResponseWriter, r *http.Request) {
 	// here is genuinely not found, and redirecting it would turn every typo and
 	// stale link into a silent bounce to the dashboard.
 	if r.URL.Path != "/" {
-		h.renderError(w, r, http.StatusNotFound, "That page does not exist.")
+		h.notFound(w, r)
 		return
 	}
 
@@ -662,6 +662,39 @@ func (h *Handler) root(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, landingFor(p), http.StatusSeeOther)
+}
+
+// notFound answers a path nothing serves, in the shape the caller asked for.
+//
+// The catch-all this sits behind receives unmatched API paths too, and an API
+// client that gets an HTML page back cannot tell a missing endpoint from a
+// broken deployment. Real API errors are RFC 7807 problem documents, so an
+// unmatched one is too. This was worse than the plaintext 404 it replaced
+// until it was noticed (introduced with the front door in bcars-portal-8yj).
+func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
+	if wantsProblemJSON(r) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"type":   "about:blank",
+			"title":  "Not Found",
+			"status": http.StatusNotFound,
+			"detail": "No endpoint is served at " + r.URL.Path + ".",
+		})
+		return
+	}
+	h.renderError(w, r, http.StatusNotFound, "That page does not exist.")
+}
+
+// wantsProblemJSON reports whether the caller is an API client rather than a
+// browser: either it asked below the API prefix, or it said it wants JSON and
+// did not ask for HTML.
+func wantsProblemJSON(r *http.Request) bool {
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		return true
+	}
+	accept := r.Header.Get("Accept")
+	return strings.Contains(accept, "json") && !strings.Contains(accept, "text/html")
 }
 
 func landingFor(p *authz.Principal) string {
@@ -677,6 +710,17 @@ func landingFor(p *authz.Principal) string {
 func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := h.principalFromRequest(r)
+
+	// "GET /admin/" is a net/http prefix pattern, so every unclaimed path under
+	// it arrives here. Without this check /admin/nonexistent rendered the
+	// dashboard with a 200, which made a mistyped or renamed route look like it
+	// worked and quietly handed a real page to any script that navigated to a
+	// wrong path (bcars-portal-i4a).
+	if r.URL.Path != "/admin/" {
+		h.renderError(w, r, http.StatusNotFound, "That page does not exist.")
+		return
+	}
+
 	data := dashboardData{Nav: navFor(p)}
 
 	// A member who can reach no officer surface is sent to their own landing
@@ -1498,6 +1542,30 @@ type errorPageData struct {
 	Title     string
 	Message   string
 	RequestID string
+	// ActionHref and ActionLabel are the one way out this page offers. They are
+	// resolved from the caller rather than fixed in the template, which used to
+	// send everyone to /admin — a link a member is redirected away from and a
+	// signed-out visitor cannot use at all.
+	ActionHref  string
+	ActionLabel string
+}
+
+// errorChrome picks the error page whose navigation suits the caller, and the
+// destination its one button should offer.
+//
+// An error page dressed in the wrong chrome is its own small disclosure and a
+// larger confusion: before this, a signed-out visitor who mistyped a URL was
+// shown the officer header — Members, Treasury, Imports and a Sign Out button —
+// for an application they were not signed in to (bcars-portal-i4a).
+func errorChrome(p *authz.Principal) (template, href, label string) {
+	switch {
+	case p == nil:
+		return "error_public.html", RouteLogin, "Go to sign in"
+	case navFor(p).AnyOfficer():
+		return "error.html", "/admin/", "Go to the dashboard"
+	default:
+		return "error_member.html", RouteMemberHome, "Go to your records"
+	}
 }
 
 // renderError renders a user-friendly error page.
@@ -1527,12 +1595,15 @@ func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, code int, 
 		return
 	}
 
+	page, href, label := errorChrome(h.principalFromRequest(r))
 	data := errorPageData{
-		Code:    code,
-		Title:   title,
-		Message: message,
+		Code:        code,
+		Title:       title,
+		Message:     message,
+		ActionHref:  href,
+		ActionLabel: label,
 	}
-	h.renderPage(w, r, "error.html", code, data)
+	h.renderPage(w, r, page, code, data)
 }
 
 // renderDomainError maps common domain errors to appropriate HTTP responses.

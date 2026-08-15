@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - BCARS Portal</title>
+    {{template "tokens" .}}
+    <style>
+        /* Centred like the sign-in card: with no navigation on the page, an
+           error pinned to the top edge reads as a broken render rather than a
+           deliberate screen. */
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: var(--space-5); }
+        .error-page { margin: 0 auto; }
+    </style>
+</head>
+<body>
+    {{/*
+        Standalone on purpose: a caller who is not signed in gets no navigation,
+        because every link in the officer and member headers leads somewhere
+        they would only be refused. This page is its own document for the same
+        reason the sign-in and recovery pages are.
+    */}}
+    <main id="main" class="container">
+        {{template "error_body" .}}
+    </main>
+</body>
+</html>
