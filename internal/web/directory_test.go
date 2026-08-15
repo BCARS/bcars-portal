@@ -393,3 +393,89 @@ func TestDirectoryPagingKeepsTheReadersView(t *testing.T) {
 	require.Equal(t, http.StatusOK, second.Code)
 	assert.Contains(t, second.Body.String(), "Previous")
 }
+
+// Officers are members: the club elects them from its membership, and the
+// portal takes that as the rule (bcars-portal-j10). An officer refused the
+// directory is therefore not a member being told no — it is an account nobody
+// linked to a member record, and it must be told so. The bootstrap
+// administrator is the standing example, created before any person exists.
+
+// officerWithCap signs in an account holding the given roles and returns its
+// cookie. It links nothing, so the account is exactly the unlinked officer the
+// refusal below is about.
+func (e *memberTestEnv) unlinkedOfficerCookie(t *testing.T, role string) *http.Cookie {
+	t.Helper()
+	_, err := e.h.db.Exec(
+		`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at, reason)
+		 VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'test setup')`,
+		e.officerUserID, role, e.officerUserID)
+	require.NoError(t, err)
+	return e.officerCookie(t)
+}
+
+func TestAnUnlinkedOfficerIsToldWhyTheDirectoryRefusesThem(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie := e.unlinkedOfficerCookie(t, "administrator")
+
+	for _, path := range []string{RouteMemberDirectory, RouteMemberDirectoryPrint} {
+		w := e.getAs(t, path, cookie)
+
+		require.Equalf(t, http.StatusForbidden, w.Code,
+			"%s must refuse an unlinked officer as a refusal, not as a missing page", path)
+
+		body := w.Body.String()
+		assert.Containsf(t, body, "not linked to a member record",
+			"%s must say what is actually wrong", path)
+		assert.NotContainsf(t, body, "No such page",
+			"%s told an administrator the page does not exist", path)
+	}
+}
+
+// TestAnIneligibleMemberStillLearnsNothing is the other half, and the reason
+// the refusal above is conditional. An Associate holds directory.read and is
+// refused; telling them the directory exists and that other members read it is
+// more than they need to know (bcars-portal-4ux.12).
+func TestAnIneligibleMemberStillLearnsNothing(t *testing.T) {
+	e := setupMemberEnv(t)
+
+	assoc := e.dirPerson(t, "Bob Associate", "W3BOB", "associate")
+	_, err := e.access.GrantAccess(context.Background(),
+		&authz.Principal{UserID: e.officerUserID}, e.memberUserID,
+		memberaccess.GrantParams{PersonID: assoc, AccessKind: memberaccess.AccessSelf,
+			Reason: "test setup"}, time.Now().UTC())
+	require.NoError(t, err)
+	cookie := e.signInMember(t)
+
+	w := e.getAs(t, RouteMemberDirectory, cookie)
+	require.Equal(t, http.StatusNotFound, w.Code,
+		"an Associate must still be answered as though the page were not there")
+
+	body := w.Body.String()
+	assert.NotContains(t, body, "not linked to a member record",
+		"the officer explanation leaked to a member who may not read the directory")
+	assert.NotContains(t, body, "directory",
+		"the refusal must not disclose that a directory exists")
+}
+
+// TestALinkedOfficerReadsTheDirectory is what the seeded fixture now produces
+// and what the club actually needs: the officer who hands the roster out at a
+// meeting can open and print it.
+func TestALinkedOfficerReadsTheDirectory(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie := e.unlinkedOfficerCookie(t, "administrator")
+
+	// Link the officer's account to their own approved full membership, the
+	// way seed-demo and a real installation do.
+	personID := e.dirPerson(t, "Dana Whitfield", "W3XAB", "full")
+	_, err := e.access.GrantAccess(context.Background(),
+		&authz.Principal{UserID: e.officerUserID}, e.officerUserID,
+		memberaccess.GrantParams{PersonID: personID, AccessKind: memberaccess.AccessSelf,
+			Reason: "test setup"}, time.Now().UTC())
+	require.NoError(t, err)
+
+	for _, path := range []string{RouteMemberDirectory, RouteMemberDirectoryPrint} {
+		w := e.getAs(t, path, cookie)
+		assert.Equalf(t, http.StatusOK, w.Code,
+			"%s must open for an officer who is also a member", path)
+	}
+}

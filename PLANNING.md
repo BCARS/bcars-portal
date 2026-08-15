@@ -276,6 +276,19 @@ Administrative recovery and role changes are audited.
 
 ### Officers and Treasurer
 
+- **Officers are members.** The club elects its officers from its membership, so
+  an officer account is linked to a person record like any other member's, and
+  holds the same access to their own record. Decided 2026-08-15
+  (`bcars-portal-j10`) after an officer account, being unlinked, was refused the
+  member directory it exists to hand out at meetings.
+  - The bootstrap administrator is the deliberate exception. `portalctl
+    bootstrap-admin` runs against an empty database, before any person exists, so
+    that account cannot be linked and will be refused member-facing screens until
+    someone links it. Those refusals must say so rather than reporting a missing
+    page.
+  - This is a rule about who holds an account, not a new authorization
+    mechanism. Officer authority still comes from capabilities; membership
+    governs only the member-facing surfaces, which read a person record.
 - Officer and treasurer accounts use the same password and recovery flow as
   ordinary member accounts; their roles add capabilities to the same identity.
 - Password setup and recovery use a short-lived single-use email link or

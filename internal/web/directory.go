@@ -204,12 +204,28 @@ func (h *Handler) directoryPrint(w http.ResponseWriter, r *http.Request) {
 // the directory exists and that other members can read it is more than they
 // need to know, and the service's own doc comment requires callers to translate
 // the error this way.
+//
+// An officer is the exception, and the reason this function does not simply
+// return one answer. Officers are members — the club elects them from its
+// membership — so an officer refused here is not a member being told no, it is
+// an account nobody linked to a member record. The bootstrap administrator is
+// the standing example: it is created on an empty database, before any person
+// exists, so it CANNOT be linked. Telling that caller "no such page" about a
+// screen they are meant to hand out at meetings sends them looking for a
+// missing route instead of a missing link (bcars-portal-j10).
 func (h *Handler) loadDirectory(w http.ResponseWriter, r *http.Request, print bool) (directory.Page, directory.Query, bool) {
 	p := h.principalFromRequest(r)
 	q := directoryQueryFrom(r, print)
 
 	page, err := h.directory.List(r.Context(), p, q)
 	if errors.Is(err, directory.ErrNotEligible) {
+		if hasCap(p, "member.read") {
+			h.renderError(w, r, http.StatusForbidden,
+				"The directory lists members, and your sign-in is not linked to a member record yet, "+
+					"so it cannot tell which member you are. An administrator can link your account "+
+					"to your own record from that member's page. The full roster is under Members.")
+			return directory.Page{}, q, false
+		}
 		h.renderError(w, r, http.StatusNotFound, "No such page.")
 		return directory.Page{}, q, false
 	}

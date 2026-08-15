@@ -94,15 +94,24 @@ type demoMember struct {
 // state below if you edit this list.
 var demoMembers = []demoMember{
 	// Dues current, comfortably inside the club year.
+	// The administrator's own member record. Officers are members: the club
+	// elects them from its membership, and the portal takes that as the rule
+	// rather than an accident (bcars-portal-j10). Before this, every officer
+	// login was unlinked, so an administrator was refused the member directory
+	// — a screen they are meant to hand out at meetings — because eligibility
+	// counts grants to an approved full membership and they had none.
 	{DisplayName: "Dana Whitfield", SortName: "Whitfield, Dana", CallSign: "W3XAB",
 		BaseType: "full", Lifecycle: "approved",
 		UseClubYear: true, ClubYearOffset: 1,
-		Phone: "814-555-0118", Street: "412 Juniata Street"},
+		LinkUserEmail: "admin@" + demoEmailDomain,
+		Phone:         "814-555-0118", Street: "412 Juniata Street"},
 
+	// The treasurer's own member record, for the same reason.
 	{DisplayName: "Marcus Reed", SortName: "Reed, Marcus", CallSign: "K3XCD",
 		BaseType: "full", Lifecycle: "approved",
 		UseClubYear: true, ClubYearOffset: 0,
-		Phone: "814-555-0143", Street: "89 Richard Street"},
+		LinkUserEmail: "treasurer@" + demoEmailDomain,
+		Phone:         "814-555-0143", Street: "89 Richard Street"},
 
 	// Expiring inside the warning window. This one is deliberately NOT anchored
 	// to 31 December: with a fixed club year the expiring bucket is empty for
@@ -247,6 +256,11 @@ func seedDemoMembers(d *sql.DB, actorUserID int64) error {
 	}
 
 	fmt.Printf("\n  %d synthetic members seeded (Bedford County, PA — all invented).\n", len(demoMembers))
+	for _, m := range demoMembers {
+		if m.LinkUserEmail != "" {
+			fmt.Printf("  %-28s  is the member record for %s\n", m.LinkUserEmail, m.DisplayName)
+		}
+	}
 	return nil
 }
 
