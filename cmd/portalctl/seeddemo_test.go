@@ -67,12 +67,14 @@ func TestSeedDemoOnEmptyDatabase(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok, "seeded password for %s must verify with the server's pepper", u.Email)
 
-		var grants int
-		require.NoError(t, d.QueryRow(
-			`SELECT COUNT(*) FROM user_role_grants g JOIN users u ON u.id = g.user_id
-			 WHERE u.email = ? AND g.role_code = ? AND g.revoked_at IS NULL`,
-			u.Email, u.Role).Scan(&grants))
-		assert.Equal(t, 1, grants, "role %s must be granted to %s", u.Role, u.Email)
+		for _, role := range u.Roles {
+			var grants int
+			require.NoError(t, d.QueryRow(
+				`SELECT COUNT(*) FROM user_role_grants g JOIN users u ON u.id = g.user_id
+				 WHERE u.email = ? AND g.role_code = ? AND g.revoked_at IS NULL`,
+				u.Email, role).Scan(&grants))
+			assert.Equal(t, 1, grants, "role %s must be granted to %s", role, u.Email)
+		}
 	}
 
 	// Re-seeding a database that now holds only demo users is still allowed.

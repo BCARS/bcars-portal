@@ -3,6 +3,7 @@
 package main
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
@@ -234,4 +235,65 @@ func TestSeedDemoMembersMakesTheDashboardNonZero(t *testing.T) {
 		  WHERE m.lifecycle = 'approved' AND ce.paid_through < date('now')`).Scan(&expired))
 	assert.GreaterOrEqual(t, expired, 2,
 		"the worksheet needs more than one overdue member for its ordering to mean anything")
+}
+
+// TestSeededOfficersAreMembers pins the club's rule, decided 2026-08-15:
+// officers are elected from the membership, so an officer login belongs to a
+// person like any other member's does (bcars-portal-j10).
+//
+// It matters here rather than only in the web tests because the fixture is
+// what was wrong. Every officer login was unlinked, so reviewing the portal as
+// an administrator meant being refused the member directory — a screen an
+// officer is meant to hand out at meetings — with no indication why.
+//
+// The assertion runs per account rather than over a total: a count is satisfied
+// by the one member login that was always linked, which is exactly the state
+// this test exists to reject.
+func TestSeededOfficersAreMembers(t *testing.T) {
+	d := newMigratedDB(t)
+	t.Setenv(authn.PepperEnvVar, testPepper)
+	_ = captureStdout(t, func() { require.NoError(t, seedDemo(d)) })
+
+	for _, u := range demoUsers {
+		t.Run(u.Email, func(t *testing.T) {
+			var personID sql.NullInt64
+			require.NoError(t, d.QueryRow(
+				`SELECT person_id FROM users WHERE email = ?`, u.Email).Scan(&personID))
+			require.Truef(t, personID.Valid,
+				"%s holds the %s role but is not linked to a member record", u.Email, u.Role())
+
+			// The link alone is not enough: directory eligibility counts an
+			// active grant against an approved full membership, so an officer
+			// linked without one is still refused.
+			var eligible int
+			require.NoError(t, d.QueryRow(
+				`SELECT COUNT(*) FROM member_access_grants g
+				   JOIN memberships m ON m.person_id = g.person_id
+				  WHERE g.user_id = (SELECT id FROM users WHERE email = ?)
+				    AND g.revoked_at IS NULL
+				    AND m.lifecycle = 'approved' AND m.base_type = 'full'
+				    AND m.ended_on IS NULL`, u.Email).Scan(&eligible))
+			assert.NotZerof(t, eligible,
+				"%s is linked to a person but holds no grant to an approved full membership, "+
+					"so the member directory still refuses them", u.Email)
+
+			// Linkage is not sufficient either. The officer roles deliberately
+			// exclude the member capabilities, so a treasurer linked to a person
+			// record was still refused their own records and the directory
+			// until they also held the member role. The administrator hid this
+			// because that role is granted the whole catalog.
+			for _, capability := range []string{"profile.self.read", "directory.read"} {
+				var held int
+				require.NoError(t, d.QueryRow(
+					`SELECT COUNT(*) FROM user_role_grants g
+					   JOIN role_capabilities rc ON rc.role_code = g.role_code
+					  WHERE g.user_id = (SELECT id FROM users WHERE email = ?)
+					    AND g.revoked_at IS NULL
+					    AND rc.capability_code = ?`, u.Email, capability).Scan(&held))
+				assert.NotZerof(t, held,
+					"%s holds no role granting %s, so the member surfaces refuse them "+
+						"however their record is linked", u.Email, capability)
+			}
+		})
+	}
 }

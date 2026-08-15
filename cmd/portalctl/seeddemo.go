@@ -60,15 +60,31 @@ func runSeedDemo(args []string) error {
 type demoUser struct {
 	Email    string
 	Password string
-	Role     string
+	// Roles are additive, which is how an officer who is also a member is
+	// expressed: they hold their officer role AND the member role.
+	//
+	// This is not belt and braces. The officer roles deliberately exclude the
+	// member capabilities — a treasurer holds no profile.self.read and no
+	// directory.read (see 0009_member_requests_access.sql) — so a treasurer
+	// linked to a person record is still refused their own records and the
+	// directory until they also hold the member role. The administrator only
+	// appeared to work because that role is granted the entire catalog.
+	Roles []string
 }
+
+// Role returns the role this account exists to demonstrate, for output.
+func (u demoUser) Role() string { return u.Roles[0] }
 
 // demoUsers are the only accounts seed-demo may touch. Every address is under
 // the reserved .local suffix so it can never collide with a real member.
+//
+// Officers are members (PLANNING.md, "Officers and Treasurer"), so the officer
+// accounts hold the member role too and are linked to their own person records
+// in seeddemo_members.go.
 var demoUsers = []demoUser{
-	{Email: "admin@demo.local", Password: "admin", Role: "administrator"},
-	{Email: "treasurer@demo.local", Password: "treasurer", Role: "treasurer"},
-	{Email: "joe@demo.local", Password: "joe", Role: "member"},
+	{Email: "admin@demo.local", Password: "admin", Roles: []string{"administrator", "member"}},
+	{Email: "treasurer@demo.local", Password: "treasurer", Roles: []string{"treasurer", "member"}},
+	{Email: "joe@demo.local", Password: "joe", Roles: []string{"member"}},
 }
 
 // assertDemoDatabase refuses to seed a database that holds any account other
@@ -137,21 +153,24 @@ func seedDemo(d *sql.DB) error {
 			return fmt.Errorf("lookup user %s: %w", u.Email, err)
 		}
 
-		// Grant role (skip if already granted).
+		// Grant roles (skip any already granted).
 		now := time.Now().UTC().Format(time.RFC3339Nano)
-		_, err = d.Exec(
-			`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at, reason)
-			 SELECT ?, ?, ?, ?, 'seed-demo'
-			 WHERE NOT EXISTS (
-			   SELECT 1 FROM user_role_grants WHERE user_id = ? AND role_code = ? AND revoked_at IS NULL
-			 )`,
-			userID, u.Role, userID, now, userID, u.Role,
-		)
-		if err != nil {
-			return fmt.Errorf("grant role %s to %s: %w", u.Role, u.Email, err)
+		for _, role := range u.Roles {
+			_, err = d.Exec(
+				`INSERT INTO user_role_grants (user_id, role_code, granted_by, granted_at, reason)
+				 SELECT ?, ?, ?, ?, 'seed-demo'
+				 WHERE NOT EXISTS (
+				   SELECT 1 FROM user_role_grants WHERE user_id = ? AND role_code = ? AND revoked_at IS NULL
+				 )`,
+				userID, role, userID, now, userID, role,
+			)
+			if err != nil {
+				return fmt.Errorf("grant role %s to %s: %w", role, u.Email, err)
+			}
 		}
 
-		fmt.Printf("  %-28s  role=%-15s  password=%s\n", u.Email, u.Role, u.Password)
+		fmt.Printf("  %-28s  roles=%-22s  password=%s\n",
+			u.Email, strings.Join(u.Roles, ","), u.Password)
 	}
 
 	// Members are seeded against the administrator account, which is the
