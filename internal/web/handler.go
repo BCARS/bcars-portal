@@ -895,6 +895,9 @@ func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
 		SortName:    r.FormValue("sort_name"),
 		CallSign:    strings.ToUpper(strings.TrimSpace(r.FormValue("call_sign"))),
 		BaseType:    r.FormValue("base_type"),
+
+		LicenseClass:      r.FormValue("license_class"),
+		VolunteerExaminer: r.FormValue("volunteer_examiner") == "1",
 	})
 	if err != nil {
 		h.log.Error("create person failed", slog.String("error", err.Error()))
@@ -937,6 +940,9 @@ func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
 		SortName:    r.FormValue("sort_name"),
 		CallSign:    strings.ToUpper(strings.TrimSpace(r.FormValue("call_sign"))),
 		Version:     version,
+
+		LicenseClass:      r.FormValue("license_class"),
+		VolunteerExaminer: r.FormValue("volunteer_examiner") == "1",
 	})
 	if err != nil {
 		h.log.Error("update person failed", slog.Int64("id", id), slog.String("error", err.Error()))

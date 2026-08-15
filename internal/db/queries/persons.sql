@@ -20,13 +20,14 @@ LIMIT ? OFFSET ?;
 SELECT * FROM persons WHERE call_sign = ?;
 
 -- name: CreatePerson :one
-INSERT INTO persons (display_name, sort_name, call_sign)
-VALUES (?, ?, ?)
+INSERT INTO persons (display_name, sort_name, call_sign, license_class, volunteer_examiner)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdatePerson :one
 UPDATE persons
 SET display_name = ?, sort_name = ?, call_sign = ?,
+    license_class = ?, volunteer_examiner = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?

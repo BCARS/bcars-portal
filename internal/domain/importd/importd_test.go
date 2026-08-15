@@ -826,3 +826,96 @@ func TestCommitIsTransactional(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "committed", run.Status)
 }
+
+// The licence class and Volunteer Examiner status survive a commit
+// (bcars-portal-um9).
+//
+// They were parsed, normalized and staged before this, and then dropped at the
+// last step, so a club importing its real list lost both. Worth noting how that
+// went unnoticed: TestNormalizeVolunteerExaminer above covers the checkbox
+// parsing carefully and passed the entire time. It tests a piece; this tests
+// the property — that what the export says about a member is what the club ends
+// up holding.
+func TestCommitKeepsLicenceClassAndVolunteerExaminer(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\n" +
+		"Vera Examiner,KA1VE,12/31/2026,,Full,Extra,555-111-2222,vera@example.invalid,1 Main,Bedford,15522,PA,true\n" +
+		"Nora Novice,KA1NN,12/31/2026,,Full,Technician,555-111-3333,nora@example.invalid,2 Main,Bedford,15522,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "class-1")
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		callSign string
+		class    string
+		ve       int64
+	}{
+		{"KA1VE", "extra", 1},
+		{"KA1NN", "technician", 0},
+	} {
+		var class string
+		var ve int64
+		require.NoError(t, d.QueryRow(
+			`SELECT COALESCE(license_class, ''), volunteer_examiner FROM persons WHERE call_sign = ?`,
+			tc.callSign).Scan(&class, &ve))
+
+		assert.Equalf(t, tc.class, class, "%s should keep the licence class the export gave", tc.callSign)
+		assert.Equalf(t, tc.ve, ve, "%s should keep the Volunteer Examiner status the export gave", tc.callSign)
+	}
+}
+
+// TestCommitDoesNotWriteAnImportedClaimIntoVerifications keeps the two apart.
+// fcc_verifications records what an OFFICER checked — a source, a date, a
+// verifier. An imported value is what the old list said, and writing it there
+// would manufacture evidence nobody produced.
+func TestCommitDoesNotWriteAnImportedClaimIntoVerifications(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\n" +
+		"Vera Examiner,KA1VE,12/31/2026,,Full,Extra,555-111-2222,vera@example.invalid,1 Main,Bedford,15522,PA,true\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "class-2")
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+
+	var verifications int
+	require.NoError(t, d.QueryRow(`SELECT COUNT(*) FROM fcc_verifications`).Scan(&verifications))
+	assert.Zero(t, verifications,
+		"an imported licence class is a claim; a verification is something an officer performed")
+}
+
+// TestCommitUpdateKeepsWhatTheExportDoesNotSay: an absent column means the
+// export is silent, not that the club has been told the answer is no.
+func TestCommitUpdateKeepsWhatTheExportDoesNotSay(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	_, err := d.Exec(
+		`INSERT INTO persons (display_name, sort_name, call_sign, license_class, volunteer_examiner)
+		 VALUES ('Held Already', 'Already, Held', 'KA1KEP', 'extra', 1)`)
+	require.NoError(t, err)
+
+	// Same member, and the export carries no Class value for them.
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\n" +
+		"Held Already,KA1KEP,12/31/2026,,Full,,555-111-4444,held@example.invalid,4 Main,Bedford,15522,PA,true\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "class-3")
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+
+	var class string
+	require.NoError(t, d.QueryRow(
+		`SELECT COALESCE(license_class, '') FROM persons WHERE call_sign = 'KA1KEP'`).Scan(&class))
+	assert.Equal(t, "extra", class,
+		"an empty Class column must not erase a licence class the club already holds")
+}

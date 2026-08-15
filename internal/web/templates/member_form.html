@@ -38,6 +38,30 @@
         </div>
 
         {{if not .IsEdit}}
+        {{/*
+            The licence class and Volunteer Examiner status. Both come from the
+            club's Groups.io export, so an imported member arrives with them
+            already set; these boxes are how a member who never came from an
+            import gets them too (bcars-portal-um9).
+
+            This is what the club believes, not a verification. An officer who
+            has actually checked a licence records that separately.
+        */}}
+        <div class="form-group">
+            <label for="license_class">Licence class</label>
+            <input type="text" id="license_class" name="license_class"
+                   value="{{if .IsEdit}}{{.Person.LicenseClass.String}}{{end}}" maxlength="40"
+                   placeholder="e.g. technician, general, extra">
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="volunteer_examiner" value="1"
+                       {{if and .IsEdit (eq .Person.VolunteerExaminer 1)}}checked{{end}}>
+                Volunteer Examiner
+            </label>
+        </div>
+
         <div class="form-group">
             <label for="base_type">Membership Type</label>
             <select id="base_type" name="base_type" required>

@@ -87,6 +87,12 @@ type demoMember struct {
 
 	Phone  string
 	Street string
+
+	// LicenseClass and VolunteerExaminer are what the club believes, the way an
+	// import records them (bcars-portal-um9). A fixture where every member's
+	// licence reads "Not recorded" leaves that panel unreviewable.
+	LicenseClass      string
+	VolunteerExaminer bool
 }
 
 // demoMembers spans the states the officer and member UIs must render. Adding a
@@ -104,14 +110,16 @@ var demoMembers = []demoMember{
 		BaseType: "full", Lifecycle: "approved",
 		UseClubYear: true, ClubYearOffset: 1,
 		LinkUserEmail: "admin@" + demoEmailDomain,
-		Phone:         "814-555-0118", Street: "412 Juniata Street"},
+		Phone:         "814-555-0118", Street: "412 Juniata Street",
+		LicenseClass: "extra", VolunteerExaminer: true},
 
 	// The treasurer's own member record, for the same reason.
 	{DisplayName: "Marcus Reed", SortName: "Reed, Marcus", CallSign: "K3XCD",
 		BaseType: "full", Lifecycle: "approved",
 		UseClubYear: true, ClubYearOffset: 0,
 		LinkUserEmail: "treasurer@" + demoEmailDomain,
-		Phone:         "814-555-0143", Street: "89 Richard Street"},
+		Phone:         "814-555-0143", Street: "89 Richard Street",
+		LicenseClass: "general"},
 
 	// Expiring inside the warning window. This one is deliberately NOT anchored
 	// to 31 December: with a fixed club year the expiring bucket is empty for
@@ -192,7 +200,8 @@ var demoMembers = []demoMember{
 		BaseType: "full", Lifecycle: "approved",
 		UseClubYear: true, ClubYearOffset: 0,
 		LinkUserEmail: "joe@" + demoEmailDomain,
-		Phone:         "814-555-0113", Street: "18 North Richard Street"},
+		Phone:         "814-555-0113", Street: "18 North Richard Street",
+		LicenseClass: "technician"},
 }
 
 // demoEmailFor builds a synthetic address from a person's name.
@@ -328,8 +337,10 @@ func upsertDemoPerson(d *sql.DB, m demoMember) (int64, error) {
 	switch {
 	case err == sql.ErrNoRows:
 		res, err := d.Exec(
-			`INSERT INTO persons (display_name, sort_name, call_sign) VALUES (?, ?, ?)`,
-			m.DisplayName, m.SortName, callSign)
+			`INSERT INTO persons (display_name, sort_name, call_sign, license_class, volunteer_examiner)
+			 VALUES (?, ?, ?, ?, ?)`,
+			m.DisplayName, m.SortName, callSign,
+			nullIfEmptyString(m.LicenseClass), boolAsInt(m.VolunteerExaminer))
 		if err != nil {
 			return 0, fmt.Errorf("create person %s: %w", m.DisplayName, err)
 		}
@@ -339,8 +350,10 @@ func upsertDemoPerson(d *sql.DB, m demoMember) (int64, error) {
 	}
 
 	if _, err := d.Exec(
-		`UPDATE persons SET sort_name = ?, call_sign = ?, version = version + 1 WHERE id = ?`,
-		m.SortName, callSign, personID); err != nil {
+		`UPDATE persons SET sort_name = ?, call_sign = ?, license_class = ?, volunteer_examiner = ?,
+		        version = version + 1 WHERE id = ?`,
+		m.SortName, callSign, nullIfEmptyString(m.LicenseClass), boolAsInt(m.VolunteerExaminer),
+		personID); err != nil {
 		return 0, fmt.Errorf("update person %s: %w", m.DisplayName, err)
 	}
 	return personID, nil
@@ -491,4 +504,20 @@ func upsertDemoHonorary(d *sql.DB, membershipID, actorUserID int64, now time.Tim
 		return fmt.Errorf("create honorary grant: %w", err)
 	}
 	return nil
+}
+
+// nullIfEmptyString keeps an unrecorded licence class NULL rather than "".
+func nullIfEmptyString(v string) any {
+	if v == "" {
+		return nil
+	}
+	return v
+}
+
+// boolAsInt renders a flag the way SQLite stores one.
+func boolAsInt(v bool) int64 {
+	if v {
+		return 1
+	}
+	return 0
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/bcars/bcars-portal/internal/audit"
@@ -133,6 +134,12 @@ type CreatePersonParams struct {
 	SortName    string
 	CallSign    string
 	BaseType    string // membership base type: "full" or "associate"
+	// LicenseClass is what the club believes the member holds, lowercased.
+	// It is a claim, not a verification: fcc_verifications records what an
+	// officer checked, and this records what the club was told
+	// (bcars-portal-um9).
+	LicenseClass      string
+	VolunteerExaminer bool
 }
 
 // CreatePerson creates a person and a pending membership.
@@ -142,9 +149,11 @@ func (s *Service) CreatePerson(ctx context.Context, p *authz.Principal, params C
 	}
 
 	person, err := s.Q.CreatePerson(ctx, sqlcgen.CreatePersonParams{
-		DisplayName: params.DisplayName,
-		SortName:    params.SortName,
-		CallSign:    sqlNullString(params.CallSign),
+		DisplayName:       params.DisplayName,
+		SortName:          params.SortName,
+		CallSign:          sqlNullString(params.CallSign),
+		LicenseClass:      sqlNullString(strings.ToLower(strings.TrimSpace(params.LicenseClass))),
+		VolunteerExaminer: boolToInt(params.VolunteerExaminer),
 	})
 	if err != nil {
 		return sqlcgen.Person{}, fmt.Errorf("members: create person: %w", err)
@@ -166,11 +175,13 @@ func (s *Service) CreatePerson(ctx context.Context, p *authz.Principal, params C
 
 // UpdatePersonParams contains fields for updating person data.
 type UpdatePersonParams struct {
-	ID          int64
-	DisplayName string
-	SortName    string
-	CallSign    string
-	Version     int64
+	ID                int64
+	DisplayName       string
+	SortName          string
+	CallSign          string
+	LicenseClass      string
+	VolunteerExaminer bool
+	Version           int64
 }
 
 // UpdatePerson updates person fields with optimistic concurrency.
@@ -180,11 +191,13 @@ func (s *Service) UpdatePerson(ctx context.Context, p *authz.Principal, params U
 	}
 
 	person, err := s.Q.UpdatePerson(ctx, sqlcgen.UpdatePersonParams{
-		DisplayName: params.DisplayName,
-		SortName:    params.SortName,
-		CallSign:    sqlNullString(params.CallSign),
-		ID:          params.ID,
-		Version:     params.Version,
+		DisplayName:       params.DisplayName,
+		SortName:          params.SortName,
+		CallSign:          sqlNullString(params.CallSign),
+		LicenseClass:      sqlNullString(strings.ToLower(strings.TrimSpace(params.LicenseClass))),
+		VolunteerExaminer: boolToInt(params.VolunteerExaminer),
+		ID:                params.ID,
+		Version:           params.Version,
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1009,4 +1022,12 @@ func sqlNullString(s string) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: s, Valid: true}
+}
+
+// boolToInt renders a flag the way SQLite stores one.
+func boolToInt(v bool) int64 {
+	if v {
+		return 1
+	}
+	return 0
 }

@@ -518,10 +518,16 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 	baseType := baseTypeFor(norm, payload)
 
 	// Create person.
+	// The licence class and Volunteer Examiner status the export carries. Both
+	// were parsed, normalized and staged and then dropped here, so importing a
+	// club's real list lost what it had been keeping for years
+	// (bcars-portal-um9).
 	person, err := qtx.CreatePerson(ctx, sqlcgen.CreatePersonParams{
-		DisplayName: norm.DisplayName,
-		SortName:    norm.SortName,
-		CallSign:    sqlNullString(norm.CallSign),
+		DisplayName:       norm.DisplayName,
+		SortName:          norm.SortName,
+		CallSign:          sqlNullString(norm.CallSign),
+		LicenseClass:      sqlNullString(norm.LicenseClass),
+		VolunteerExaminer: boolToInt(norm.VolunteerExaminer),
 	})
 	if err != nil {
 		return fmt.Errorf("create person: %w", err)
@@ -665,14 +671,29 @@ func (s *Service) applyUpdateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		callSign = sqlNullString(norm.CallSign)
 		needsUpdate = true
 	}
+	// An absent column in the export means "the export does not say", not "the
+	// club has been told this is false". Only a value present in the import
+	// changes what is held.
+	licenseClass := person.LicenseClass
+	if norm.LicenseClass != "" && norm.LicenseClass != person.LicenseClass.String {
+		licenseClass = sqlNullString(norm.LicenseClass)
+		needsUpdate = true
+	}
+	volunteerExaminer := person.VolunteerExaminer
+	if boolToInt(norm.VolunteerExaminer) != person.VolunteerExaminer {
+		volunteerExaminer = boolToInt(norm.VolunteerExaminer)
+		needsUpdate = true
+	}
 
 	if needsUpdate {
 		_, err = qtx.UpdatePerson(ctx, sqlcgen.UpdatePersonParams{
-			DisplayName: displayName,
-			SortName:    sortName,
-			CallSign:    callSign,
-			ID:          person.ID,
-			Version:     person.Version,
+			DisplayName:       displayName,
+			SortName:          sortName,
+			CallSign:          callSign,
+			LicenseClass:      licenseClass,
+			VolunteerExaminer: volunteerExaminer,
+			ID:                person.ID,
+			Version:           person.Version,
 		})
 		if err != nil {
 			return fmt.Errorf("update person: %w", err)
