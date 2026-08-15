@@ -11,19 +11,27 @@ import (
 )
 
 const createPerson = `-- name: CreatePerson :one
-INSERT INTO persons (display_name, sort_name, call_sign)
-VALUES (?, ?, ?)
-RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
+INSERT INTO persons (display_name, sort_name, call_sign, license_class, volunteer_examiner)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version, license_class, volunteer_examiner
 `
 
 type CreatePersonParams struct {
-	DisplayName string
-	SortName    string
-	CallSign    sql.NullString
+	DisplayName       string
+	SortName          string
+	CallSign          sql.NullString
+	LicenseClass      sql.NullString
+	VolunteerExaminer int64
 }
 
 func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error) {
-	row := q.db.QueryRowContext(ctx, createPerson, arg.DisplayName, arg.SortName, arg.CallSign)
+	row := q.db.QueryRowContext(ctx, createPerson,
+		arg.DisplayName,
+		arg.SortName,
+		arg.CallSign,
+		arg.LicenseClass,
+		arg.VolunteerExaminer,
+	)
 	var i Person
 	err := row.Scan(
 		&i.ID,
@@ -35,6 +43,8 @@ func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) (Per
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.LicenseClass,
+		&i.VolunteerExaminer,
 	)
 	return i, err
 }
@@ -45,7 +55,7 @@ SET deactivated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version, license_class, volunteer_examiner
 `
 
 type DeactivatePersonParams struct {
@@ -66,12 +76,14 @@ func (q *Queries) DeactivatePerson(ctx context.Context, arg DeactivatePersonPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.LicenseClass,
+		&i.VolunteerExaminer,
 	)
 	return i, err
 }
 
 const getPerson = `-- name: GetPerson :one
-SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version FROM persons WHERE id = ?
+SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version, license_class, volunteer_examiner FROM persons WHERE id = ?
 `
 
 func (q *Queries) GetPerson(ctx context.Context, id int64) (Person, error) {
@@ -87,12 +99,14 @@ func (q *Queries) GetPerson(ctx context.Context, id int64) (Person, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.LicenseClass,
+		&i.VolunteerExaminer,
 	)
 	return i, err
 }
 
 const getPersonByCallSign = `-- name: GetPersonByCallSign :one
-SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version FROM persons WHERE call_sign = ?
+SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version, license_class, volunteer_examiner FROM persons WHERE call_sign = ?
 `
 
 func (q *Queries) GetPersonByCallSign(ctx context.Context, callSign sql.NullString) (Person, error) {
@@ -108,6 +122,8 @@ func (q *Queries) GetPersonByCallSign(ctx context.Context, callSign sql.NullStri
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.LicenseClass,
+		&i.VolunteerExaminer,
 	)
 	return i, err
 }
@@ -242,7 +258,7 @@ SET deceased_at = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version, license_class, volunteer_examiner
 `
 
 type MarkDeceasedParams struct {
@@ -264,6 +280,8 @@ func (q *Queries) MarkDeceased(ctx context.Context, arg MarkDeceasedParams) (Per
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.LicenseClass,
+		&i.VolunteerExaminer,
 	)
 	return i, err
 }
@@ -274,7 +292,7 @@ SET deactivated_at = NULL,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version, license_class, volunteer_examiner
 `
 
 type ReactivatePersonParams struct {
@@ -295,6 +313,8 @@ func (q *Queries) ReactivatePerson(ctx context.Context, arg ReactivatePersonPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.LicenseClass,
+		&i.VolunteerExaminer,
 	)
 	return i, err
 }
@@ -302,18 +322,21 @@ func (q *Queries) ReactivatePerson(ctx context.Context, arg ReactivatePersonPara
 const updatePerson = `-- name: UpdatePerson :one
 UPDATE persons
 SET display_name = ?, sort_name = ?, call_sign = ?,
+    license_class = ?, volunteer_examiner = ?,
     version = version + 1,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
-RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version
+RETURNING id, display_name, sort_name, call_sign, deceased_at, deactivated_at, created_at, updated_at, version, license_class, volunteer_examiner
 `
 
 type UpdatePersonParams struct {
-	DisplayName string
-	SortName    string
-	CallSign    sql.NullString
-	ID          int64
-	Version     int64
+	DisplayName       string
+	SortName          string
+	CallSign          sql.NullString
+	LicenseClass      sql.NullString
+	VolunteerExaminer int64
+	ID                int64
+	Version           int64
 }
 
 func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error) {
@@ -321,6 +344,8 @@ func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Per
 		arg.DisplayName,
 		arg.SortName,
 		arg.CallSign,
+		arg.LicenseClass,
+		arg.VolunteerExaminer,
 		arg.ID,
 		arg.Version,
 	)
@@ -335,6 +360,8 @@ func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Per
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.LicenseClass,
+		&i.VolunteerExaminer,
 	)
 	return i, err
 }

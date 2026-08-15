@@ -391,15 +391,17 @@ type PaymentCorrection struct {
 }
 
 type Person struct {
-	ID            int64
-	DisplayName   string
-	SortName      string
-	CallSign      sql.NullString
-	DeceasedAt    sql.NullString
-	DeactivatedAt sql.NullString
-	CreatedAt     string
-	UpdatedAt     string
-	Version       int64
+	ID                int64
+	DisplayName       string
+	SortName          string
+	CallSign          sql.NullString
+	DeceasedAt        sql.NullString
+	DeactivatedAt     sql.NullString
+	CreatedAt         string
+	UpdatedAt         string
+	Version           int64
+	LicenseClass      sql.NullString
+	VolunteerExaminer int64
 }
 
 type PersonRelationship struct {

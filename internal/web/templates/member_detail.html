@@ -49,6 +49,20 @@
     </div>
 
     <div class="card">
+        <h3>Licence</h3>
+        <div class="detail-row">
+            <div class="detail-label">Class</div>
+            <div class="detail-value">
+                {{if .Person.LicenseClass.Valid}}{{.Person.LicenseClass.String}}{{else}}<span style="color: var(--text-muted);">Not recorded</span>{{end}}
+            </div>
+        </div>
+        <div class="detail-row">
+            <div class="detail-label">Volunteer Examiner</div>
+            <div class="detail-value">{{if eq .Person.VolunteerExaminer 1}}Yes{{else}}No{{end}}</div>
+        </div>
+    </div>
+
+    <div class="card">
         <h3>Contact Methods</h3>
         {{if .ContactMethods}}
         {{range .ContactMethods}}
