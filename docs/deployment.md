@@ -95,7 +95,36 @@ you do supervise it with systemd, the invariants below are what the unit has to
 preserve: a dedicated non-root user, an `EnvironmentFile` at mode `0600` for the
 secrets, and migrations before the health check is expected to pass.
 
-### Container image
+### Publishing a release
+
+Pushing a version tag publishes the image to GitHub Container Registry
+(`.github/workflows/release.yml`):
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+That builds the image, **runs the container smoke test against it, and publishes
+only if that passes** — a published tag gets pulled, so it is exercised before it
+exists rather than after. It then pushes two names:
+
+| Name | Meaning |
+|------|---------|
+| `ghcr.io/bcars/bcars-portal:v1.2.3` | that release, permanently |
+| `ghcr.io/bcars/bcars-portal:latest` | whatever was tagged most recently |
+
+`latest` follows the tag. That is what makes the example Kubernetes manifest
+work out of the box, and it is worth knowing what it costs: a pod that restarts
+after a later release comes back on the newer image. Name an explicit version in
+any deployment where that matters.
+
+Tags are made by hand for now. The workflow reads the version from the tag, so
+adopting semantic release later changes how tags are produced and nothing about
+how they are published. The version in the tag is stamped into the binary:
+`portal -version` inside the published image reports it.
+
+### Building the image yourself
 
 ```bash
 make docker                    # builds bcars-portal:<version>

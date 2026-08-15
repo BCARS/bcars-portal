@@ -137,6 +137,12 @@ Kubernetes manifest, or the plain binaries on a host; see
 [deployment.md](../deployment.md#production-packaging). No service unit is
 shipped, so do not assume a particular process manager or install path.
 
+Container images are published to `ghcr.io/bcars/bcars-portal` when a version
+tag is pushed, and `:latest` follows the newest tag; see
+[deployment.md](../deployment.md#publishing-a-release). Rolling back means
+deploying the previous version tag, which is why an upgrade record must name the
+tag that was running before.
+
 Whichever shape is in use, an upgrade is: take an encrypted backup, run
 `portal -migrate-only` against the database with the **new** binary or image,
 then start the new version and confirm readiness. Migrations run before the new
