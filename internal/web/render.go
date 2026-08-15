@@ -87,6 +87,12 @@ type chrome struct {
 	// data-text-size attribute on <html>, so the size is settled by the markup
 	// the server sent rather than applied by a script after first paint.
 	TextSize string
+	// Nav says which surfaces this caller can reach, so a header can offer the
+	// way across to the other one and only to a caller who has one. It arrives
+	// here rather than on each view model for the same reason TextSize does:
+	// the alternative is a field added to sixty-odd structs, one of which would
+	// be forgotten.
+	Nav navLinks
 }
 
 // HasLayout reports whether a page embeds a base layout and is therefore
@@ -172,9 +178,9 @@ func (r *Renderer) Render(w io.Writer, name string, data any) error {
 // RenderPage renders a page, wrapping its view model in chrome when the page
 // embeds a base layout. Handlers call this rather than RenderHTTP so a page
 // cannot reach the layout without the values the layout dereferences.
-func (r *Renderer) RenderPage(w http.ResponseWriter, name string, status int, data any, textSize string) {
+func (r *Renderer) RenderPage(w http.ResponseWriter, name string, status int, data any, textSize string, nav navLinks) {
 	if r.layouts[name] {
-		data = chrome{Page: data, TextSize: textSize}
+		data = chrome{Page: data, TextSize: textSize, Nav: nav}
 	}
 	r.RenderHTTP(w, name, status, data)
 }

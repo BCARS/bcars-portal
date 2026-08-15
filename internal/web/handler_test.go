@@ -397,7 +397,7 @@ func TestTemplateRendering(t *testing.T) {
 	}
 	for _, tt := range tests {
 		w := httptest.NewRecorder()
-		r.RenderPage(w, tt.name, http.StatusOK, tt.data, textSizeBase)
+		r.RenderPage(w, tt.name, http.StatusOK, tt.data, textSizeBase, navLinks{})
 		assert.Equal(t, http.StatusOK, w.Code, "template %s should render", tt.name)
 	}
 }

@@ -444,3 +444,34 @@ func TestAnUnknownAPIPathAnswersAsAnAPI(t *testing.T) {
 	e.mux.ServeHTTP(w, req)
 	assert.Contains(t, w.Body.String(), "<!DOCTYPE html>", "a browser must still get the page")
 }
+
+// A person who is both officer and member used to be stranded in whichever
+// surface they landed on: the two headers had no link between them, so crossing
+// meant typing a URL (bcars-portal-62d). Officers are members, so this is the
+// ordinary case, not an edge one.
+
+func TestAnOfficerWhoIsAlsoAMemberCanCrossBetweenSurfaces(t *testing.T) {
+	e := setupHandlerWithRoles(t, "administrator")
+
+	officerPage := e.body(t, "GET", "/admin/", "")
+	assert.Contains(t, officerPage, `href="/member/"`,
+		"an officer with a member surface should be offered the way across")
+
+	// And back again: the member header carries the return link for a caller
+	// who can reach the officer surface.
+	memberPage := e.body(t, "GET", RouteMemberHome, "")
+	assert.Contains(t, memberPage, `href="/admin/"`,
+		"the member surface should offer the way back for someone who can use it")
+}
+
+// TestAMemberIsOfferedNoOfficerSurface is the half that keeps the separation
+// honest: the link is capability-gated, not decoration.
+func TestAMemberIsOfferedNoOfficerSurface(t *testing.T) {
+	e := setupDirectoryEligibleMember(t)
+
+	body := e.getAs(t, RouteMemberHome, e.testEnv.cookie).Body.String()
+
+	assert.NotContains(t, body, `href="/admin/"`,
+		"a member must not be shown a link to a surface that would refuse them")
+	assert.NotContains(t, body, "Officer view")
+}
