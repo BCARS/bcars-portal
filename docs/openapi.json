@@ -5564,7 +5564,7 @@
   "info": {
     "description": "BCARS Members Portal — officers-only administrative API (Phase 1).",
     "title": "BCARS Portal API",
-    "version": "v0.0.1-ws1"
+    "version": "v0.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
