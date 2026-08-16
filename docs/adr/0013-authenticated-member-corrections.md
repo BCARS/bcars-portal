@@ -1,6 +1,6 @@
 # ADR-0013: Member correction suggestions do not require target access
 
-- Status: Accepted
+- Status: Accepted, narrowed in part by ADR-0014
 - Date: 2026-08-10
 
 ## Context
