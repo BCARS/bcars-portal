@@ -2,10 +2,12 @@ package smoke
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,4 +136,93 @@ func TestDevelopmentSwitchesCannotBeSetByEnvironment(t *testing.T) {
 		"the server started without a pepper because an environment variable was honoured: %s", out)
 	assert.Contains(t, string(out), "pepper",
 		"the refusal must name the missing secret: %s", out)
+}
+
+// TestAPlaintextBaseURLIsDiagnosedAtStartup covers the failure that leaves
+// nothing to search for (bcars-portal-fmc.22).
+//
+// Session cookies are Secure, so a browser reaching the portal over plaintext
+// http accepts the session cookie and then refuses to send it back: a correct
+// password bounces straight to the sign-in page and no component logs anything,
+// because none of them did anything wrong. The warning is the only trace, which
+// is why it is asserted against the SHIPPED BINARY's own output rather than a
+// test logger — a warning that exists in a package and never reaches the
+// process would be exactly as useful as no warning.
+func TestAPlaintextBaseURLIsDiagnosedAtStartup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("smoke test builds binaries and starts a server; skipped in -short")
+	}
+
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		baseURL func(port int) string
+		expect  bool
+	}{
+		{
+			name:    "plaintext base URL, Secure cookies",
+			baseURL: func(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) },
+			expect:  true,
+		},
+		{
+			name:    "the development opt-out is quiet",
+			args:    []string{"-allow-insecure-cookies"},
+			baseURL: func(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) },
+			expect:  false,
+		},
+		{
+			name:    "an https base URL is quiet",
+			baseURL: func(int) string { return "https://portal.example.org" },
+			expect:  false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			dbPath := filepath.Join(tmp, "diagnostic.db")
+			port := freePort(t)
+
+			args := append([]string{
+				"-db", dbPath,
+				"-addr", fmt.Sprintf("127.0.0.1:%d", port),
+				"-base-url", tc.baseURL(port),
+				"-migrate",
+				"-log-level", "warn",
+			}, tc.args...)
+
+			cmd := exec.Command(binPath(t, "portal"), args...)
+			cmd.Env = append(os.Environ(), smokePepperEnv)
+			var logBuf syncBuffer
+			cmd.Stdout = &logBuf
+			cmd.Stderr = &logBuf
+			require.NoError(t, cmd.Start())
+			t.Cleanup(func() {
+				if cmd.Process != nil {
+					_ = cmd.Process.Kill()
+					_ = cmd.Wait()
+				}
+			})
+
+			// The warning is emitted during assembly, before the listener, so
+			// waiting for the port is waiting for a decision already made.
+			deadline := time.Now().Add(20 * time.Second)
+			for time.Now().Before(deadline) {
+				if strings.Contains(logBuf.String(), "session cookies are Secure") {
+					break
+				}
+				if _, err := net.DialTimeout("tcp",
+					fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond); err == nil {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			warned := strings.Contains(logBuf.String(), "session cookies are Secure")
+			assert.Equalf(t, tc.expect, warned, "server log said:\n%s", logBuf.String())
+
+			if tc.expect {
+				assert.Contains(t, logBuf.String(), "allow-insecure-cookies",
+					"the warning must name the remedy, or it only says something is wrong")
+			}
+		})
+	}
 }

@@ -52,6 +52,13 @@ func buildHandler(database *sql.DB, cfg assemblyConfig) (http.Handler, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
+	// Warned about here rather than in main, because this is the wiring both
+	// the binary and the production-assembly smoke test go through: a check
+	// main did on its own would be absent from the thing the smoke test runs.
+	if warning := cookieReachabilityWarning(cfg.BaseURL, cfg.AllowInsecureCookies); warning != "" {
+		cfg.Logger.Warn(warning, slog.String("base_url", cfg.BaseURL))
+	}
+
 	sessionStore := authn.NewSessionStore(database, authn.SessionConfig{
 		CookieName: cfg.CookieName,
 		TTL:        cfg.SessionTTL,
