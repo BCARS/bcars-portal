@@ -13,6 +13,7 @@ const getGrantedProfile = `-- name: GetGrantedProfile :one
 SELECT p.id                                        AS person_id,
        p.display_name                              AS display_name,
        COALESCE(p.call_sign, '')                   AS call_sign,
+       p.version                                   AS person_version,
        g.access_kind                               AS access_kind,
        CAST(COALESCE(m.id, 0) AS INTEGER)          AS membership_id,
        CAST(COALESCE(m.base_type, '') AS TEXT)     AS base_type,
@@ -32,18 +33,24 @@ type GetGrantedProfileParams struct {
 }
 
 type GetGrantedProfileRow struct {
-	PersonID     int64
-	DisplayName  string
-	CallSign     string
-	AccessKind   string
-	MembershipID int64
-	BaseType     string
-	Lifecycle    string
+	PersonID      int64
+	DisplayName   string
+	CallSign      string
+	PersonVersion int64
+	AccessKind    string
+	MembershipID  int64
+	BaseType      string
+	Lifecycle     string
 }
 
 // One record, by person, for this caller. Returns no row when the grant is
 // missing or revoked, which callers translate to the same 404 an unknown
 // person produces.
+// person_version travels with the record so a correction can say which version
+// of it the member was looking at. A contact method already carries its own
+// version for that reason; without this the name and call-sign fields of the
+// member's edit form had nothing to carry, and an approval weeks later could
+// silently overwrite an officer's more recent edit.
 func (q *Queries) GetGrantedProfile(ctx context.Context, arg GetGrantedProfileParams) (GetGrantedProfileRow, error) {
 	row := q.db.QueryRowContext(ctx, getGrantedProfile, arg.UserID, arg.PersonID)
 	var i GetGrantedProfileRow
@@ -51,6 +58,7 @@ func (q *Queries) GetGrantedProfile(ctx context.Context, arg GetGrantedProfilePa
 		&i.PersonID,
 		&i.DisplayName,
 		&i.CallSign,
+		&i.PersonVersion,
 		&i.AccessKind,
 		&i.MembershipID,
 		&i.BaseType,

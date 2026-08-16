@@ -3182,6 +3182,11 @@
           "person_id": {
             "format": "int64",
             "type": "integer"
+          },
+          "version": {
+            "description": "Send as target_version when proposing a correction to the name or call sign.",
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [

@@ -6,12 +6,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
-	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
 	"github.com/bcars/bcars-portal/internal/domain/memberprofile"
 )
 
@@ -199,16 +199,6 @@ func proposedValueLabel(operation, raw string) string {
 	}
 }
 
-// kindsFor picks the phrasing that fits who the record belongs to. A delegate
-// granted access on someone's behalf is not correcting their OWN name, and a
-// form that said so would be asking them to confirm something untrue.
-func kindsFor(accessKind string) []suggestionKind {
-	if accessKind == memberaccess.AccessSelf {
-		return ownKinds()
-	}
-	return otherKinds()
-}
-
 // --- Landing ---
 
 type memberHomeData struct {
@@ -393,12 +383,8 @@ type memberSuggestData struct {
 	// About names the record this concerns, and is empty for a suggestion
 	// about someone else. That emptiness is the whole difference between the
 	// two forms.
-	About    memberRecordRow
-	Contacts []memberContactRow
-	Kinds    []suggestionKind
-	// Targets is the own-record form's single question: name, call sign, each
-	// contact detail, or something else.
-	Targets []suggestTarget
+	About memberRecordRow
+	Kinds []suggestionKind
 	// Submitted holds what the member typed, so a rejected submission comes
 	// back with their words rather than an empty form.
 	Submitted memberSuggestForm
@@ -426,14 +412,6 @@ type memberSuggestForm struct {
 	ContactSelected string
 }
 
-func ownKinds() []suggestionKind {
-	out := make([]suggestionKind, 0, len(suggestionKinds))
-	for _, k := range suggestionKinds {
-		out = append(out, suggestionKind(k))
-	}
-	return out
-}
-
 func otherKinds() []suggestionKind {
 	out := make([]suggestionKind, 0, len(otherSuggestionKinds))
 	for _, k := range otherSuggestionKinds {
@@ -442,182 +420,147 @@ func otherKinds() []suggestionKind {
 	return out
 }
 
+// --- The member's edit form (bcars-portal-ssz.2, ADR-0014) ---
+
+// memberEditData is the record as an editable form.
+//
+// It carries the CURRENT value of every field, because the form is a mirror of
+// the record rather than a question about it. A member who has moved house
+// corrects the address and the telephone number in one submission; the single
+// question this replaced made that two submissions, or a note.
+type memberEditData struct {
+	About    memberRecordRow
+	Contacts []memberEditContact
+	// PersonVersion is the version of the record the member is looking at. It
+	// rides the form so review can tell whether an officer changed the name or
+	// call sign in the meantime.
+	PersonVersion int64
+	// Submitted holds what the member typed on a submission that came back with
+	// a problem, so their words survive the round trip.
+	Submitted memberEditForm
+	Error     string
+}
+
+// memberEditContact is one contact detail as an editable row.
+type memberEditContact struct {
+	ID int64
+	// Label is what the field is called on screen: "Email (Home)".
+	Label string
+	// Field is the form input name, "contact_12". Contacts are rows, not
+	// columns, so each needs its own name rather than an index a reordering
+	// could shift.
+	Field   string
+	Value   string
+	Version int64
+}
+
+// memberEditForm is what the member posted.
+type memberEditForm struct {
+	DisplayName string
+	CallSign    string
+	// Contacts maps a contact id to the value the member typed for it.
+	Contacts map[int64]string
+	Note     string
+}
+
 func (h *Handler) memberSuggestOwnForm(w http.ResponseWriter, r *http.Request) {
 	profile, ok := h.loadMemberRecord(w, r)
 	if !ok {
 		return
 	}
-	contacts := contactRows(profile)
-	kinds := kindsFor(profile.AccessKind)
-	h.renderPage(w, r, "member_suggest_own.html", http.StatusOK, memberSuggestData{
-		About:    memberRecordRowFrom(profile),
-		Contacts: contacts,
-		Kinds:    kinds,
-		Targets:  ownTargets(kinds, contacts),
-	})
+	h.renderPage(w, r, "member_suggest_own.html", http.StatusOK, memberEditDataFor(profile, memberEditForm{}, ""))
 }
 
-// suggestTarget is one thing a member can say is wrong about their own record.
-//
-// Contacts are entries in this list rather than a separate dropdown. The form
-// previously offered radios for what needs correcting AND an always-visible
-// "which contact detail?" chooser that no radio governed, so a member choosing
-// "My name is wrong" was shown a live list of their telephone numbers to pick
-// from (bcars-portal-245). One question with one answer is the whole fix.
-type suggestTarget struct {
-	// Value is what the radio posts. "contact:<id>" carries which detail; the
-	// rest are operation codes. The server maps it back, so a form cannot name
-	// an operation the review path has no adapter for.
-	Value      string
-	Label      string
-	ValueLabel string
-}
-
-// ownTargets lists the member's name, call sign, each contact detail they hold,
-// and the catch-all.
-func ownTargets(kinds []suggestionKind, contacts []memberContactRow) []suggestTarget {
-	out := make([]suggestTarget, 0, len(kinds)+len(contacts))
-	for _, k := range kinds {
-		if k.Operation == "contact_method.update" {
-			// Replaced below by one entry per contact the member actually has.
-			for _, c := range contacts {
-				label := c.Kind
-				if c.Label != "" {
-					label += " (" + c.Label + ")"
-				}
-				out = append(out, suggestTarget{
-					Value:      "contact:" + strconv.FormatInt(c.ID, 10),
-					Label:      "My " + label + " is wrong — " + c.Value,
-					ValueLabel: "What it should be",
-				})
-			}
-			continue
-		}
-		out = append(out, suggestTarget{Value: k.Operation, Label: k.Label, ValueLabel: k.ValueLabel})
+// memberEditDataFor builds the form, filled with the record's current values or
+// with what the member typed when a submission is being handed back.
+func memberEditDataFor(profile memberprofile.Profile, submitted memberEditForm, problem string) memberEditData {
+	data := memberEditData{
+		About:         memberRecordRowFrom(profile),
+		PersonVersion: profile.PersonVersion,
+		Error:         problem,
 	}
-	return out
-}
 
-// targetToKind maps a posted target back to an operation and, for a contact, to
-// which one. ok is false for anything not offered.
-func targetToKind(target string, contacts []memberContactRow) (kind string, contactID int64, ok bool) {
-	if id, found := strings.CutPrefix(target, "contact:"); found {
-		parsed, err := strconv.ParseInt(id, 10, 64)
-		if err != nil {
-			return "", 0, false
-		}
-		for _, c := range contacts {
-			if c.ID == parsed {
-				return "contact_method.update", parsed, true
-			}
-		}
-		// A contact the member does not hold is not theirs to correct here.
-		return "", 0, false
-	}
-	for _, k := range suggestionKinds {
-		if k.Operation == target && k.Operation != "contact_method.update" {
-			return target, 0, true
+	filled := problem != ""
+	data.Submitted = submitted
+	if !filled {
+		data.Submitted = memberEditForm{
+			DisplayName: profile.DisplayName,
+			CallSign:    profile.CallSign,
+			Contacts:    map[int64]string{},
+			Note:        "",
 		}
 	}
-	return "", 0, false
-}
 
-func contactRows(profile memberprofile.Profile) []memberContactRow {
-	out := make([]memberContactRow, 0, len(profile.Contacts))
 	for _, c := range profile.Contacts {
-		out = append(out, memberContactRow{
-			ID: c.ID, Kind: c.Kind, Label: c.Label, Value: c.Value,
-			Primary: c.Primary, SharedWith: c.SharedWith, Version: c.Version,
+		label := contactFieldLabel(c)
+		value := c.Value
+		if filled {
+			if typed, ok := submitted.Contacts[c.ID]; ok {
+				value = typed
+			}
+		}
+		data.Contacts = append(data.Contacts, memberEditContact{
+			ID:      c.ID,
+			Label:   label,
+			Field:   contactFieldName(c.ID),
+			Value:   value,
+			Version: c.Version,
 		})
 	}
-	return out
+	return data
 }
 
-// summaryFor is what an officer reads first when the member wrote no note.
+// contactFieldLabel names a contact detail the way its owner would: the kind,
+// and the label the club stored for it when there is one.
+func contactFieldLabel(c memberprofile.Contact) string {
+	label := strings.ToUpper(c.Kind[:1]) + c.Kind[1:]
+	if c.Label != "" {
+		label += " (" + c.Label + ")"
+	}
+	return label
+}
+
+func contactFieldName(id int64) string {
+	return "contact_" + strconv.FormatInt(id, 10)
+}
+
+// memberSuggestOwnSubmit turns the edited form into one request carrying one
+// item per field the member actually changed.
 //
-// Every change request carries a plain-language summary, because that is the
-// line an officer triages from (changerequests.ErrSummaryRequired). Requiring
-// the MEMBER to write it turned "my call sign should be W3XYZ" into a short
-// essay before the form would accept it, so the form composes one from the
-// choice they made instead of demanding prose (bcars-portal-245). A member who
-// does write a note keeps their own words.
-func summaryFor(form memberSuggestForm, targets []suggestTarget) string {
-	if form.Summary != "" {
-		return form.Summary
-	}
-	for _, t := range targets {
-		if t.Value != form.Target {
-			continue
-		}
-		// The target's own label already names the thing in the member's terms
-		// ("My phone (Mobile) is wrong — 814-555-0113"); the part before the
-		// dash is the subject, which is what an officer needs on one line.
-		subject := t.Label
-		if i := strings.Index(subject, " — "); i > 0 {
-			subject = subject[:i]
-		}
-		return subject + ". Should be: " + form.ProposedValue
-	}
-	return form.ProposedValue
-}
-
+// UNCHANGED FIELDS PRODUCE NO ITEM. The form posts every field, including the
+// ones the member never touched, so a submission that proposed all of them
+// would ask an officer to approve the record's own current values back onto
+// itself -- and, worse, would carry a stale version for fields nobody meant to
+// touch, turning an unrelated officer edit into a conflict.
+//
+// Nothing here writes canonical data. Every field becomes a proposal.
 func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request) {
 	profile, ok := h.loadMemberRecord(w, r)
 	if !ok {
 		return
 	}
 
-	ownContacts := contactRows(profile)
-	ownKindList := kindsFor(profile.AccessKind)
-	form, problem := readSuggestForm(r, true, ownContacts)
+	form, problem := readMemberEditForm(r, profile)
 	render := func(msg string) {
-		contacts := ownContacts
-		kinds := ownKindList
-		h.renderPage(w, r, "member_suggest_own.html", http.StatusBadRequest, memberSuggestData{
-			About:     memberRecordRowFrom(profile),
-			Contacts:  contacts,
-			Kinds:     kinds,
-			Targets:   ownTargets(kinds, contacts),
-			Submitted: form,
-			Error:     msg,
-		})
+		h.renderPage(w, r, "member_suggest_own.html", http.StatusBadRequest,
+			memberEditDataFor(profile, form, msg))
 	}
 	if problem != "" {
 		render(problem)
 		return
 	}
 
-	item := changerequests.ItemInput{
-		Operation:     form.Kind,
-		ProposedValue: form.ProposedValue,
-	}
-	switch form.Kind {
-	case "person.display_name.set", "person.call_sign.set":
-		item.TargetKind = "person"
-		item.TargetID = profile.PersonID
-	case "contact_method.update":
-		// The contact must be one this record actually holds. The form offers
-		// only those, and this re-checks it rather than trusting the posted id:
-		// a hand-built form could otherwise name a stranger's contact row.
-		contact, found := findContact(profile, form.ContactID)
-		if !found {
-			render("Choose which contact detail is wrong.")
+	items, changed := memberEditItems(profile, form)
+	if len(items) == 0 {
+		if form.Note == "" {
+			render("Change something on the form, or write a note telling the officers what needs to happen.")
 			return
 		}
-		item.TargetKind = "contact_method"
-		item.TargetID = contact.ID
-		item.TargetVersion = contact.Version
-		// The review path reads a contact value as "kind:value" so that an
-		// approval cannot turn an email into a phone, and so an added contact
-		// says what it is. The member never types that prefix -- the form asks
-		// which detail is wrong and the answer carries the kind -- so it is
-		// attached here, at the one place that knows both.
-		//
-		// Without this every contact correction a member sent was refused at
-		// approval time with "the proposed value is not valid", and the officer
-		// could not repair it: the review screen has no editable value
-		// (bcars-portal-b4d).
-		item.ProposedValue = contact.Kind + ":" + form.ProposedValue
+		// A note with no field edits is the "add my new work number" case: the
+		// form deliberately cannot create a contact row, so the member says so
+		// in words and an officer does it. It is still a reviewable item, so it
+		// still reaches the queue and still resolves.
+		items = []changerequests.ItemInput{{Operation: changerequests.OpOther}}
 	}
 
 	p := h.principalFromRequest(r)
@@ -625,10 +568,10 @@ func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request)
 		Source:          changerequests.SourceMember,
 		RequesterUserID: p.UserID,
 		TargetPersonID:  profile.PersonID,
-		Summary:         summaryFor(form, ownTargets(ownKindList, ownContacts)),
+		Summary:         memberEditSummary(form, changed),
 		SourceIPHash:    h.clientIP.HashRequest(r),
-		Items:           []changerequests.ItemInput{item},
-	}, idempotencyKeyFor(r), time.Now())
+		Items:           items,
+	}, memberEditIdempotencyKey(r, profile.PersonID), time.Now())
 	if err != nil {
 		h.log.Error("member suggestion", slog.String("error", err.Error()))
 		render(friendlyError(err))
@@ -639,13 +582,144 @@ func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request)
 		http.StatusSeeOther)
 }
 
-func findContact(profile memberprofile.Profile, id int64) (memberprofile.Contact, bool) {
+// readMemberEditForm reads only the fields the record actually has.
+//
+// A contact input is read by looking up each contact the RECORD holds, never by
+// walking the posted form: a hand-built POST naming contact_99 gets no more
+// attention than a browser sending nothing at all.
+func readMemberEditForm(r *http.Request, profile memberprofile.Profile) (memberEditForm, string) {
+	if err := r.ParseForm(); err != nil {
+		return memberEditForm{}, "Please check your entries and try again."
+	}
+
+	form := memberEditForm{
+		DisplayName: strings.TrimSpace(r.FormValue("display_name")),
+		CallSign:    strings.TrimSpace(r.FormValue("call_sign")),
+		Note:        strings.TrimSpace(r.FormValue("note")),
+		Contacts:    make(map[int64]string, len(profile.Contacts)),
+	}
 	for _, c := range profile.Contacts {
-		if c.ID == id {
-			return c, true
+		form.Contacts[c.ID] = strings.TrimSpace(r.FormValue(contactFieldName(c.ID)))
+	}
+
+	// A field cleared to blank is a REMOVAL, and this form does not do
+	// removals (ADR-0014.3). Refusing it here, in the member's terms, is the
+	// difference between "a name cannot be blank" and the domain's answer to
+	// the same mistake: "changerequests: this operation needs a proposed
+	// value: person.call_sign.set".
+	//
+	// A record that never had a call sign is not affected: blank stays blank
+	// and proposes nothing.
+	if form.DisplayName == "" {
+		return form, "A name cannot be blank. To have something removed, ask in the note instead."
+	}
+	if form.CallSign == "" && profile.CallSign != "" {
+		return form, "A call sign cannot be blank. To have it removed, ask in the note instead."
+	}
+	for _, c := range profile.Contacts {
+		if form.Contacts[c.ID] == "" {
+			return form, "A contact detail cannot be blank. To have one removed, ask in the note instead."
 		}
 	}
-	return memberprofile.Contact{}, false
+	return form, ""
+}
+
+// memberEditItems is the diff: one item per field whose value the member
+// changed, and changed names them for the summary line.
+func memberEditItems(profile memberprofile.Profile, form memberEditForm) (items []changerequests.ItemInput, changed []string) {
+	if form.DisplayName != profile.DisplayName {
+		items = append(items, changerequests.ItemInput{
+			Operation:     "person.display_name.set",
+			ProposedValue: form.DisplayName,
+			TargetKind:    "person",
+			TargetID:      profile.PersonID,
+			TargetVersion: profile.PersonVersion,
+		})
+		changed = append(changed, "name")
+	}
+	// A call sign is compared case-insensitively: it is stored upper-case, and
+	// a member who retypes their own in lower case has not proposed anything.
+	if !strings.EqualFold(form.CallSign, profile.CallSign) {
+		items = append(items, changerequests.ItemInput{
+			Operation:     "person.call_sign.set",
+			ProposedValue: form.CallSign,
+			TargetKind:    "person",
+			TargetID:      profile.PersonID,
+			TargetVersion: profile.PersonVersion,
+		})
+		changed = append(changed, "call sign")
+	}
+	for _, c := range profile.Contacts {
+		typed, ok := form.Contacts[c.ID]
+		if !ok || typed == c.Value {
+			continue
+		}
+		items = append(items, changerequests.ItemInput{
+			Operation: "contact_method.update",
+			// The review path reads a contact value as "kind:value" so an
+			// approval cannot turn an email into a phone (bcars-portal-b4d).
+			ProposedValue: c.Kind + ":" + typed,
+			TargetKind:    "contact_method",
+			TargetID:      c.ID,
+			TargetVersion: c.Version,
+		})
+		changed = append(changed, strings.ToLower(contactFieldLabel(c)))
+	}
+	return items, changed
+}
+
+// memberEditSummary is the line an officer triages from.
+//
+// The member's own words win when they wrote any. Otherwise the form composes
+// one naming what changed, because every request must carry a summary
+// (changerequests.ErrSummaryRequired) and requiring the member to write prose
+// before the form would accept a corrected digit is what bcars-portal-245
+// removed.
+func memberEditSummary(form memberEditForm, changed []string) string {
+	if form.Note != "" {
+		return form.Note
+	}
+	switch len(changed) {
+	case 0:
+		return "Asked the officers to look at this record."
+	case 1:
+		return "Correction to " + changed[0] + "."
+	default:
+		return "Corrections to " + strings.Join(changed[:len(changed)-1], ", ") +
+			" and " + changed[len(changed)-1] + "."
+	}
+}
+
+// memberEditIdempotencyKey derives the key a resubmitted form reuses, so the
+// ordinary browser back-and-send-again files one suggestion rather than two.
+//
+// It is the posted values, not a fresh value per request, for the same reason
+// the single-field form's key was: two identical submissions are one intent.
+func memberEditIdempotencyKey(r *http.Request, personID int64) string {
+	var b strings.Builder
+	b.WriteString("edit-")
+	b.WriteString(strconv.FormatInt(personID, 10))
+	for _, field := range []string{"display_name", "call_sign", "note"} {
+		b.WriteString("|")
+		b.WriteString(r.FormValue(field))
+	}
+	// Contact inputs are named per row, so they are collected and sorted rather
+	// than read from a fixed list: an unsorted map walk would produce a
+	// different key for the same form on the next request.
+	keys := make([]string, 0, len(r.PostForm))
+	for name := range r.PostForm {
+		if strings.HasPrefix(name, "contact_") {
+			keys = append(keys, name)
+		}
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		b.WriteString("|")
+		b.WriteString(name)
+		b.WriteString("=")
+		b.WriteString(r.FormValue(name))
+	}
+	return b.String()
 }
 
 func (h *Handler) memberSuggestOtherForm(w http.ResponseWriter, r *http.Request) {
@@ -675,7 +749,7 @@ func (h *Handler) memberSuggestOtherForm(w http.ResponseWriter, r *http.Request)
 // records are not consulted at all, so there is nothing here that could answer
 // "is this person a member".
 func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Request) {
-	form, problem := readSuggestForm(r, false, nil)
+	form, problem := readSuggestForm(r)
 	render := func(msg string, status int) {
 		h.renderPage(w, r, "member_suggest_other.html", status, memberSuggestData{
 			Kinds:     otherKinds(),
@@ -730,7 +804,13 @@ func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Reques
 // The operation is matched against the allowlist rather than passed through, so
 // a hand-built form cannot propose an operation the review path has no adapter
 // for — and cannot smuggle one the UI deliberately does not offer.
-func readSuggestForm(r *http.Request, own bool, contacts []memberContactRow) (memberSuggestForm, string) {
+// readSuggestForm reads the form about SOMEBODY ELSE.
+//
+// The own-record form is an edit form now (ADR-0014) and is read by
+// readMemberEditForm, so this no longer has an own-record branch and no longer
+// takes the caller's contacts: this form shows nobody's details and proposes
+// against nobody's row.
+func readSuggestForm(r *http.Request) (memberSuggestForm, string) {
 	if err := r.ParseForm(); err != nil {
 		return memberSuggestForm{}, "Please check your entries and try again."
 	}
@@ -745,26 +825,14 @@ func readSuggestForm(r *http.Request, own bool, contacts []memberContactRow) (me
 		Summary:       strings.TrimSpace(r.FormValue("summary")),
 	}
 
-	if own {
-		// The own-record form asks one question, and each answer carries which
-		// contact detail it means. Nothing is read from a separate chooser.
-		kind, contactID, ok := targetToKind(form.Target, contacts)
-		if !ok {
-			return form, "Choose what needs correcting."
+	known := false
+	for _, k := range suggestionKinds {
+		if k.Operation == form.Kind {
+			known = true
 		}
-		form.Kind = kind
-		form.ContactID = contactID
-		form.ContactSelected = strconv.FormatInt(contactID, 10)
-	} else {
-		known := false
-		for _, k := range suggestionKinds {
-			if k.Operation == form.Kind {
-				known = true
-			}
-		}
-		if !known {
-			return form, "Choose what needs correcting."
-		}
+	}
+	if !known {
+		return form, "Choose what needs correcting."
 	}
 
 	// The note is optional. It was required, which turned an ordinary

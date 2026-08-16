@@ -176,15 +176,15 @@ func TestMemberSuggestsCorrectionToOwnRecord(t *testing.T) {
 
 	form := e.getAs(t, fmt.Sprintf("/member/records/%d/suggest", personID), cookie)
 	require.Equal(t, http.StatusOK, form.Code)
-	assert.Contains(t, form.Body.String(), "An officer reviews every suggestion",
+	assert.Contains(t, form.Body.String(), "An officer checks every change",
 		"the form must say review is required before anything changes")
 	assert.Contains(t, form.Body.String(), "dale.old@example.test",
-		"the member picks which of their own details is wrong")
+		"the form holds what the club currently has, so the member edits it")
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {fmt.Sprintf("contact:%d", contactID)},
-		"proposed_value": {"dale.new@example.test"},
-		"summary":        {"My email address changed last month."},
+		"display_name":                       {"Dale Rutherford"},
+		fmt.Sprintf("contact_%d", contactID): {"dale.new@example.test"},
+		"note":                               {"My email address changed last month."},
 	}, cookie)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
 	assert.Contains(t, w.Header().Get("Location"), "/member/requests/")
@@ -208,6 +208,31 @@ func TestMemberSuggestsCorrectionToOwnRecord(t *testing.T) {
 	assert.NotZero(t, targetVersion, "the version the member saw travels with the proposal")
 }
 
+// A correction to the name carries the PERSON's version, the same way a contact
+// correction carries the contact row's. Without it an approval weeks later
+// silently overwrites whatever an officer changed in the meantime
+// (bcars-portal-ssz.2).
+func TestANameCorrectionCarriesTheVersionTheMemberSaw(t *testing.T) {
+	e := setupMemberEnv(t)
+	personID := e.grant(t, "Dale Rutherford")
+	cookie := e.signInMember(t)
+
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"display_name": {"Dale Rutherforde"},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var targetKind string
+	var targetVersion int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT target_kind, COALESCE(target_version, 0)
+		   FROM member_change_request_items ORDER BY id DESC LIMIT 1`).
+		Scan(&targetKind, &targetVersion))
+	assert.Equal(t, "person", targetKind)
+	assert.NotZero(t, targetVersion,
+		"a person correction must record which version of the record it was written against")
+}
+
 // TestMemberCannotAimOwnFormAtAnotherRecord stops the posted contact id from
 // being trusted. The form offers only the caller's own details; a hand-built
 // POST must not get further.
@@ -224,19 +249,29 @@ func TestMemberCannotAimOwnFormAtAnotherRecord(t *testing.T) {
 	strangerContact, err := res.LastInsertId()
 	require.NoError(t, err)
 
+	// A hand-built POST naming a contact row the record does not hold. The
+	// browser never sends this: the form has an input per contact the record
+	// actually has, and this is not one of them.
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {"contact_method.update"},
-		"contact_id":     {fmt.Sprint(strangerContact)},
-		"proposed_value": {"+15555550199"},
-		"summary":        {"Fix this number."},
+		"display_name": {"Dale Rutherford"},
+		fmt.Sprintf("contact_%d", strangerContact): {"+15555550199"},
+		"note": {"Fix this number."},
 	}, cookie)
-	assert.Equal(t, http.StatusBadRequest, w.Code,
-		"an item may only name a contact on the record the suggestion is about")
+	require.Equal(t, http.StatusSeeOther, w.Code,
+		"the note is a legitimate submission on its own: %s", w.Body.String())
 
+	// The stranger's row is untouched and unmentioned. The form reads only the
+	// contacts the RECORD holds, so an unknown field name is not refused, it is
+	// simply not a field -- and nothing can be stored pointing at it.
 	var items int
 	require.NoError(t, e.h.db.QueryRow(
 		`SELECT count(*) FROM member_change_request_items WHERE target_id = ?`, strangerContact).Scan(&items))
-	assert.Zero(t, items, "and nothing may be stored pointing at it")
+	assert.Zero(t, items, "nothing may be stored pointing at a contact the record does not hold")
+
+	var stored string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT value_raw FROM contact_methods WHERE id = ?`, strangerContact).Scan(&stored))
+	assert.Equal(t, "+15555550101", stored)
 }
 
 // TestAssociateUsesHintFormAndLearnsNothing is the Associate case: no grant to
@@ -308,9 +343,12 @@ func TestDelegateFormDoesNotClaimTheRecordIsTheirs(t *testing.T) {
 	cookie := e.signInMember(t)
 
 	body := e.getAs(t, fmt.Sprintf("/member/records/%d/suggest", personID), cookie).Body.String()
-	assert.Contains(t, body, "Their name is wrong",
-		"a delegate corrects someone else's record, and the form must say so")
-	assert.NotContains(t, body, "My name is wrong")
+	assert.Contains(t, body, "Correct the details for Marguerite Ashby",
+		"a delegate corrects someone else's record, and the form must name whose it is")
+	assert.NotContains(t, body, "your details",
+		"the form must not tell a delegate that somebody else's record is theirs")
+	assert.NotContains(t, body, "My name",
+		"nor phrase a field as the caller's own")
 }
 
 // TestMemberPagesSpeakToAPerson checks the small things a member actually
@@ -338,9 +376,9 @@ func TestMemberPagesSpeakToAPerson(t *testing.T) {
 		"'approved' is database vocabulary; the ordinary state needs no announcement")
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {"person.call_sign.set"},
-		"proposed_value": {"W3NEW"},
-		"summary":        {"My call sign changed."},
+		"display_name": {"Dale Rutherford"},
+		"call_sign":    {"W3NEW"},
+		"note":         {"My call sign changed."},
 	}, cookie)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
 
@@ -361,9 +399,8 @@ func TestMemberTracksAndWithdrawsOwnSuggestions(t *testing.T) {
 	theirs := e.grantTo(t, assocEmail, 0)
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {"person.display_name.set"},
-		"proposed_value": {"Dale Rutherforde"},
-		"summary":        {"My name is spelled wrong."},
+		"display_name": {"Dale Rutherforde"},
+		"note":         {"My name is spelled wrong."},
 	}, mine)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
 	detail := requestPath(t, w)
@@ -409,9 +446,8 @@ func TestWithdrawalPageHidesTheButtonOnceDecided(t *testing.T) {
 	cookie := e.signInMember(t)
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {"person.display_name.set"},
-		"proposed_value": {"Dale Rutherforde"},
-		"summary":        {"My name is spelled wrong."},
+		"display_name": {"Dale Rutherforde"},
+		"note":         {"My name is spelled wrong."},
 	}, cookie)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
 	detail := requestPath(t, w)
@@ -646,30 +682,36 @@ func (e *memberTestEnv) seedContact(t *testing.T, personID int64, kind, value st
 	return id
 }
 
-// The correction form asks one question (bcars-portal-245). It used to ask two
-// and only mean one: radios chose what needs correcting, and a separate
-// "which contact detail?" dropdown sat below them, always visible and governed
-// by nothing — so a member choosing "My name is wrong" was shown a live list of
-// their own telephone numbers to pick from.
-
-func TestTheCorrectionFormAsksOneQuestion(t *testing.T) {
+// The form is a mirror of the record, not a question about it
+// (bcars-portal-ssz.2, ADR-0014).
+//
+// bcars-portal-245 fixed a real defect here: radios chose WHICH field was wrong
+// beside a separate "which contact detail?" dropdown that no radio governed, so
+// a member choosing "My name is wrong" was shown a live list of their telephone
+// numbers to pick from. The fix then was to ask one question.
+//
+// An edit form asks none. Every field is on screen holding its own current
+// value, so there is nothing to choose between and nothing for a chooser to
+// disagree with. This asserts that property in the new shape: the ambiguity 245
+// removed must not come back as a field the member has to aim.
+func TestTheFormShowsEveryFieldHoldingItsOwnValue(t *testing.T) {
 	e := setupMemberEnv(t)
 	cookie, personID := e.eligibleMember(t)
 	contactID := e.seedContact(t, personID, "email", "dale.old@example.test")
 
 	body := e.getAs(t, fmt.Sprintf("/member/records/%d/suggest", personID), cookie).Body.String()
 
-	// Each contact detail is one of the choices, named and shown.
-	assert.Contains(t, body, fmt.Sprintf(`value="contact:%d"`, contactID),
-		"the member's email should be one of the things they can say is wrong")
-	assert.Contains(t, body, "dale.old@example.test",
-		"a choice about a contact detail should show which detail it means")
+	assert.Contains(t, body, fmt.Sprintf(`name="contact_%d"`, contactID),
+		"each contact detail is its own field")
+	assert.Contains(t, body, `value="dale.old@example.test"`,
+		"and it is filled with what the club currently holds, so a member edits rather than retypes")
+	assert.Contains(t, body, `name="display_name"`)
+	assert.Contains(t, body, `name="call_sign"`)
 
-	// And there is no second, ungoverned chooser.
+	assert.NotContains(t, body, `name="target"`,
+		"nothing asks the member which field they mean")
 	assert.NotContains(t, body, `name="contact_id"`,
-		"the contact dropdown should be gone; the radio carries which detail it is")
-	assert.NotContains(t, body, "only for a contact correction",
-		"a hint apologising for a control that does not apply means the control is wrong")
+		"and no separate chooser governs the contact fields")
 }
 
 func TestANoteIsOptionalOnAnOrdinaryCorrection(t *testing.T) {
@@ -677,15 +719,14 @@ func TestANoteIsOptionalOnAnOrdinaryCorrection(t *testing.T) {
 	cookie, personID := e.eligibleMember(t)
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {"person.call_sign.set"},
-		"proposed_value": {"W3NEW"},
-		// No summary: "my call sign should be W3NEW" says everything.
+		"display_name": {"Dale Rutherford"},
+		"call_sign":    {"W3NEW"},
+		// No note: "my call sign should be W3NEW" says everything.
 	}, cookie)
 
 	require.Equal(t, http.StatusSeeOther, w.Code,
-		"a correction with a value and no note must be accepted: %s", w.Body.String())
+		"a correction with a changed value and no note must be accepted: %s", w.Body.String())
 
-	// And it reaches an officer intact.
 	var value, summary string
 	require.NoError(t, e.h.db.QueryRow(
 		`SELECT i.proposed_value, COALESCE(r.summary, '')
@@ -693,26 +734,80 @@ func TestANoteIsOptionalOnAnOrdinaryCorrection(t *testing.T) {
 		   JOIN member_change_requests r ON r.id = i.request_id
 		  ORDER BY i.id DESC LIMIT 1`).Scan(&value, &summary))
 	assert.Equal(t, "W3NEW", value)
-	// The member wrote no note, so the form composed the line an officer
-	// triages from rather than storing a blank one.
-	assert.Contains(t, summary, "W3NEW")
-	assert.Contains(t, strings.ToLower(summary), "call sign")
+	assert.NotEmpty(t, summary,
+		"the member wrote no note, so the form composes the line an officer triages from")
+	assert.Contains(t, summary, "call sign",
+		"and that line names what changed")
 }
 
-// TestSomethingElseStillNeedsItsNote is the other half. The catch-all carries no
-// value, so the note is the whole of what an officer would read.
-func TestSomethingElseStillNeedsItsNote(t *testing.T) {
+// Only the fields the member actually changed become proposals. The form posts
+// all of them, and asking an officer to approve a record's current values back
+// onto itself is both noise and a stale-version conflict waiting to happen.
+func TestUnchangedFieldsProposeNothing(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, personID := e.eligibleMember(t)
+	contactID := e.seedContact(t, personID, "phone", "814-555-0113")
+
+	form := e.getAs(t, fmt.Sprintf("/member/records/%d/suggest", personID), cookie)
+	require.Equal(t, http.StatusOK, form.Code)
+
+	// Everything posted back as it stands, except one telephone number.
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"display_name":                       {"Dale Rutherford"},
+		"call_sign":                          {"W3DLR"},
+		fmt.Sprintf("contact_%d", contactID): {"814-555-0199"},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var operations []string
+	rows, err := e.h.db.Query(
+		`SELECT operation FROM member_change_request_items ORDER BY id`)
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var op string
+		require.NoError(t, rows.Scan(&op))
+		operations = append(operations, op)
+	}
+	require.NoError(t, rows.Err())
+
+	assert.Equal(t, []string{"contact_method.update"}, operations,
+		"only the telephone number changed, so it is the only thing proposed")
+}
+
+// A form that changes nothing and says nothing is refused. A form that changes
+// nothing but carries a note is the "please add my new work number" case, which
+// the form deliberately cannot do itself, so it travels as words instead.
+func TestAnEmptySubmissionIsRefusedButANoteAloneIsNot(t *testing.T) {
 	e := setupMemberEnv(t)
 	cookie, personID := e.eligibleMember(t)
 
-	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target": {changerequests.OpOther},
-	}, cookie)
-
+	unchanged := url.Values{"display_name": {"Dale Rutherford"}, "call_sign": {"W3DLR"}}
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), unchanged, cookie)
 	require.Equal(t, http.StatusBadRequest, w.Code,
-		"a submission saying nothing at all must be refused")
-	assert.Contains(t, w.Body.String(), "Tell the officers what should change",
+		"a submission proposing nothing and saying nothing must be refused")
+	assert.Contains(t, w.Body.String(), "Change something on the form",
 		"the refusal must name what to supply")
+
+	withNote := url.Values{
+		"display_name": {"Dale Rutherford"},
+		"call_sign":    {"W3DLR"},
+		"note":         {"Please add my new work number, 814-555-0177."},
+	}
+	w = e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), withNote, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code,
+		"a note with no field edits is a real request: %s", w.Body.String())
+
+	var operation, summary string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT i.operation, r.summary
+		   FROM member_change_request_items i
+		   JOIN member_change_requests r ON r.id = i.request_id
+		  ORDER BY i.id DESC LIMIT 1`).Scan(&operation, &summary))
+	assert.Equal(t, changerequests.OpOther, operation,
+		"it reaches the queue as a note rather than as a change nobody can apply")
+	assert.Contains(t, summary, "new work number",
+		"and the member's own words are what an officer reads")
 }
 
 // TestAMemberCannotCorrectSomeoneElsesContactThroughTheirOwnForm asserts the
@@ -731,15 +826,27 @@ func TestAMemberCannotCorrectSomeoneElsesContactThroughTheirOwnForm(t *testing.T
 	stranger := e.dirPerson(t, "Someone Else", "W3SEL", "full")
 	strangerContact := e.seedContact(t, stranger, "phone", "540-555-0199")
 
+	form := e.getAs(t, fmt.Sprintf("/member/records/%d/suggest", personID), cookie).Body.String()
+	assert.NotContains(t, form, "540-555-0199",
+		"the form shows only the contacts of the record it is for")
+	assert.NotContains(t, form, fmt.Sprintf(`name="contact_%d"`, strangerContact),
+		"and offers no field aimed at anyone else's")
+
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {fmt.Sprintf("contact:%d", strangerContact)},
-		"proposed_value": {"540-555-0000"},
+		"display_name": {"Dale Rutherford"},
+		"call_sign":    {"W3DLR"},
+		fmt.Sprintf("contact_%d", strangerContact): {"540-555-0000"},
 	}, cookie)
 
 	require.Equal(t, http.StatusBadRequest, w.Code,
-		"a contact the member does not hold is not theirs to correct here")
+		"the posted field names no contact this record holds, so the submission proposes nothing")
 	assert.NotContains(t, w.Body.String(), "540-555-0199",
-		"the refusal must not echo a stranger's telephone number back")
+		"and the refusal must not echo a stranger's telephone number back")
+
+	var items int
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT count(*) FROM member_change_request_items WHERE target_id = ?`, strangerContact).Scan(&items))
+	assert.Zero(t, items)
 }
 
 // seedPerson inserts a bare person for an officer-side form test.
@@ -871,9 +978,10 @@ func TestAMemberContactCorrectionCanBeApprovedByAnOfficer(t *testing.T) {
 	contactID := e.seedContact(t, personID, "phone", "814-555-0113")
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {fmt.Sprintf("contact:%d", contactID)},
-		"proposed_value": {"814-555-0199"},
-		"summary":        {"New mobile number since June."},
+		"display_name":                       {"Dale Rutherford"},
+		"call_sign":                          {"W3DLR"},
+		fmt.Sprintf("contact_%d", contactID): {"814-555-0199"},
+		"note":                               {"New mobile number since June."},
 	}, cookie)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
 
@@ -903,9 +1011,10 @@ func TestTheContactKindEncodingNeverReachesAScreen(t *testing.T) {
 	contactID := e.seedContact(t, personID, "phone", "814-555-0113")
 
 	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
-		"target":         {fmt.Sprintf("contact:%d", contactID)},
-		"proposed_value": {"814-555-0199"},
-		"summary":        {"New mobile number since June."},
+		"display_name":                       {"Dale Rutherford"},
+		"call_sign":                          {"W3DLR"},
+		fmt.Sprintf("contact_%d", contactID): {"814-555-0199"},
+		"note":                               {"New mobile number since June."},
 	}, cookie)
 	require.Equal(t, http.StatusSeeOther, w.Code)
 	detail := w.Header().Get("Location")
