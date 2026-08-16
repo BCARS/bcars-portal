@@ -172,6 +172,33 @@ func kindLabel(operation string) string {
 	}
 }
 
+// proposedValueLabel renders a proposed value the way a reader should see it.
+//
+// A contact value is stored as "kind:value" so the review path can tell an
+// email from a phone (parseContactValue in the changerequests service). That
+// encoding is for the applier, not for the member who typed the value or the
+// officer deciding on it, so it is unwound here: "phone:814-555-0199" reads as
+// "phone — 814-555-0199", and the kind is stated rather than dropped, because
+// which detail is being corrected is part of what the officer is approving.
+//
+// Anything that does not carry the encoding is shown as written. Older rows
+// predate it, and no display should turn into an error page over a value.
+func proposedValueLabel(operation, raw string) string {
+	if operation != "contact_method.update" && operation != "contact_method.create" {
+		return raw
+	}
+	kind, value, found := strings.Cut(raw, ":")
+	if !found || strings.TrimSpace(kind) == "" || strings.TrimSpace(value) == "" {
+		return raw
+	}
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "email", "phone", "postal":
+		return strings.TrimSpace(kind) + " — " + strings.TrimSpace(value)
+	default:
+		return raw
+	}
+}
+
 // kindsFor picks the phrasing that fits who the record belongs to. A delegate
 // granted access on someone's behalf is not correcting their OWN name, and a
 // form that said so would be asking them to confirm something untrue.
@@ -580,6 +607,17 @@ func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request)
 		item.TargetKind = "contact_method"
 		item.TargetID = contact.ID
 		item.TargetVersion = contact.Version
+		// The review path reads a contact value as "kind:value" so that an
+		// approval cannot turn an email into a phone, and so an added contact
+		// says what it is. The member never types that prefix -- the form asks
+		// which detail is wrong and the answer carries the kind -- so it is
+		// attached here, at the one place that knows both.
+		//
+		// Without this every contact correction a member sent was refused at
+		// approval time with "the proposed value is not valid", and the officer
+		// could not repair it: the review screen has no editable value
+		// (bcars-portal-b4d).
+		item.ProposedValue = contact.Kind + ":" + form.ProposedValue
 	}
 
 	p := h.principalFromRequest(r)
@@ -851,7 +889,7 @@ func (h *Handler) memberRequestDetail(w http.ResponseWriter, r *http.Request) {
 	for _, item := range req.Items {
 		data.Items = append(data.Items, memberRequestItemRow{
 			Label:          kindLabel(item.Operation),
-			ProposedValue:  item.ProposedValue,
+			ProposedValue:  proposedValueLabel(item.Operation, item.ProposedValue),
 			Status:         item.Status,
 			DecisionReason: item.DecisionReason,
 		})
