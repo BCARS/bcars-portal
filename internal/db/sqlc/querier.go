@@ -175,6 +175,11 @@ type Querier interface {
 	// One record, by person, for this caller. Returns no row when the grant is
 	// missing or revoked, which callers translate to the same 404 an unknown
 	// person produces.
+	// person_version travels with the record so a correction can say which version
+	// of it the member was looking at. A contact method already carries its own
+	// version for that reason; without this the name and call-sign fields of the
+	// member's edit form had nothing to carry, and an approval weeks later could
+	// silently overwrite an officer's more recent edit.
 	GetGrantedProfile(ctx context.Context, arg GetGrantedProfileParams) (GetGrantedProfileRow, error)
 	GetHonoraryGrant(ctx context.Context, id int64) (HonoraryGrant, error)
 	GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyRecord, error)

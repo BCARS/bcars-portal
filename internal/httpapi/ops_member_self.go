@@ -68,7 +68,12 @@ type MemberProfile struct {
 	PersonID    int64  `json:"person_id"`
 	DisplayName string `json:"display_name"`
 	CallSign    string `json:"call_sign,omitempty"`
-	AccessKind  string `json:"access_kind" enum:"self,delegate" doc:"Why you can see this record. Both kinds read the same fields."`
+	// Version is the record's version, for the same reason MemberContact
+	// carries one: a correction to the name or call sign should say which
+	// version it was written against, and until now a client had no way to
+	// learn it. Present on a single-record read; a list omits it.
+	Version    int64  `json:"version,omitempty" doc:"Send as target_version when proposing a correction to the name or call sign."`
+	AccessKind string `json:"access_kind" enum:"self,delegate" doc:"Why you can see this record. Both kinds read the same fields."`
 
 	BaseType  string `json:"base_type,omitempty" enum:"full,associate" doc:"The underlying membership right. An honorary waiver changes dues, never this."`
 	Lifecycle string `json:"lifecycle,omitempty"`
@@ -198,6 +203,7 @@ func memberProfileToResponse(p memberprofile.Profile) MemberProfile {
 		PersonID:    p.PersonID,
 		DisplayName: p.DisplayName,
 		CallSign:    p.CallSign,
+		Version:     p.PersonVersion,
 		AccessKind:  p.AccessKind,
 		BaseType:    p.BaseType,
 		Lifecycle:   p.Lifecycle,

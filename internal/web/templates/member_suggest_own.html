@@ -1,40 +1,50 @@
 {{template "member_layout.html" .}}
 
-{{define "title"}}Suggest a correction - BCARS Portal{{end}}
+{{define "title"}}Correct details for {{.About.DisplayName}} - BCARS Portal{{end}}
 
 {{define "content"}}
 <p class="breadcrumb"><a href="/member/records/{{.About.PersonID}}">Back to {{.About.DisplayName}}</a></p>
 
-<h2>Suggest a correction to {{.About.DisplayName}}</h2>
+<h2>Correct the details for {{.About.DisplayName}}</h2>
 
 {{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
 
 <div class="alert alert-info">
-    An officer reviews every suggestion before anything changes. Nothing on this
-    form edits the club's records directly.
+    Change anything that is wrong and send it. An officer checks every change
+    before the club's records are updated, so nothing on this form takes effect
+    on its own.
 </div>
 
 <form method="post" action="/member/records/{{.About.PersonID}}/suggest" class="card">
-    <fieldset>
-        <legend>What needs correcting?</legend>
-        {{range $i, $t := .Targets}}
-        <label>
-            <input type="radio" name="target" value="{{$t.Value}}"
-                   {{if eq $.Submitted.Target $t.Value}}checked{{else if and (eq $.Submitted.Target "") (eq $i 0)}}checked{{end}}>
-            {{$t.Label}}
-        </label>
-        {{end}}
-    </fieldset>
-
     <div class="form-group">
-        <label for="proposed_value">What it should be</label>
-        <input type="text" id="proposed_value" name="proposed_value" value="{{.Submitted.ProposedValue}}" maxlength="2000">
-        <p class="form-hint">Leave this empty only if you chose “Something else”, which is described in the note below.</p>
+        <label for="display_name">Name</label>
+        <input type="text" id="display_name" name="display_name"
+               value="{{.Submitted.DisplayName}}" maxlength="2000" autocomplete="off">
     </div>
 
     <div class="form-group">
-        <label for="summary">Anything else the officers should know (optional)</label>
-        <textarea id="summary" name="summary" rows="4" maxlength="4000">{{.Submitted.Summary}}</textarea>
+        <label for="call_sign">Call sign</label>
+        <input type="text" id="call_sign" name="call_sign"
+               value="{{.Submitted.CallSign}}" maxlength="2000" autocomplete="off"
+               class="callsign">
+    </div>
+
+    {{range .Contacts}}
+    <div class="form-group">
+        <label for="{{.Field}}">{{.Label}}</label>
+        <input type="text" id="{{.Field}}" name="{{.Field}}"
+               value="{{.Value}}" maxlength="2000" autocomplete="off">
+    </div>
+    {{end}}
+
+    <div class="form-group">
+        <label for="note">Anything else the officers should know (optional)</label>
+        <textarea id="note" name="note" rows="4" maxlength="4000"
+                  placeholder="For example: please remove the old work number, or add a new mobile: 814-555-0199">{{.Submitted.Note}}</textarea>
+        <p class="form-hint">
+            This form changes details the club already holds. To have one added
+            or removed, ask here and an officer will do it.
+        </p>
     </div>
 
     <button type="submit" class="btn btn-primary">Send to the officers</button>

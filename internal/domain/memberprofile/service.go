@@ -68,6 +68,16 @@ type Profile struct {
 	PersonID    int64
 	DisplayName string
 	CallSign    string
+	// PersonVersion is the version of the person row these values came from,
+	// so a correction to the name or call sign can say which version its
+	// sender was looking at -- the same thing Contact.Version does for a
+	// contact detail. Review refuses an item whose recorded version has moved,
+	// which is what stops a suggestion sent last week from quietly undoing an
+	// officer's edit from yesterday.
+	//
+	// Populated by Get. List leaves it zero, and zero means "no version
+	// recorded", which review reads as opting out of the check.
+	PersonVersion int64
 	// AccessKind is 'self' for the member's own record or 'delegate' when an
 	// officer granted them access on someone's behalf. It is provenance for the
 	// member, not authority: both kinds read exactly the same fields.
@@ -162,13 +172,14 @@ func (s *Service) Get(ctx context.Context, p *authz.Principal, personID int64) (
 	}
 
 	out := Profile{
-		PersonID:     row.PersonID,
-		DisplayName:  row.DisplayName,
-		CallSign:     row.CallSign,
-		AccessKind:   row.AccessKind,
-		MembershipID: row.MembershipID,
-		BaseType:     row.BaseType,
-		Lifecycle:    row.Lifecycle,
+		PersonID:      row.PersonID,
+		DisplayName:   row.DisplayName,
+		CallSign:      row.CallSign,
+		PersonVersion: row.PersonVersion,
+		AccessKind:    row.AccessKind,
+		MembershipID:  row.MembershipID,
+		BaseType:      row.BaseType,
+		Lifecycle:     row.Lifecycle,
 	}
 
 	standing, err := s.standingFor(ctx, p, row.PersonID, row.MembershipID)
