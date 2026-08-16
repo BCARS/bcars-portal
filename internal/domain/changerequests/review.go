@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -205,7 +206,11 @@ func (s *Service) DecideItem(
 				return err
 			}
 			decided, err = q.MarkChangeRequestItemApplied(ctx, sqlcgen.MarkChangeRequestItemAppliedParams{
-				AppliedAt:              sql.NullString{String: now.UTC().Format(isoTimestamp), Valid: true},
+				AppliedAt: sql.NullString{String: now.UTC().Format(isoTimestamp), Valid: true},
+				// Valid unconditionally: an operation that sets no value
+				// records the empty string, so that NULL keeps meaning
+				// "applied before the portal recorded this" and nothing else.
+				AppliedValue:           sql.NullString{String: result.Value, Valid: true},
 				AppliedResourceKind:    sql.NullString{String: result.Kind, Valid: true},
 				AppliedResourceID:      sql.NullInt64{Int64: result.ID, Valid: true},
 				AppliedResourceVersion: sql.NullInt64{Int64: result.Version, Valid: result.Version != 0},
@@ -265,6 +270,17 @@ type applyResult struct {
 	Kind    string
 	ID      int64
 	Version int64
+	// Value is what reached the record, in the form it was written -- an
+	// upper-cased call sign is recorded upper-cased, and a contact value is
+	// recorded without the "kind:" prefix the proposal carries. Since ADR-0014
+	// an officer may amend a value while approving it, so this is not always
+	// the proposed value, and the two are shown side by side.
+	//
+	// The operations that set no value at all -- making a contact primary,
+	// archiving one -- leave this empty, which is why the column records the
+	// empty string rather than NULL for them. NULL is reserved for items
+	// applied before any of this was recorded (migration 0016).
+	Value string
 }
 
 // applyItem calls the one domain adapter this operation maps to.
@@ -327,7 +343,7 @@ func (s *Service) applyItem(
 		if err != nil {
 			return applyResult{}, err
 		}
-		return applyResult{Kind: "contact_method_visibility_event", ID: ev.ID}, nil
+		return applyResult{Kind: "contact_method_visibility_event", ID: ev.ID, Value: audience}, nil
 	case AdapterSharingPreference:
 		participates, err := parseBool(item.ProposedValue)
 		if err != nil {
@@ -338,7 +354,11 @@ func (s *Service) applyItem(
 		if err != nil {
 			return applyResult{}, err
 		}
-		return applyResult{Kind: "acs_ares_sharing_event", ID: ev.ID}, nil
+		return applyResult{
+			Kind:  "acs_ares_sharing_event",
+			ID:    ev.ID,
+			Value: strconv.FormatBool(participates),
+		}, nil
 	}
 	return applyResult{}, ErrNoAdapter
 }
@@ -369,12 +389,16 @@ func (s *Service) applyPersonUpdate(ctx context.Context, q *sqlcgen.Queries, mem
 	if value == "" {
 		return applyResult{}, ErrBadValue
 	}
+	// applied records the field as it was written, which is not always what
+	// arrived: a call sign is upper-cased on the way in.
+	applied := value
 	switch item.Operation {
 	case "person.display_name.set":
 		params.DisplayName = value
 		params.SortName = strings.ToLower(value)
 	case "person.call_sign.set":
 		params.CallSign = strings.ToUpper(value)
+		applied = params.CallSign
 	default:
 		return applyResult{}, ErrNoAdapter
 	}
@@ -383,7 +407,7 @@ func (s *Service) applyPersonUpdate(ctx context.Context, q *sqlcgen.Queries, mem
 	if err != nil {
 		return applyResult{}, err
 	}
-	return applyResult{Kind: "person", ID: updated.ID, Version: updated.Version}, nil
+	return applyResult{Kind: "person", ID: updated.ID, Version: updated.Version, Value: applied}, nil
 }
 
 func (s *Service) applyContactCreate(ctx context.Context, q *sqlcgen.Queries, memberSvc *members.Service, p *authz.Principal, item Item) (applyResult, error) {
@@ -414,7 +438,7 @@ func (s *Service) applyContactCreate(ctx context.Context, q *sqlcgen.Queries, me
 	if err != nil {
 		return applyResult{}, err
 	}
-	return applyResult{Kind: "contact_method", ID: cm.ID, Version: cm.Version}, nil
+	return applyResult{Kind: "contact_method", ID: cm.ID, Version: cm.Version, Value: value}, nil
 }
 
 func (s *Service) applyContactUpdate(ctx context.Context, q *sqlcgen.Queries, memberSvc *members.Service, p *authz.Principal, item Item) (applyResult, error) {
@@ -452,7 +476,7 @@ func (s *Service) applyContactUpdate(ctx context.Context, q *sqlcgen.Queries, me
 	if err != nil {
 		return applyResult{}, err
 	}
-	return applyResult{Kind: "contact_method", ID: updated.ID, Version: updated.Version}, nil
+	return applyResult{Kind: "contact_method", ID: updated.ID, Version: updated.Version, Value: value}, nil
 }
 
 // checkTargetVersion enforces the conflict rule.

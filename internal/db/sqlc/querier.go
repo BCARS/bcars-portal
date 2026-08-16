@@ -446,6 +446,11 @@ type Querier interface {
 	// Stamps the resource an approved item produced. `applied_at IS NULL` in the
 	// WHERE clause is what makes apply exactly-once: a replay updates no row, and
 	// the caller returns the already-recorded outcome instead of applying twice.
+	//
+	// applied_value is what reached the record, which since ADR-0014 need not be
+	// what the member proposed. Always pass it, using the empty string for the
+	// operations that set no value: NULL in this column means "applied before the
+	// portal recorded this" and must keep meaning only that (migration 0016).
 	MarkChangeRequestItemApplied(ctx context.Context, arg MarkChangeRequestItemAppliedParams) (MemberChangeRequestItem, error)
 	MarkDeceased(ctx context.Context, arg MarkDeceasedParams) (Person, error)
 	MarkPaymentBatchAbandoned(ctx context.Context, arg MarkPaymentBatchAbandonedParams) (PaymentBatch, error)

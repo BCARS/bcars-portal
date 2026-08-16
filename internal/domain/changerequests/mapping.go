@@ -84,6 +84,8 @@ func itemsFrom(rows []sqlcgen.MemberChangeRequestItem) []Item {
 			AppliedResourceKind:    row.AppliedResourceKind.String,
 			AppliedResourceID:      row.AppliedResourceID.Int64,
 			AppliedResourceVersion: row.AppliedResourceVersion.Int64,
+			AppliedValue:           row.AppliedValue.String,
+			AppliedValueRecorded:   row.AppliedValue.Valid,
 			Version:                row.Version,
 		})
 	}

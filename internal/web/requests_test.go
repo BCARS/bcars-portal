@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -532,4 +533,104 @@ func TestUnknownRequestIsNotFound(t *testing.T) {
 	officer := e.officerCookie(t)
 	assert.Equal(t, http.StatusNotFound,
 		e.getAs(t, RouteAdminRequests+"/999999", officer).Code)
+}
+
+// What an officer applied is recorded next to what the member proposed
+// (bcars-portal-ssz.1, ADR-0014).
+//
+// Until ADR-0014 the two could not differ, so proposed_value answered "what
+// changed". Once a reviewer may amend a value while approving it, that stops
+// being true, and a record of the amendment has to exist before the screen
+// that makes them is built.
+func TestApplyingRecordsWhatReachedTheRecord(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+	req := e.seedOwnRequest(t, personID, "Dale Rutherford Jr")
+
+	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, req.ID, req.Items[0].ID)
+	w := e.post(t, path, url.Values{"decision": {"approved"}}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var applied sql.NullString
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT applied_value FROM member_change_request_items WHERE id = ?`,
+		req.Items[0].ID).Scan(&applied))
+	assert.True(t, applied.Valid,
+		"an item applied now records a value, so that NULL keeps meaning 'applied before this was recorded'")
+	assert.Equal(t, "Dale Rutherford Jr", applied.String,
+		"and the value recorded is the one that reached the record")
+
+	var proposed string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT proposed_value FROM member_change_request_items WHERE id = ?`,
+		req.Items[0].ID).Scan(&proposed))
+	assert.Equal(t, "Dale Rutherford Jr", proposed,
+		"and what the member asked for is not rewritten by applying it")
+}
+
+// A call sign is upper-cased on the way in, so the value that reached the
+// record is not the string the member typed. That difference is exactly what
+// this column exists to carry, and a test asserting the proposal back would
+// have passed while recording the wrong thing.
+func TestAppliedValueIsWhatWasWrittenNotWhatWasTyped(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+
+	req, err := e.h.changeRequests.Create(context.Background(),
+		&authz.Principal{UserID: e.memberUserID},
+		changerequests.CreateParams{
+			Source:          changerequests.SourceMember,
+			RequesterUserID: e.memberUserID,
+			TargetPersonID:  personID,
+			Summary:         "My call sign is wrong",
+			Items: []changerequests.ItemInput{{
+				Operation:     "person.call_sign.set",
+				ProposedValue: "w3xyz",
+				TargetKind:    "person",
+				TargetID:      personID,
+			}},
+		}, "callsign-case", time.Now().UTC())
+	require.NoError(t, err)
+
+	// A call sign is a sensitive operation, so its approval carries the
+	// verification note the policy requires.
+	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, req.ID, req.Items[0].ID)
+	w := e.post(t, path, url.Values{
+		"decision":          {"approved"},
+		"verification_note": {"Checked against the FCC record."},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var applied, callSign string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT applied_value FROM member_change_request_items WHERE id = ?`,
+		req.Items[0].ID).Scan(&applied))
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT call_sign FROM persons WHERE id = ?`, personID).Scan(&callSign))
+
+	assert.Equal(t, "W3XYZ", callSign)
+	assert.Equal(t, callSign, applied,
+		"the recorded value is the one on the record, not the lower-case string the member sent")
+}
+
+// A rejected item wrote nothing, so it has nothing to record.
+func TestARejectedItemRecordsNoAppliedValue(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+	req := e.seedOwnRequest(t, personID, "Dale Rutherford Jr")
+
+	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, req.ID, req.Items[0].ID)
+	w := e.post(t, path, url.Values{
+		"decision": {"rejected"}, "reason": {"Spoke to Dale; the record is right."},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var applied sql.NullString
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT applied_value FROM member_change_request_items WHERE id = ?`,
+		req.Items[0].ID).Scan(&applied))
+	assert.False(t, applied.Valid, "nothing was written, so nothing is recorded as written")
 }

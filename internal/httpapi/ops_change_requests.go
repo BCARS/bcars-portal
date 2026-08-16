@@ -46,6 +46,14 @@ type ChangeRequestItem struct {
 	AppliedResourceID      int64  `json:"applied_resource_id,omitempty"`
 	AppliedResourceVersion int64  `json:"applied_resource_version,omitempty"`
 
+	// AppliedValue is what reached the record, which need not be
+	// proposed_value: a reviewer may amend a value while approving it.
+	//
+	// A pointer, so that "applied, and the value was empty" and "applied
+	// before the portal recorded values" are different answers rather than
+	// both being an absent string. Absent means the second.
+	AppliedValue *string `json:"applied_value,omitempty" doc:"Value that reached the record. May differ from proposed_value where the reviewer amended it. Absent on items applied before this was recorded."`
+
 	Version int64 `json:"version"`
 }
 
@@ -464,8 +472,21 @@ func changeRequestItemToResponse(it changerequests.Item) ChangeRequestItem {
 		AppliedResourceKind:    it.AppliedResourceKind,
 		AppliedResourceID:      it.AppliedResourceID,
 		AppliedResourceVersion: it.AppliedResourceVersion,
+		AppliedValue:           appliedValueOrNil(it),
 		Version:                it.Version,
 	}
+}
+
+// appliedValueOrNil keeps "no value recorded" distinct from "the empty value".
+//
+// Items applied before migration 0016 have no recorded value. Rendering that as
+// an empty string would report that a reviewer blanked a field nobody touched.
+func appliedValueOrNil(it changerequests.Item) *string {
+	if !it.AppliedValueRecorded {
+		return nil
+	}
+	v := it.AppliedValue
+	return &v
 }
 
 func changeRequestToResponse(r changerequests.Request) ChangeRequest {
@@ -489,6 +510,7 @@ func changeRequestToResponse(r changerequests.Request) ChangeRequest {
 			AppliedResourceKind:    it.AppliedResourceKind,
 			AppliedResourceID:      it.AppliedResourceID,
 			AppliedResourceVersion: it.AppliedResourceVersion,
+			AppliedValue:           appliedValueOrNil(it),
 			Version:                it.Version,
 		})
 	}

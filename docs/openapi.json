@@ -754,6 +754,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "applied_value": {
+            "description": "Value that reached the record. May differ from proposed_value where the reviewer amended it. Absent on items applied before this was recorded.",
+            "type": "string"
+          },
           "decision_reason": {
             "type": "string"
           },
@@ -3287,6 +3291,10 @@
       "MemberRequestItem": {
         "additionalProperties": false,
         "properties": {
+          "applied_value": {
+            "description": "What the officer applied, when it differs from what you proposed. Only present for a record you may see.",
+            "type": "string"
+          },
           "decision_reason": {
             "description": "Why an officer rejected this item.",
             "type": "string"

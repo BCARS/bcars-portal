@@ -89,6 +89,16 @@ type MemberRequestItem struct {
 	ProposedValue  string `json:"proposed_value,omitempty"`
 	Status         string `json:"status" enum:"pending,approved,rejected,needs_verification"`
 	DecisionReason string `json:"decision_reason,omitempty" doc:"Why an officer rejected this item."`
+
+	// AppliedValue is what the officer actually wrote, which may differ from
+	// what this member proposed.
+	//
+	// Sent ONLY for a request about a record the caller may see. On a
+	// suggestion about somebody else it stays absent, for the same reason the
+	// canonical target link does: "your suggestion was applied as
+	// 814-555-0199" is a statement about a stranger's record, and submitting a
+	// suggestion has never been a way to read one.
+	AppliedValue *string `json:"applied_value,omitempty" doc:"What the officer applied, when it differs from what you proposed. Only present for a record you may see."`
 }
 
 // MemberRequest is one of the caller's own submissions.
@@ -241,14 +251,18 @@ func memberRequestToResponse(r changerequests.Request, visibleTarget bool) Membe
 		out.AboutPersonID = r.TargetPersonID
 	}
 	for _, it := range r.Items {
-		out.Items = append(out.Items, MemberRequestItem{
+		row := MemberRequestItem{
 			ID:             it.ID,
 			Ordinal:        it.Ordinal,
 			Operation:      it.Operation,
 			ProposedValue:  it.ProposedValue,
 			Status:         it.Status,
 			DecisionReason: it.DecisionReason,
-		})
+		}
+		if visibleTarget {
+			row.AppliedValue = appliedValueOrNil(it)
+		}
+		out.Items = append(out.Items, row)
 	}
 	return out
 }
