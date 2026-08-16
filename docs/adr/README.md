@@ -22,3 +22,4 @@ Rationale for a decision belongs here; day-to-day design detail belongs in
 | 0011 | Accepted | One generic confirmation control; recent-auth removed |
 | 0012 | Accepted | Members and officers share one password authentication model |
 | 0013 | Accepted | Member correction suggestions do not require target access |
+| 0014 | Accepted | Corrections are edits on records you can see, and notes about everyone else |
