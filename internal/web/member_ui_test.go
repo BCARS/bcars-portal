@@ -851,3 +851,78 @@ func TestTheContactFormNoLongerOffersPostal(t *testing.T) {
 	assert.NotContains(t, body, `value="postal"`,
 		"a postal address has its own form; offering it here records one unstructured line")
 }
+
+// The member surface and the officer surface have to agree on how a proposed
+// contact value is written down (bcars-portal-b4d).
+//
+// They did not. The member form stored the bare value the member typed; the
+// review path reads a contact value as "kind:value" and refused anything else,
+// so EVERY contact correction a member sent was rejected at approval time with
+// "the proposed value is not valid for this kind of change" -- and the officer
+// could not repair it, because the review screen has no editable value.
+//
+// Every existing test missed it because they seed the request through the
+// domain service and approve it there. The defect lived in the gap between the
+// two surfaces, so this test crosses that gap: it posts the member's form and
+// then posts the officer's decision, and asserts on the contact row.
+func TestAMemberContactCorrectionCanBeApprovedByAnOfficer(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, personID := e.eligibleMember(t)
+	contactID := e.seedContact(t, personID, "phone", "814-555-0113")
+
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"target":         {fmt.Sprintf("contact:%d", contactID)},
+		"proposed_value": {"814-555-0199"},
+		"summary":        {"New mobile number since June."},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var requestID, itemID int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT request_id, id FROM member_change_request_items ORDER BY id DESC LIMIT 1`).
+		Scan(&requestID, &itemID))
+
+	officer := e.officerCookie(t)
+	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, requestID, itemID)
+	w = e.post(t, path, url.Values{"decision": {"approved"}}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+	assert.NotContains(t, w.Header().Get("Location"), "error=",
+		"an officer approving a correction the portal's own form produced must not be refused")
+
+	var stored string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT value_raw FROM contact_methods WHERE id = ?`, contactID).Scan(&stored))
+	assert.Equal(t, "814-555-0199", stored,
+		"the approved value reaches the contact the member named")
+}
+
+// The encoding the applier needs is not something either reader should see.
+func TestTheContactKindEncodingNeverReachesAScreen(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie, personID := e.eligibleMember(t)
+	contactID := e.seedContact(t, personID, "phone", "814-555-0113")
+
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"target":         {fmt.Sprintf("contact:%d", contactID)},
+		"proposed_value": {"814-555-0199"},
+		"summary":        {"New mobile number since June."},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	detail := w.Header().Get("Location")
+
+	var requestID int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT request_id FROM member_change_request_items ORDER BY id DESC LIMIT 1`).Scan(&requestID))
+
+	member := e.getAs(t, detail, cookie).Body.String()
+	assert.Contains(t, member, "814-555-0199", "the member sees the value they proposed")
+	assert.NotContains(t, member, "phone:814-555-0199",
+		"and never the storage encoding")
+
+	officer := e.getAs(t, fmt.Sprintf("%s/%d", RouteAdminRequests, requestID), e.officerCookie(t)).Body.String()
+	assert.Contains(t, officer, "814-555-0199", "the officer sees the value under review")
+	assert.NotContains(t, officer, "phone:814-555-0199",
+		"and never the storage encoding")
+	assert.Contains(t, officer, "phone",
+		"but is told which kind of detail the correction is for")
+}

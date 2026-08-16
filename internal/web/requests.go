@@ -388,7 +388,7 @@ func officerItemRowFrom(item changerequests.Item) officerItemRow {
 		ID:               item.ID,
 		Label:            kindLabel(item.Operation),
 		Operation:        item.Operation,
-		ProposedValue:    item.ProposedValue,
+		ProposedValue:    proposedValueLabel(item.Operation, item.ProposedValue),
 		Status:           itemStatusLabel(item.Status),
 		Sensitive:        changerequests.EffectiveSensitivity(item.Operation, item.Sensitivity) == changerequests.SensitivitySensitive,
 		Decidable:        item.Status == changerequests.ItemPending,
