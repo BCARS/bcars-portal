@@ -3,10 +3,12 @@
 # This is a worked example, not a supported artifact: adjust the image
 # reference, storage class, ingress and host name for your cluster.
 #
-# The image below is :latest, which follows the most recent released tag. That
-# makes this file work as written, and means a pod restarting after a later
-# release comes back on the newer image. Name an explicit version
-# (ghcr.io/bcars/bcars-portal:v1.2.3) for a deployment where that matters. What it is
+# The image below is :latest, which follows the most recent released tag. A pod
+# restarting after a later release therefore comes back on the newer image; name
+# an explicit version (ghcr.io/bcars/bcars-portal:v1.2.3) where that matters.
+#
+# The package is private, so a pull secret is required. See the imagePullSecrets
+# stanza in the pod spec below, and docs/deployment.md "Pulling the image". What it is
 # meant to get right is the handful of things the portal is strict about, each
 # marked below — one writer, migrations before readiness, secrets from the
 # secret store, and a persistent volume for the database.
@@ -88,6 +90,20 @@ spec:
       labels:
         app: portal
     spec:
+      # The image is published to a PRIVATE package, so the cluster needs a
+      # credential to pull it. Create the secret before applying this file:
+      #
+      #   kubectl create secret docker-registry portal-ghcr \
+      #     --docker-server=ghcr.io \
+      #     --docker-username=<your-github-username> \
+      #     --docker-password="$GITHUB_TOKEN"
+      #
+      # A token with the read:packages scope is enough. Without this, both
+      # containers below fail with ImagePullBackOff, which reads like a missing
+      # image rather than a missing credential (bcars-portal-iva). Delete this
+      # stanza if the package is made public.
+      imagePullSecrets:
+        - name: portal-ghcr
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532

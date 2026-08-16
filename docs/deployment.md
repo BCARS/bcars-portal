@@ -114,15 +114,46 @@ exists rather than after. It then pushes two names:
 | `ghcr.io/bcars/bcars-portal:v1.2.3` | that release, permanently |
 | `ghcr.io/bcars/bcars-portal:latest` | whatever was tagged most recently |
 
-`latest` follows the tag. That is what makes the example Kubernetes manifest
-work out of the box, and it is worth knowing what it costs: a pod that restarts
-after a later release comes back on the newer image. Name an explicit version in
-any deployment where that matters.
+`latest` follows the tag, and it is worth knowing what that costs: a pod that
+restarts after a later release comes back on the newer image. Name an explicit
+version in any deployment where that matters.
 
 Tags are made by hand for now. The workflow reads the version from the tag, so
 adopting semantic release later changes how tags are produced and nothing about
 how they are published. The version in the tag is stamped into the binary:
 `portal -version` inside the published image reports it.
+
+### Pulling the image
+
+**The package is private.** A new GitHub Container Registry package is private
+by default, and this one is deliberately left that way: the image contains no
+secret — `scripts/docker-smoke.sh` asserts that on every build — but which
+software a club runs is not something a release should publish on its own.
+
+So a pull needs credentials. Create a token with the `read:packages` scope and
+sign in once per machine:
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-github-username> --password-stdin
+docker pull ghcr.io/bcars/bcars-portal:v1.2.3
+```
+
+A `docker pull` without that answers `unauthorized`, which reads like a missing
+image rather than a missing credential.
+
+Kubernetes needs the same credential as a pull secret. The example manifest
+references one named `portal-ghcr`:
+
+```bash
+kubectl create secret docker-registry portal-ghcr \
+  --docker-server=ghcr.io \
+  --docker-username=<your-github-username> \
+  --docker-password="$GITHUB_TOKEN"
+```
+
+Making the package public instead is a supported choice — it removes the login
+and the pull secret entirely. It is the repository owner's decision, not a
+default this project makes for them.
 
 ### Building the image yourself
 
