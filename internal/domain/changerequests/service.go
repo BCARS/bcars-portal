@@ -260,7 +260,20 @@ type Item struct {
 	AppliedResourceKind    string
 	AppliedResourceID      int64
 	AppliedResourceVersion int64
-	Version                int64
+	// AppliedValue is what reached the record, which since ADR-0014 need not
+	// be what the member proposed: an officer may amend a value while
+	// approving it. ProposedValue is never rewritten, so the two together say
+	// what was asked for and what was done.
+	//
+	// AppliedValueRecorded separates "applied, and the value was the empty
+	// string" from "applied before the portal recorded values at all"
+	// (migration 0016). A reader that treats an unrecorded value as an empty
+	// one reports that an officer blanked a field they never touched, so the
+	// flag is not optional decoration -- callers rendering an applied item
+	// must consult it.
+	AppliedValue         string
+	AppliedValueRecorded bool
+	Version              int64
 }
 
 // Request is one stored intake with its items.

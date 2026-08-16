@@ -56,11 +56,12 @@ type apiMemberRequest struct {
 	SubmittedAt   string `json:"submitted_at"`
 	WithdrawnAt   string `json:"withdrawn_at"`
 	Items         []struct {
-		ID             int64  `json:"id"`
-		Operation      string `json:"operation"`
-		ProposedValue  string `json:"proposed_value"`
-		Status         string `json:"status"`
-		DecisionReason string `json:"decision_reason"`
+		ID             int64   `json:"id"`
+		Operation      string  `json:"operation"`
+		ProposedValue  string  `json:"proposed_value"`
+		Status         string  `json:"status"`
+		DecisionReason string  `json:"decision_reason"`
+		AppliedValue   *string `json:"applied_value"`
 	} `json:"items"`
 	Version int64 `json:"version"`
 }
@@ -696,4 +697,85 @@ func TestMemberCapabilityIsSubmitMember(t *testing.T) {
 
 	_, known := authz.ByCode("change_request.submit.member")
 	assert.True(t, known, "the capability catalog must name the code the routes require")
+}
+
+// TestAMemberSeesWhatWasActuallyAppliedToTheirRecord is the payoff of recording
+// the applied value (bcars-portal-ssz.1, ADR-0014.6): a member reading their own
+// suggestion afterwards sees what they asked for AND what was done, which under
+// ADR-0014 may differ because the officer amended it.
+func TestAMemberSeesWhatWasActuallyAppliedToTheirRecord(t *testing.T) {
+	e := setupMemberSelfService(t)
+
+	resp := e.submit(t, e.full, "applied-1", fmt.Sprintf(`{
+		"about_person_id": %d,
+		"summary": "My name is spelled wrong.",
+		"items": [{"operation": "person.display_name.set", "proposed_value": "Dale Rutherforde",
+		           "target_kind": "person", "target_id": %d}]
+	}`, e.fullPersonID, e.fullPersonID))
+	require.Equal(t, http.StatusCreated, resp.StatusCode, readAll(t, resp))
+	mine := decodeMemberRequest(t, resp)
+	require.Len(t, mine.Items, 1)
+	require.Nil(t, mine.Items[0].AppliedValue,
+		"nothing is applied at submission, so there is nothing to report as applied")
+
+	resp = e.do(t, http.MethodPost,
+		fmt.Sprintf("/api/v1/change-requests/%d/items/%d/decision", mine.ID, mine.Items[0].ID),
+		e.officer, `{"decision":"approved"}`)
+	require.Equal(t, http.StatusOK, resp.StatusCode, readAll(t, resp))
+
+	resp = e.do(t, http.MethodGet,
+		fmt.Sprintf("/api/v1/me/change-requests/%d", mine.ID), e.full, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	read := decodeMemberRequest(t, resp)
+	require.Len(t, read.Items, 1)
+	require.NotNil(t, read.Items[0].AppliedValue,
+		"an applied item tells its submitter what was applied")
+	assert.Equal(t, "Dale Rutherforde", *read.Items[0].AppliedValue)
+	assert.Equal(t, "Dale Rutherforde", read.Items[0].ProposedValue,
+		"and what they asked for is still what they asked for")
+}
+
+// The applied value is a fact about a RECORD, so it follows the same rule as
+// the canonical target link: a caller who may no longer see the record is not
+// told what was written to it.
+//
+// Revocation is the reachable version of this. Submission cannot attach a
+// target the caller may not see, so the two only come apart after the fact --
+// and "your suggestion was applied as 814-555-0199" would otherwise keep
+// answering questions about a record the club has since closed to them.
+func TestTheAppliedValueStopsBeingSentOnceAccessIsRevoked(t *testing.T) {
+	e := setupMemberSelfService(t)
+
+	resp := e.submit(t, e.full, "applied-revoked-1", fmt.Sprintf(`{
+		"about_person_id": %d,
+		"summary": "My name is spelled wrong.",
+		"items": [{"operation": "person.display_name.set", "proposed_value": "Dale Rutherforde",
+		           "target_kind": "person", "target_id": %d}]
+	}`, e.fullPersonID, e.fullPersonID))
+	require.Equal(t, http.StatusCreated, resp.StatusCode, readAll(t, resp))
+	mine := decodeMemberRequest(t, resp)
+	require.Len(t, mine.Items, 1)
+
+	resp = e.do(t, http.MethodPost,
+		fmt.Sprintf("/api/v1/change-requests/%d/items/%d/decision", mine.ID, mine.Items[0].ID),
+		e.officer, `{"decision":"approved"}`)
+	require.Equal(t, http.StatusOK, resp.StatusCode, readAll(t, resp))
+
+	resp = revokeRecord(t, e.authzEnv, e.officer, e.fullUserID, e.fullPersonID, "left the household")
+	require.Equal(t, http.StatusOK, resp.StatusCode, readAll(t, resp))
+
+	resp = e.do(t, http.MethodGet,
+		fmt.Sprintf("/api/v1/me/change-requests/%d", mine.ID), e.full, "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	raw := readAll(t, resp)
+
+	var read apiMemberRequest
+	require.NoError(t, json.Unmarshal([]byte(raw), &read))
+	require.Len(t, read.Items, 1, "the request itself is still theirs to read")
+	assert.Nil(t, read.Items[0].AppliedValue,
+		"what was written to a record they may no longer see must stop being reported to them")
+	assert.NotContains(t, raw, "applied_value",
+		"omitted entirely rather than sent empty")
+	assert.Equal(t, "Dale Rutherforde", read.Items[0].ProposedValue,
+		"what they themselves asked for is still their own to read")
 }

@@ -103,7 +103,7 @@ INSERT INTO member_change_request_items (
     request_id, ordinal, operation, proposed_value,
     target_kind, target_id, target_version, sensitivity
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version
+RETURNING id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version, applied_value
 `
 
 type CreateChangeRequestItemParams struct {
@@ -151,6 +151,7 @@ func (q *Queries) CreateChangeRequestItem(ctx context.Context, arg CreateChangeR
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.AppliedValue,
 	)
 	return i, err
 }
@@ -167,7 +168,7 @@ UPDATE member_change_request_items
  WHERE id = ?6
    AND version = ?7
    AND status = 'pending'
-RETURNING id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version
+RETURNING id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version, applied_value
 `
 
 type DecideChangeRequestItemParams struct {
@@ -216,6 +217,7 @@ func (q *Queries) DecideChangeRequestItem(ctx context.Context, arg DecideChangeR
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.AppliedValue,
 	)
 	return i, err
 }
@@ -253,7 +255,7 @@ func (q *Queries) GetChangeRequest(ctx context.Context, id int64) (MemberChangeR
 }
 
 const getChangeRequestItem = `-- name: GetChangeRequestItem :one
-SELECT id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version FROM member_change_request_items WHERE id = ?
+SELECT id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version, applied_value FROM member_change_request_items WHERE id = ?
 `
 
 func (q *Queries) GetChangeRequestItem(ctx context.Context, id int64) (MemberChangeRequestItem, error) {
@@ -281,12 +283,13 @@ func (q *Queries) GetChangeRequestItem(ctx context.Context, id int64) (MemberCha
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.AppliedValue,
 	)
 	return i, err
 }
 
 const listChangeRequestItems = `-- name: ListChangeRequestItems :many
-SELECT id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version FROM member_change_request_items
+SELECT id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version, applied_value FROM member_change_request_items
  WHERE request_id = ?
  ORDER BY ordinal
 `
@@ -322,6 +325,7 @@ func (q *Queries) ListChangeRequestItems(ctx context.Context, requestID int64) (
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.AppliedValue,
 		); err != nil {
 			return nil, err
 		}
@@ -568,20 +572,22 @@ func (q *Queries) ListUntargetedChangeRequests(ctx context.Context, arg ListUnta
 const markChangeRequestItemApplied = `-- name: MarkChangeRequestItemApplied :one
 UPDATE member_change_request_items
    SET applied_at = ?1,
-       applied_resource_kind = ?2,
-       applied_resource_id = ?3,
-       applied_resource_version = ?4,
+       applied_value = ?2,
+       applied_resource_kind = ?3,
+       applied_resource_id = ?4,
+       applied_resource_version = ?5,
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
        version = version + 1
- WHERE id = ?5
-   AND version = ?6
+ WHERE id = ?6
+   AND version = ?7
    AND status = 'approved'
    AND applied_at IS NULL
-RETURNING id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version
+RETURNING id, request_id, ordinal, operation, proposed_value, target_kind, target_id, target_version, sensitivity, status, reviewed_by, reviewed_at, decision_reason, verification_note, applied_at, applied_resource_kind, applied_resource_id, applied_resource_version, created_at, updated_at, version, applied_value
 `
 
 type MarkChangeRequestItemAppliedParams struct {
 	AppliedAt              sql.NullString
+	AppliedValue           sql.NullString
 	AppliedResourceKind    sql.NullString
 	AppliedResourceID      sql.NullInt64
 	AppliedResourceVersion sql.NullInt64
@@ -592,9 +598,15 @@ type MarkChangeRequestItemAppliedParams struct {
 // Stamps the resource an approved item produced. `applied_at IS NULL` in the
 // WHERE clause is what makes apply exactly-once: a replay updates no row, and
 // the caller returns the already-recorded outcome instead of applying twice.
+//
+// applied_value is what reached the record, which since ADR-0014 need not be
+// what the member proposed. Always pass it, using the empty string for the
+// operations that set no value: NULL in this column means "applied before the
+// portal recorded this" and must keep meaning only that (migration 0016).
 func (q *Queries) MarkChangeRequestItemApplied(ctx context.Context, arg MarkChangeRequestItemAppliedParams) (MemberChangeRequestItem, error) {
 	row := q.db.QueryRowContext(ctx, markChangeRequestItemApplied,
 		arg.AppliedAt,
+		arg.AppliedValue,
 		arg.AppliedResourceKind,
 		arg.AppliedResourceID,
 		arg.AppliedResourceVersion,
@@ -624,6 +636,7 @@ func (q *Queries) MarkChangeRequestItemApplied(ctx context.Context, arg MarkChan
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.AppliedValue,
 	)
 	return i, err
 }

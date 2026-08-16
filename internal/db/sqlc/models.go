@@ -277,6 +277,7 @@ type MemberChangeRequestItem struct {
 	CreatedAt              string
 	UpdatedAt              string
 	Version                int64
+	AppliedValue           sql.NullString
 }
 
 type Membership struct {
