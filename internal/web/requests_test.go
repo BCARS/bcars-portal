@@ -634,3 +634,187 @@ func TestARejectedItemRecordsNoAppliedValue(t *testing.T) {
 		req.Items[0].ID).Scan(&applied))
 	assert.False(t, applied.Valid, "nothing was written, so nothing is recorded as written")
 }
+
+// The review screen ADR-0014.5 describes: tick what you accept, correct what is
+// nearly right, apply once (bcars-portal-ssz.3).
+//
+// The case that drove it: a member sends an address with one character mistyped.
+// The officer can see what was meant. Before this the only exit was to reject it
+// and ask them to send the whole thing again.
+func TestAnOfficerAmendsAValueAndAppliesItInOneGo(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+	contactID := e.seedContact(t, personID, "email", "dale.old@example.test")
+
+	cookie := e.signInMember(t)
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"display_name":                       {"Dale Rutherforde"},
+		fmt.Sprintf("contact_%d", contactID): {"dale.new@example.testt"},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var requestID int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT MAX(request_id) FROM member_change_request_items`).Scan(&requestID))
+	items := map[string]int64{}
+	rows, err := e.h.db.Query(
+		`SELECT operation, id FROM member_change_request_items WHERE request_id = ?`, requestID)
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var op string
+		var id int64
+		require.NoError(t, rows.Scan(&op, &id))
+		items[op] = id
+	}
+	require.NoError(t, rows.Err())
+	require.Len(t, items, 2)
+
+	// The officer sees what the record holds now, beside what was suggested.
+	detail := e.getAs(t, fmt.Sprintf("%s/%d", RouteAdminRequests, requestID), officer).Body.String()
+	assert.Contains(t, detail, "dale.old@example.test",
+		"the reviewer must see the value they are changing away from")
+	assert.Contains(t, detail, "On the record now")
+
+	// Tick both, drop the stray character from the email on the way past.
+	emailItem := items["contact_method.update"]
+	nameItem := items["person.display_name.set"]
+	w = e.post(t, fmt.Sprintf("%s/%d/apply", RouteAdminRequests, requestID), url.Values{
+		"include":                          {fmt.Sprint(nameItem), fmt.Sprint(emailItem)},
+		fmt.Sprintf("value_%d", nameItem):  {"Dale Rutherforde"},
+		fmt.Sprintf("value_%d", emailItem): {"dale.new@example.test"},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+	assert.Contains(t, w.Header().Get("Location"), "success=", w.Header().Get("Location"))
+
+	var name, email string
+	require.NoError(t, e.h.db.QueryRow(`SELECT display_name FROM persons WHERE id = ?`, personID).Scan(&name))
+	require.NoError(t, e.h.db.QueryRow(`SELECT value_raw FROM contact_methods WHERE id = ?`, contactID).Scan(&email))
+	assert.Equal(t, "Dale Rutherforde", name, "both ticked changes reach the record")
+	assert.Equal(t, "dale.new@example.test", email,
+		"and the email lands as the officer corrected it, not as it was typed")
+
+	// What the member asked for is not rewritten, and what was applied is kept
+	// beside it.
+	var proposed, applied string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT proposed_value, COALESCE(applied_value, '') FROM member_change_request_items WHERE id = ?`,
+		emailItem).Scan(&proposed, &applied))
+	assert.Equal(t, "email:dale.new@example.testt", proposed,
+		"the member's own words stay on the record")
+	assert.Equal(t, "dale.new@example.test", applied,
+		"and the officer's correction is recorded as what was applied")
+}
+
+// Unticking declines nothing on its own: the item is left pending, because a
+// member is entitled to a reason and an empty checkbox is not one.
+func TestAnUntickedChangeIsLeftPendingRatherThanRejected(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+	contactID := e.seedContact(t, personID, "phone", "814-555-0113")
+
+	cookie := e.signInMember(t)
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"display_name":                       {"Dale Rutherforde"},
+		fmt.Sprintf("contact_%d", contactID): {"814-555-0199"},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var requestID, nameItem int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT request_id, id FROM member_change_request_items
+		  WHERE operation = 'person.display_name.set' ORDER BY id DESC LIMIT 1`).Scan(&requestID, &nameItem))
+
+	w = e.post(t, fmt.Sprintf("%s/%d/apply", RouteAdminRequests, requestID), url.Values{
+		"include":                         {fmt.Sprint(nameItem)},
+		fmt.Sprintf("value_%d", nameItem): {"Dale Rutherforde"},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var phone string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT value_raw FROM contact_methods WHERE id = ?`, contactID).Scan(&phone))
+	assert.Equal(t, "814-555-0113", phone, "the unticked change did not reach the record")
+
+	var status string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT status FROM member_change_request_items
+		  WHERE operation = 'contact_method.update' ORDER BY id DESC LIMIT 1`).Scan(&status))
+	assert.Equal(t, "pending", status,
+		"an unticked change is still waiting for a decision, not silently refused")
+
+	// Declining the rest is the deliberate act, and it carries the reason.
+	w = e.post(t, fmt.Sprintf("%s/%d/decline", RouteAdminRequests, requestID), url.Values{
+		"reason": {"Spoke to Dale at the meeting; that number is right."},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var declinedStatus, reason string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT status, COALESCE(decision_reason, '') FROM member_change_request_items
+		  WHERE operation = 'contact_method.update' ORDER BY id DESC LIMIT 1`).Scan(&declinedStatus, &reason))
+	assert.Equal(t, "rejected", declinedStatus)
+	assert.Contains(t, reason, "Spoke to Dale")
+}
+
+// Declining without a reason is refused. The member reads that line.
+func TestDecliningStillNeedsAReason(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+	req := e.seedOwnRequest(t, personID, "Dale Rutherford Jr")
+
+	w := e.post(t, fmt.Sprintf("%s/%d/decline", RouteAdminRequests, req.ID), url.Values{
+		"reason": {"   "},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Contains(t, w.Header().Get("Location"), "error=Give+a+reason")
+
+	var status string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT status FROM member_change_request_items WHERE id = ?`, req.Items[0].ID).Scan(&status))
+	assert.Equal(t, "pending", status, "nothing is decided without a reason")
+}
+
+// A sensitive change still needs its verification note, and the note is asked
+// for once for the whole apply rather than once per row.
+func TestASensitiveChangeStillNeedsItsVerificationNote(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+
+	cookie := e.signInMember(t)
+	w := e.post(t, fmt.Sprintf("/member/records/%d/suggest", personID), url.Values{
+		"display_name": {"Dale Rutherford"},
+		"call_sign":    {"W3NEW"},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var requestID, itemID int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT request_id, id FROM member_change_request_items ORDER BY id DESC LIMIT 1`).
+		Scan(&requestID, &itemID))
+
+	w = e.post(t, fmt.Sprintf("%s/%d/apply", RouteAdminRequests, requestID), url.Values{
+		"include":                       {fmt.Sprint(itemID)},
+		fmt.Sprintf("value_%d", itemID): {"W3NEW"},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Contains(t, w.Header().Get("Location"), "error=",
+		"a sensitive change may not be applied without saying how it was verified")
+
+	var callSign sql.NullString
+	require.NoError(t, e.h.db.QueryRow(`SELECT call_sign FROM persons WHERE id = ?`, personID).Scan(&callSign))
+	assert.Empty(t, callSign.String, "and nothing reached the record")
+
+	w = e.post(t, fmt.Sprintf("%s/%d/apply", RouteAdminRequests, requestID), url.Values{
+		"include":                       {fmt.Sprint(itemID)},
+		fmt.Sprintf("value_%d", itemID): {"W3NEW"},
+		"verification_note":             {"Checked against the FCC record."},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	require.NoError(t, e.h.db.QueryRow(`SELECT call_sign FROM persons WHERE id = ?`, personID).Scan(&callSign))
+	assert.Equal(t, "W3NEW", callSign.String)
+}

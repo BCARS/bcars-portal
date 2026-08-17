@@ -4,11 +4,14 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bcars/bcars-portal/internal/db"
+	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
+	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
 	"github.com/bcars/bcars-portal/internal/domain/relationships"
 )
@@ -63,6 +66,8 @@ func (h *Handler) RequestRoutes() []GuardedRoute {
 		{Pattern: "GET " + RouteAdminRequests + "/{id}", Capability: "change_request.manage", ResourceKind: "change_request", handler: h.requestDetail},
 		{Pattern: "POST " + RouteAdminRequests + "/{id}/target", Capability: "change_request.manage", AuditAction: "change_request.triage", ResourceKind: "change_request", handler: h.requestTriage},
 		{Pattern: "POST " + RouteAdminRequests + "/{id}/items/{item_id}/decision", Capability: "change_request.review", AuditAction: "change_request.item.decide", ResourceKind: "change_request_item", handler: h.requestDecide},
+		{Pattern: "POST " + RouteAdminRequests + "/{id}/apply", Capability: "change_request.review", AuditAction: "change_request.item.decide", ResourceKind: "change_request", handler: h.requestApply},
+		{Pattern: "POST " + RouteAdminRequests + "/{id}/decline", Capability: "change_request.review", AuditAction: "change_request.item.decide", ResourceKind: "change_request", handler: h.requestDecline},
 	}
 }
 
@@ -289,8 +294,14 @@ type requestDetailData struct {
 	Request officerRequestRow
 	// Supplied is what the submitter wrote, kept next to what the officer
 	// concluded rather than replaced by it.
-	Supplied      suppliedSnapshot
-	Items         []officerItemRow
+	Supplied suppliedSnapshot
+	Items    []officerItemRow
+	// HasPending reports that at least one item can still be applied, which is
+	// what decides whether the review controls appear at all.
+	HasPending bool
+	// HasSensitive reports that one of those needs a verification note, so the
+	// form asks for it once rather than per row.
+	HasSensitive  bool
 	Relationships []relationshipContextRow
 	// TargetPersonID is zero until an officer links the request.
 	TargetPersonID int64
@@ -331,6 +342,29 @@ type officerItemRow struct {
 	// adapter yet; the page says so rather than offering an approval that
 	// would fail.
 	Appliable bool
+
+	// CurrentValue is what the record holds NOW, so the reviewer sees what
+	// they are changing away from rather than approving a value in isolation
+	// (bcars-portal-2c4). Empty when the item names no readable target: an
+	// unlinked request, or an operation that sets no value.
+	CurrentValue string
+	// EditValue is the proposed value in the plain form a reviewer edits --
+	// no "kind:" prefix -- so what is in the box is what they would type.
+	EditValue string
+	// AppliedValue is what actually reached the record, shown once decided
+	// because it may differ from what was proposed (ADR-0014.6).
+	AppliedValue string
+	// AppliedDiffers is true when the reviewer amended the value, which is the
+	// only case worth drawing a reader's eye to.
+	AppliedDiffers bool
+}
+
+// itemContext is what the review screen knows about an item from the RECORD
+// rather than from the proposal: the value on file, and the record's own name
+// for the field being corrected.
+type itemContext struct {
+	Current string
+	Label   string
 }
 
 // relationshipContextRow is informational and is treated as such.
@@ -375,12 +409,84 @@ func (h *Handler) requestDetail(w http.ResponseWriter, r *http.Request) {
 		_ = h.db.QueryRowContext(r.Context(),
 			`SELECT email FROM users WHERE id = ?`, req.RequesterUserID).Scan(&data.Supplied.SubmittedBy)
 	}
+	current := h.currentValues(r, p, req)
 	for _, item := range req.Items {
-		data.Items = append(data.Items, officerItemRowFrom(item))
+		row := officerItemRowFrom(item)
+		row.CurrentValue = current[item.ID].Current
+		if label := current[item.ID].Label; label != "" {
+			row.Label = label
+		}
+		data.Items = append(data.Items, row)
+		if row.Decidable && row.Appliable {
+			data.HasPending = true
+			if row.Sensitive {
+				data.HasSensitive = true
+			}
+		}
 	}
 	data.Relationships = h.relationshipContext(r, req.TargetPersonID)
 
 	h.renderPage(w, r, "request_detail.html", http.StatusOK, data)
+}
+
+// currentValues reads what the record holds now for each item that names a
+// target, keyed by item id.
+//
+// It reads through the members service, so an officer without member.read gets
+// no values here rather than a page that quietly bypasses the capability. A
+// value that cannot be read is simply absent: the review screen says what it
+// knows and does not guess.
+func (h *Handler) currentValues(r *http.Request, p *authz.Principal, req changerequests.Request) map[int64]itemContext {
+	out := make(map[int64]itemContext, len(req.Items))
+	if h.members == nil {
+		return out
+	}
+	ctx := r.Context()
+
+	var person sqlcgen.Person
+	personLoaded := false
+	if req.TargetPersonID != 0 {
+		if got, err := h.members.GetPerson(ctx, p, req.TargetPersonID); err == nil {
+			person, personLoaded = got, true
+		}
+	}
+
+	// Contacts are read once for the whole request rather than per item: a
+	// member correcting three details would otherwise be three queries deep
+	// before the page rendered.
+	contacts := map[int64]sqlcgen.ContactMethod{}
+	if req.TargetPersonID != 0 {
+		if rows, err := h.members.ListContactMethods(ctx, p, req.TargetPersonID); err == nil {
+			for _, c := range rows {
+				contacts[c.ID] = c
+			}
+		}
+	}
+
+	for _, item := range req.Items {
+		switch item.Operation {
+		case "person.display_name.set":
+			if personLoaded {
+				out[item.ID] = itemContext{Current: person.DisplayName}
+			}
+		case "person.call_sign.set":
+			if personLoaded {
+				out[item.ID] = itemContext{Current: person.CallSign.String}
+			}
+		case "contact_method.update":
+			if c, ok := contacts[item.TargetID]; ok {
+				// "Contact detail" three times over tells a reviewer nothing
+				// about which three. The row names the detail the way the
+				// record does: "Phone (Mobile)".
+				label := strings.ToUpper(c.Kind[:1]) + c.Kind[1:]
+				if c.Label.Valid && c.Label.String != "" {
+					label += " (" + c.Label.String + ")"
+				}
+				out[item.ID] = itemContext{Current: c.ValueRaw, Label: label}
+			}
+		}
+	}
+	return out
 }
 
 func officerItemRowFrom(item changerequests.Item) officerItemRow {
@@ -396,6 +502,29 @@ func officerItemRowFrom(item changerequests.Item) officerItemRow {
 		VerificationNote: item.VerificationNote,
 		AppliedAt:        memberDate(item.AppliedAt),
 		Appliable:        changerequests.Adapters[item.Operation] != changerequests.AdapterNone,
+		EditValue:        plainProposedValue(item.Operation, item.ProposedValue),
+		AppliedValue:     item.AppliedValue,
+		AppliedDiffers: item.AppliedValueRecorded &&
+			item.AppliedValue != plainProposedValue(item.Operation, item.ProposedValue),
+	}
+}
+
+// plainProposedValue strips the storage encoding so the reviewer edits the
+// value itself. proposedValueLabel is for reading; this is for a text box,
+// where "phone — 814-555-0199" would be submitted back as the new number.
+func plainProposedValue(operation, raw string) string {
+	if operation != "contact_method.update" && operation != "contact_method.create" {
+		return raw
+	}
+	kind, value, found := strings.Cut(raw, ":")
+	if !found || strings.TrimSpace(value) == "" {
+		return raw
+	}
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "email", "phone", "postal":
+		return strings.TrimSpace(value)
+	default:
+		return raw
 	}
 }
 
@@ -592,6 +721,173 @@ func (h *Handler) requestDecide(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("request decision", slog.String("error", err.Error()))
 		http.Redirect(w, r, target+"?error=That+decision+could+not+be+saved.+Please+try+again", http.StatusSeeOther)
 	}
+}
+
+// requestApply is the review action ADR-0014.5 describes: the officer ticks the
+// changes they accept, edits any value they want to correct on the way past, and
+// applies them in one go.
+//
+// PARTIAL SUCCESS IS REPORTED, NOT HIDDEN. Each item is its own transaction, so
+// a stale target on the third change does not undo the first two. Rolling the
+// whole thing back would mean one contact row an officer edited yesterday blocks
+// a name correction today; applying what can be applied and naming what could
+// not is the behaviour an officer can act on.
+//
+// Unticked items are LEFT PENDING rather than rejected. Declining is a separate
+// action carrying a reason, because a member is entitled to know why (see
+// requestDecline), and silence is not a reason.
+func (h *Handler) requestApply(w http.ResponseWriter, r *http.Request) {
+	p := h.principalFromRequest(r)
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
+
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		return
+	}
+
+	ticked := r.PostForm["include"]
+	if len(ticked) == 0 {
+		http.Redirect(w, r,
+			target+"?error=Tick+the+changes+you+want+to+apply", http.StatusSeeOther)
+		return
+	}
+	note := strings.TrimSpace(r.FormValue("verification_note"))
+
+	applied := 0
+	var failures []string
+	for _, raw := range ticked {
+		itemID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			continue
+		}
+		decision, err := h.changeRequests.DecideItem(r.Context(), p, h.members, id, itemID,
+			changerequests.DecideParams{
+				Decision:         changerequests.ItemApproved,
+				VerificationNote: note,
+				AmendedValue:     strings.TrimSpace(r.FormValue("value_" + raw)),
+			}, time.Now())
+		if err != nil {
+			failures = append(failures, applyFailureReason(err))
+			continue
+		}
+		if decision.Applied {
+			applied++
+		}
+	}
+
+	if len(failures) == 0 {
+		http.Redirect(w, r, target+"?success="+url.QueryEscape(appliedMessage(applied)), http.StatusSeeOther)
+		return
+	}
+	// One message names what landed and what did not, so an officer is never
+	// left to work out which half of their click took effect.
+	msg := appliedMessage(applied) + " " + strings.Join(dedupeReasons(failures), " ")
+	http.Redirect(w, r, target+"?error="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+// requestDecline closes out everything still pending with one reason.
+//
+// The reason is required for the same purpose it always was: the member reads
+// it. Asking for it once per request rather than once per field is the whole
+// difference between recording a decision and writing an essay.
+func (h *Handler) requestDecline(w http.ResponseWriter, r *http.Request) {
+	p := h.principalFromRequest(r)
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
+
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		return
+	}
+	reason := strings.TrimSpace(r.FormValue("reason"))
+	if reason == "" {
+		http.Redirect(w, r, target+"?error=Give+a+reason,+so+the+member+knows+why", http.StatusSeeOther)
+		return
+	}
+
+	req, err := h.changeRequests.Get(r.Context(), p, id)
+	if err != nil {
+		h.renderError(w, r, http.StatusNotFound, "No such request.")
+		return
+	}
+
+	declined := 0
+	var failures []string
+	for _, item := range req.Items {
+		if item.Status != changerequests.ItemPending {
+			continue
+		}
+		if _, err := h.changeRequests.DecideItem(r.Context(), p, h.members, id, item.ID,
+			changerequests.DecideParams{
+				Decision: changerequests.ItemRejected,
+				Reason:   reason,
+			}, time.Now()); err != nil {
+			failures = append(failures, applyFailureReason(err))
+			continue
+		}
+		declined++
+	}
+
+	msg := "Declined " + itemCount(declined) + "."
+	if len(failures) > 0 {
+		http.Redirect(w, r,
+			target+"?error="+url.QueryEscape(msg+" "+strings.Join(dedupeReasons(failures), " ")),
+			http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, target+"?success="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+func appliedMessage(applied int) string {
+	if applied == 0 {
+		return "Nothing was applied."
+	}
+	return "Applied " + itemCount(applied) + "."
+}
+
+func itemCount(n int) string {
+	if n == 1 {
+		return "1 change"
+	}
+	return strconv.Itoa(n) + " changes"
+}
+
+// applyFailureReason turns a domain error into the sentence an officer needs.
+// It says what to do next, because "conflict" on its own is not an instruction.
+func applyFailureReason(err error) string {
+	switch {
+	case errors.Is(err, db.ErrStale):
+		return "One change was left alone because the record moved while you were reading it; reload and look again."
+	case errors.Is(err, changerequests.ErrItemDecided):
+		return "One change had already been decided by another officer."
+	case errors.Is(err, changerequests.ErrSelfReview):
+		return "One change needs a different officer, because you submitted it."
+	case errors.Is(err, changerequests.ErrVerificationNoteRequired):
+		return "One change is sensitive and needs a note saying how you verified it."
+	case errors.Is(err, changerequests.ErrTargetRequired):
+		return "One change names no record yet; link this request first."
+	case errors.Is(err, changerequests.ErrBadValue):
+		return "One value was not valid for the kind of detail it corrects."
+	case errors.Is(err, changerequests.ErrNoAdapter):
+		return "One change cannot be applied here; do it on the record and decline this."
+	default:
+		return "One change could not be applied."
+	}
+}
+
+// dedupeReasons keeps a repeated failure from being printed once per item.
+func dedupeReasons(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // decisionMessage says what actually happened, including the case where the

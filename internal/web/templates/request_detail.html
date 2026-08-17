@@ -79,13 +79,79 @@
 <div class="card">
     <h2>Proposed changes</h2>
     {{if .Items}}
-    <table>
+
+    {{if and .CanReview .Reviewable .HasPending}}
+    <form action="/admin/requests/{{.Request.ID}}/apply" method="post">
+        <p style="font-size:0.875rem; color:var(--text-helper); margin-top:0;">
+            Tick what you accept. Correct anything that is nearly right before you
+            apply it &mdash; what you apply is recorded beside what was suggested.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:2.5rem;"><span class="visually-hidden">Apply</span></th>
+                    <th>What</th>
+                    <th>On the record now</th>
+                    <th>Apply this</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Items}}
+                {{if and .Decidable .Appliable}}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="include" value="{{.ID}}" checked
+                               id="include-{{.ID}}">
+                        <label class="visually-hidden" for="include-{{.ID}}">Apply the change to {{.Label}}</label>
+                    </td>
+                    <td>
+                        {{.Label}}
+                        {{if .Sensitive}}<span class="badge badge-yellow">Sensitive</span>{{end}}
+                    </td>
+                    <td>
+                        {{if .CurrentValue}}{{.CurrentValue}}
+                        {{else}}<span style="color:var(--text-muted);">not recorded</span>{{end}}
+                    </td>
+                    <td>
+                        <input type="text" name="value_{{.ID}}" value="{{.EditValue}}"
+                               maxlength="2000" style="width:100%; padding:6px 8px; border:1px solid var(--input-border); border-radius:var(--radius-control); font-family:inherit; font-size:0.95em;"
+                               aria-label="Value to apply for {{.Label}}">
+                    </td>
+                </tr>
+                {{end}}
+            {{end}}
+            </tbody>
+        </table>
+
+        {{if .HasSensitive}}
+        <div class="form-group" style="margin-top:12px;">
+            <label for="verification_note">How you verified the sensitive change</label>
+            <input type="text" id="verification_note" name="verification_note"
+                   placeholder="For example: called the published number back">
+        </div>
+        {{end}}
+
+        <button type="submit" class="btn btn-primary" style="margin-top:12px;">Apply the ticked changes</button>
+    </form>
+
+    <form action="/admin/requests/{{.Request.ID}}/decline" method="post"
+          style="margin-top:16px; padding-top:12px; border-top:1px solid var(--divider);">
+        <label for="decline-reason" style="font-size:0.875rem;">Decline what is left, and tell the member why</label>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+            <input type="text" id="decline-reason" name="reason" style="flex:1;"
+                   placeholder="For example: spoke to Dale at the meeting; the record is right">
+            <button type="submit" class="btn btn-secondary">Decline the rest</button>
+        </div>
+    </form>
+    {{end}}
+
+    <table style="margin-top:16px;">
         <thead>
             <tr>
                 <th>What</th>
                 <th>Suggested value</th>
                 <th>Status</th>
-                <th>Decision</th>
+                <th>Outcome</th>
             </tr>
         </thead>
         <tbody>
@@ -108,27 +174,12 @@
                     {{if .AppliedAt}}<div style="font-size:0.75rem; color:var(--text-helper);">Applied {{.AppliedAt}}</div>{{end}}
                 </td>
                 <td>
+                    {{if .AppliedDiffers}}
+                    <div style="font-size:0.8125rem;">Applied as <strong>{{.AppliedValue}}</strong></div>
+                    {{end}}
                     {{if .DecisionReason}}<div style="font-size:0.8125rem;">{{.DecisionReason}}</div>{{end}}
                     {{if .VerificationNote}}<div style="font-size:0.75rem; color:var(--text-helper);">Verified: {{.VerificationNote}}</div>{{end}}
-
-                    {{if and $.CanReview .Decidable $.Reviewable}}
-                    <form action="/admin/requests/{{$.Request.ID}}/items/{{.ID}}/decision" method="post"
-                          style="margin-top:8px; display:grid; gap:6px;">
-                        <label class="sr-only" for="decision-{{.ID}}">Decision</label>
-                        <select id="decision-{{.ID}}" name="decision">
-                            <option value="approved">Approve</option>
-                            <option value="rejected">Reject</option>
-                            <option value="needs_verification">Needs verification</option>
-                        </select>
-                        <input type="text" name="reason" placeholder="Reason (required to reject)"
-                               aria-label="Reason for rejecting or holding item {{.ID}}">
-                        {{if .Sensitive}}
-                        <input type="text" name="verification_note" placeholder="How you verified this (required to approve)"
-                               aria-label="Verification note for item {{.ID}}">
-                        {{end}}
-                        <button type="submit" class="btn btn-sm btn-primary">Record decision</button>
-                    </form>
-                    {{else if and .Decidable $.Reviewable}}
+                    {{if and .Decidable $.Reviewable (not $.CanReview)}}
                     <div style="font-size:0.75rem; color:var(--text-muted);">Awaiting an officer who may review.</div>
                     {{end}}
                 </td>

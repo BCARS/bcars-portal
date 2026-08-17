@@ -72,6 +72,17 @@ type DecideParams struct {
 	// VerificationNote records how a sensitive approval was verified, e.g.
 	// "called the published number back".
 	VerificationNote string
+	// AmendedValue is the value the REVIEWER decided to apply, when it is not
+	// the one the submitter sent (ADR-0014.5). A member writes their new
+	// address with one character mistyped; the officer drops it and approves,
+	// instead of rejecting and asking them to send the whole thing again.
+	//
+	// Empty means "apply what was proposed", which is the ordinary case.
+	//
+	// It never rewrites proposed_value. What the submitter asked for and what
+	// the reviewer did are two facts, and applied_value records the second
+	// (migration 0016). Ignored for a rejection or a hold, which apply nothing.
+	AmendedValue string
 }
 
 // Decision is the outcome of reviewing one item.
@@ -200,6 +211,11 @@ func (s *Service) DecideItem(
 
 		applied := false
 		if params.Decision == ItemApproved {
+			// The reviewer's amendment replaces the value for the APPLY only.
+			// item is a local copy; the stored proposal is untouched.
+			if amended := strings.TrimSpace(params.AmendedValue); amended != "" {
+				item.ProposedValue = amendedProposal(item, amended)
+			}
 			result, err := s.applyItem(ctx, q, memberSvc, p, item)
 			if err != nil {
 				// Rolls back the decision recorded above.
@@ -509,6 +525,34 @@ func mapMissing(err error) error {
 // rejects an email-like literal in any tracked non-test file, and it is right
 // to, because a real one reaches production source the same way an example
 // does.
+// amendedProposal puts a reviewer's plain value back into the form the appliers
+// read.
+//
+// A contact proposal is stored as "kind:value" so an approval cannot turn an
+// email into a phone. A reviewer amending it types a telephone number, not
+// "phone:814-555-0199", so the kind is carried over from the proposal being
+// amended rather than asked for again. Changing the KIND is not an amendment;
+// it is a different correction, and the encoding keeps it that way.
+//
+// A value that already carries a recognised kind prefix is left alone, so a
+// caller that does supply the encoded form is not double-prefixed.
+func amendedProposal(item Item, amended string) string {
+	if Adapters[item.Operation] != AdapterContactCreate &&
+		Adapters[item.Operation] != AdapterContactUpdate {
+		return amended
+	}
+	if kind, _, err := parseContactValue(amended); err == nil && kind != "" {
+		return amended
+	}
+	kind, _, err := parseContactValue(item.ProposedValue)
+	if err != nil {
+		// Nothing to carry over: hand it on unchanged and let the applier
+		// refuse it, rather than inventing a kind here.
+		return amended
+	}
+	return kind + ":" + amended
+}
+
 func parseContactValue(raw string) (kind, value string, err error) {
 	parts := strings.SplitN(strings.TrimSpace(raw), ":", 2)
 	if len(parts) != 2 {
