@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -1034,4 +1035,103 @@ func TestTheContactKindEncodingNeverReachesAScreen(t *testing.T) {
 		"and never the storage encoding")
 	assert.Contains(t, officer, "phone",
 		"but is told which kind of detail the correction is for")
+}
+
+// A report about a record the member cannot see is a NOTE (ADR-0014.4,
+// bcars-portal-ssz.4).
+//
+// It used to offer the same field list as the own-record form and produce an
+// item with no target, which nothing could ever apply: an officer who linked
+// the request was told to link the request (bcars-portal-3la). The words were
+// always the useful part, so the words are the whole of it.
+func TestAReportAboutSomeoneElseIsANote(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie := e.signInMember(t)
+
+	form := e.getAs(t, RouteMemberSuggest, cookie).Body.String()
+	assert.NotContains(t, form, `name="kind"`,
+		"there is no field to choose: the note is the submission")
+	assert.NotContains(t, form, `name="proposed_value"`,
+		"and nothing structured to propose")
+	assert.Contains(t, form, `name="about_name"`,
+		"who it is about is still the member's own words")
+	assert.Contains(t, form, `name="summary"`)
+
+	w := e.post(t, RouteMemberSuggest, url.Values{
+		"about_name": {"Marguerite Ashby"},
+		"summary":    {"Her mobile number has changed to 814-555-0177."},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var operation, proposed string
+	var targetKind sql.NullString
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT operation, COALESCE(proposed_value, ''), target_kind
+		   FROM member_change_request_items ORDER BY id DESC LIMIT 1`).
+		Scan(&operation, &proposed, &targetKind))
+	assert.Equal(t, changerequests.OpOther, operation,
+		"a note carries nothing an adapter could apply")
+	assert.Empty(t, proposed)
+	assert.False(t, targetKind.Valid, "and names no record, which is the whole point")
+}
+
+// The note is the submission, so an empty one is refused.
+func TestANoteAboutSomeoneElseNeedsWords(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie := e.signInMember(t)
+
+	w := e.post(t, RouteMemberSuggest, url.Values{
+		"about_name": {"Marguerite Ashby"},
+	}, cookie)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Tell the officers what they should know")
+
+	var items int
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT count(*) FROM member_change_request_items`).Scan(&items))
+	assert.Zero(t, items)
+}
+
+// A note has no items to count down, so the rule that resolves a request when
+// its pending items reach zero must not fire on arrival. Nothing calls that
+// helper for notes today; this fails if anything starts to (bcars-portal-ssz.6).
+func TestANewNoteIsNotResolvedOnArrival(t *testing.T) {
+	e := setupMemberEnv(t)
+	cookie := e.signInMember(t)
+
+	w := e.post(t, RouteMemberSuggest, url.Values{
+		"about_name": {"Marguerite Ashby"},
+		"summary":    {"Her mobile number has changed."},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var status string
+	var resolvedAt sql.NullString
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT status, resolved_at FROM member_change_requests ORDER BY id DESC LIMIT 1`).
+		Scan(&status, &resolvedAt))
+	assert.Equal(t, "submitted", status,
+		"a note an officer has not read is not done")
+	assert.False(t, resolvedAt.Valid)
+}
+
+// Submitting a note still tells the sender nothing about the person named.
+func TestSendingANoteStillRevealsNothing(t *testing.T) {
+	e := setupMemberEnv(t)
+	e.seedPersonRow(t, "Marguerite Ashby", "W3MGA")
+	cookie := e.signInMember(t)
+
+	w := e.post(t, RouteMemberSuggest, url.Values{
+		"about_name":      {"Marguerite Ashby"},
+		"about_call_sign": {"W3MGA"},
+		"summary":         {"Her mobile number has changed."},
+	}, cookie)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+
+	body := e.getAs(t, w.Header().Get("Location"), cookie).Body.String()
+	assert.Contains(t, body, "Marguerite Ashby", "their own words read back to them")
+	assert.NotContains(t, body, "W3MGA - ",
+		"but nothing canonical about her is echoed")
+	assert.NotContains(t, body, "member record",
+		"and no hint that a record exists")
 }

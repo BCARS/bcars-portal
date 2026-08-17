@@ -779,3 +779,38 @@ func TestTheAppliedValueStopsBeingSentOnceAccessIsRevoked(t *testing.T) {
 	assert.Equal(t, "Dale Rutherforde", read.Items[0].ProposedValue,
 		"what they themselves asked for is still their own to read")
 }
+
+// A suggestion about somebody else carries no structured change (ADR-0014.4,
+// bcars-portal-ssz.4).
+//
+// The web form stopped offering one; this is the same rule at the API, because
+// a client that could still send one would recreate exactly the dead end
+// bcars-portal-3la describes: an item naming no record, which linking the
+// request does not fix, so an officer is told to link what they just linked.
+func TestASuggestionAboutSomeoneElseCannotCarryAStructuredChange(t *testing.T) {
+	e := setupMemberSelfService(t)
+
+	resp := e.submit(t, e.associate, "cross-structured-1", `{
+		"about_name": "Marguerite Ashby",
+		"summary": "Her call sign is printed wrong.",
+		"items": [{"operation": "person.call_sign.set", "proposed_value": "W3MGB"}]
+	}`)
+	require.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+	body := readAll(t, resp)
+	assert.Contains(t, body, "carries no structured change",
+		"the refusal must say what the caller should send instead")
+
+	var items int
+	require.NoError(t, e.db.QueryRow(`SELECT count(*) FROM member_change_request_items`).Scan(&items))
+	assert.Zero(t, items, "and nothing unapplyable is stored")
+
+	// The note itself is still accepted, and still tells the sender nothing.
+	resp = e.submit(t, e.associate, "cross-note-1", `{
+		"about_name": "Marguerite Ashby",
+		"summary": "Her call sign is printed wrong; it should be W3MGB.",
+		"items": [{"operation": "other"}]
+	}`)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, readAll(t, resp))
+	filed := decodeMemberRequest(t, resp)
+	assert.Zero(t, filed.AboutPersonID)
+}

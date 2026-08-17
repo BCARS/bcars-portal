@@ -3340,7 +3340,7 @@
         "additionalProperties": false,
         "properties": {
           "operation": {
-            "description": "Must be an allowlisted operation. There is no arbitrary field path.",
+            "description": "Must be an allowlisted operation. There is no arbitrary field path. About somebody else, only 'other' is accepted: such a report is a note an officer acts on, not a change anything can apply.",
             "minLength": 1,
             "type": "string"
           },
@@ -5096,7 +5096,7 @@
             "type": "string"
           },
           "about_person_id": {
-            "description": "One of your own records. Omit it to suggest a correction about someone else and describe them instead.",
+            "description": "One of your own records. Omit it to report something about someone else, which is a note: describe them and say what you know, and an officer acts on it.",
             "format": "int64",
             "type": "integer"
           },

@@ -39,6 +39,11 @@ SELECT r.*,
    AND (sqlc.arg(untargeted_only) = 0
         OR (r.target_person_id IS NULL
             AND r.status NOT IN ('resolved', 'withdrawn')))
+   -- open_only is what the queue opens on. A pile where finished work looks
+   -- exactly like outstanding work is a pile an officer re-reads every month
+   -- (bcars-portal-ssz.6).
+   AND (sqlc.arg(open_only) = 0
+        OR r.status NOT IN ('resolved', 'withdrawn'))
  ORDER BY r.submitted_at DESC, r.id DESC
  -- Named, not bare `?`. sqlc numbers named parameters (?3, ?4, ...) and leaves
  -- a bare `?` positional, so mixing the two in one query makes SQLite expect
@@ -87,6 +92,30 @@ UPDATE member_change_requests
        version = version + 1
  WHERE id = sqlc.arg(id)
    AND version = sqlc.arg(version)
+RETURNING *;
+
+-- name: ResolveChangeRequest :one
+--
+-- An officer declaring they are finished with a request (bcars-portal-ssz.6).
+--
+-- Distinct from SetChangeRequestStatus, which the review path uses when the
+-- last item becomes terminal. This one is an ACT: it names the officer and
+-- carries what they did about it, and it is the only way a request carrying
+-- nothing appliable -- a note -- ever leaves the queue.
+--
+-- Guarded on status so a resolved or withdrawn request is not silently
+-- resolved twice, and on version so two officers closing the same note produce
+-- a conflict rather than one overwriting the other.
+UPDATE member_change_requests
+   SET status = 'resolved',
+       resolved_at = sqlc.arg(resolved_at),
+       resolved_by = sqlc.arg(resolved_by),
+       resolution_note = sqlc.narg(resolution_note),
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+       version = version + 1
+ WHERE id = sqlc.arg(id)
+   AND version = sqlc.arg(version)
+   AND status NOT IN ('resolved', 'withdrawn')
 RETURNING *;
 
 -- name: CreateChangeRequestItem :one

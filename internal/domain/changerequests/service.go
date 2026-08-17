@@ -177,6 +177,11 @@ var (
 	// ErrAlreadyResolved is returned when triage targets a terminal request.
 	ErrAlreadyResolved = errors.New("changerequests: request is already resolved or withdrawn")
 
+	// ErrPendingItems is returned when marking a request done while a proposed
+	// change is still waiting for a decision. Closing it would tell the member
+	// their suggestion was dealt with when no officer ever decided it.
+	ErrPendingItems = errors.New("changerequests: decide the proposed changes before marking this done")
+
 	// ErrNotYours is returned when a member names a request they did not
 	// submit.
 	//
@@ -294,11 +299,16 @@ type Request struct {
 	TriagedBy          int64
 	TriagedAt          string
 	ResolvedAt         string
-	WithdrawnAt        string
-	CreatedAt          string
-	UpdatedAt          string
-	Version            int64
-	Items              []Item
+	// ResolvedBy and ResolutionNote are set when an officer declared they were
+	// finished with the request. Zero and empty on requests resolved before
+	// migration 0017, which is not the same as "nobody resolved it".
+	ResolvedBy     int64
+	ResolutionNote string
+	WithdrawnAt    string
+	CreatedAt      string
+	UpdatedAt      string
+	Version        int64
+	Items          []Item
 	// PendingItems is the count of items still awaiting a decision. A request
 	// resolves only when it reaches zero.
 	PendingItems int64
@@ -312,6 +322,10 @@ type ListFilter struct {
 	// UnresolvedTargetOnly restricts the page to requests with no canonical
 	// target, which is the triage queue.
 	UnresolvedTargetOnly bool
+	// OpenOnly hides requests an officer has finished with. It is what the
+	// queue defaults to: outstanding work should not have to be picked out of
+	// the work already done (bcars-portal-ssz.6).
+	OpenOnly bool
 	// RequesterUserID restricts to one submitter's own requests. Used by the
 	// member API in 4ux.6; zero means no restriction.
 	RequesterUserID int64
@@ -434,6 +448,7 @@ func (s *Service) List(ctx context.Context, p *authz.Principal, f ListFilter) ([
 		Source:          nullableFilter(f.Source),
 		RequesterUserID: nullableIDFilter(f.RequesterUserID),
 		UntargetedOnly:  boolToInt(f.UnresolvedTargetOnly),
+		OpenOnly:        boolToInt(f.OpenOnly),
 		PageLimit:       limit,
 		PageOffset:      offset,
 	})
@@ -549,6 +564,84 @@ func (s *Service) GetForRequester(ctx context.Context, p *authz.Principal, id in
 // asked for survives it. A request an officer has begun deciding cannot be
 // withdrawn at all, because retracting a request whose approved item already
 // changed a record would leave the record with no stated reason.
+// ResolveParams carries what an officer did about a request.
+type ResolveParams struct {
+	// Note is optional: one line about what was done, so the next officer does
+	// not open the record to find out. Required prose would turn a note into
+	// paperwork.
+	Note string
+	// ExpectedVersion guards against two officers closing the same request.
+	ExpectedVersion int64
+}
+
+// Resolve is an officer declaring they are finished with a request
+// (bcars-portal-ssz.6, ADR-0014.4).
+//
+// It exists because a NOTE has nothing to decide. A member reports that
+// somebody's number has changed; an officer reads it and edits the record. That
+// act touches the record, not the request, so without this the note stays in
+// the queue for ever and next month's officer re-reads it to find out whether
+// anything happened.
+//
+// IT REFUSES A REQUEST THAT STILL HAS SOMETHING TO APPLY. Marking a request
+// done while a proposed change sits pending would lose that change quietly --
+// the member is told it was dealt with, and no officer ever decided it. Those
+// have to be applied or declined first, which the review screen does.
+//
+// A request whose only pending items cannot be applied -- 'other', or an item
+// naming no record -- is exactly the case this serves.
+func (s *Service) Resolve(ctx context.Context, p *authz.Principal, id int64, params ResolveParams, now time.Time) (Request, error) {
+	var actorID int64
+	if p != nil {
+		actorID = p.UserID
+	}
+
+	var out Request
+	err := s.inTx(ctx, func(q *sqlcgen.Queries) error {
+		current, err := s.load(ctx, q, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if current.Status == StatusResolved || current.Status == StatusWithdrawn {
+			return ErrAlreadyResolved
+		}
+		for _, item := range current.Items {
+			if item.Status == ItemPending && CanApply(item.Operation) && item.TargetID != 0 {
+				return ErrPendingItems
+			}
+		}
+
+		version := params.ExpectedVersion
+		if version == 0 {
+			version = current.Version
+		}
+		if _, err := q.ResolveChangeRequest(ctx, sqlcgen.ResolveChangeRequestParams{
+			ResolvedAt:     nullString(now.UTC().Format(isoTimestamp)),
+			ResolvedBy:     nullInt(actorID),
+			ResolutionNote: nullString(strings.TrimSpace(params.Note)),
+			ID:             id,
+			Version:        version,
+		}); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// The row exists -- it was read above -- so either the version
+				// moved or another officer resolved it first.
+				return db.ErrStale
+			}
+			return err
+		}
+
+		out, err = s.load(ctx, q, id)
+		return err
+	})
+	if err != nil {
+		return Request{}, err
+	}
+	return out, nil
+}
+
 func (s *Service) Withdraw(ctx context.Context, p *authz.Principal, id int64, now time.Time) (Request, error) {
 	if p == nil || p.UserID == 0 {
 		return Request{}, ErrNotYours

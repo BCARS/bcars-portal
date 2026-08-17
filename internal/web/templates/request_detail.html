@@ -7,6 +7,13 @@
     <a href="/admin/requests">Correction requests</a><span>/</span>Request {{.Request.ID}}
 </div>
 
+{{if .Request.ResolvedAt}}
+<div class="alert alert-success" role="status">
+    Marked done {{.Request.ResolvedAt}}{{if .Request.ResolvedByEmail}} by {{.Request.ResolvedByEmail}}{{end}}.
+    {{if .Request.ResolutionNote}}<strong>{{.Request.ResolutionNote}}</strong>{{end}}
+</div>
+{{end}}
+
 <h2 style="margin: 0 0 16px; font-size: 1.25rem; font-weight: 600;">
     {{.Request.Kind}} &middot; {{.Request.About}}
 </h2>
@@ -141,6 +148,21 @@
             <input type="text" id="decline-reason" name="reason" style="flex:1;"
                    placeholder="For example: spoke to Dale at the meeting; the record is right">
             <button type="submit" class="btn btn-secondary">Decline the rest</button>
+        </div>
+    </form>
+    {{end}}
+
+    {{if and .CanReview .Reviewable (not .HasPending)}}
+    <form action="/admin/requests/{{.Request.ID}}/done" method="post"
+          style="margin-top:16px; padding-top:12px; border-top:1px solid var(--divider);">
+        <input type="hidden" name="version" value="{{.Version}}">
+        <label for="resolution_note" style="font-size:0.875rem;">
+            Finished with this? Say what you did, if it helps the next person.
+        </label>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+            <input type="text" id="resolution_note" name="resolution_note" style="flex:1;"
+                   placeholder="Optional, for example: added the new mobile">
+            <button type="submit" class="btn btn-primary">Mark done</button>
         </div>
     </form>
     {{end}}

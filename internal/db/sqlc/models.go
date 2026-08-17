@@ -253,6 +253,8 @@ type MemberChangeRequest struct {
 	CreatedAt          string
 	UpdatedAt          string
 	Version            int64
+	ResolvedBy         sql.NullInt64
+	ResolutionNote     sql.NullString
 }
 
 type MemberChangeRequestItem struct {
