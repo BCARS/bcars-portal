@@ -475,6 +475,18 @@ type Querier interface {
 	// offset, so a multi-byte character above a query corrupts the SQL it parses.
 	RecordRequestAttempt(ctx context.Context, arg RecordRequestAttemptParams) (RequestAttempt, error)
 	RejectMembership(ctx context.Context, arg RejectMembershipParams) (Membership, error)
+	//
+	// An officer declaring they are finished with a request (bcars-portal-ssz.6).
+	//
+	// Distinct from SetChangeRequestStatus, which the review path uses when the
+	// last item becomes terminal. This one is an ACT: it names the officer and
+	// carries what they did about it, and it is the only way a request carrying
+	// nothing appliable -- a note -- ever leaves the queue.
+	//
+	// Guarded on status so a resolved or withdrawn request is not silently
+	// resolved twice, and on version so two officers closing the same note produce
+	// a conflict rather than one overwriting the other.
+	ResolveChangeRequest(ctx context.Context, arg ResolveChangeRequestParams) (MemberChangeRequest, error)
 	RevokeAllSessionsForUser(ctx context.Context, userID int64) error
 	RevokeCapabilityGrant(ctx context.Context, arg RevokeCapabilityGrantParams) error
 	RevokeFCCVerification(ctx context.Context, arg RevokeFCCVerificationParams) error

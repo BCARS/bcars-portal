@@ -30,7 +30,7 @@ INSERT INTO member_change_requests (
     supplied_name, supplied_call_sign, supplied_contact, stated_relationship,
     summary, received_by, submitted_at, source_ip_hash
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version
+RETURNING id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version, resolved_by, resolution_note
 `
 
 type CreateChangeRequestParams struct {
@@ -94,6 +94,8 @@ func (q *Queries) CreateChangeRequest(ctx context.Context, arg CreateChangeReque
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.ResolvedBy,
+		&i.ResolutionNote,
 	)
 	return i, err
 }
@@ -223,7 +225,7 @@ func (q *Queries) DecideChangeRequestItem(ctx context.Context, arg DecideChangeR
 }
 
 const getChangeRequest = `-- name: GetChangeRequest :one
-SELECT id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version FROM member_change_requests WHERE id = ?
+SELECT id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version, resolved_by, resolution_note FROM member_change_requests WHERE id = ?
 `
 
 func (q *Queries) GetChangeRequest(ctx context.Context, id int64) (MemberChangeRequest, error) {
@@ -250,6 +252,8 @@ func (q *Queries) GetChangeRequest(ctx context.Context, id int64) (MemberChangeR
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.ResolvedBy,
+		&i.ResolutionNote,
 	)
 	return i, err
 }
@@ -341,7 +345,7 @@ func (q *Queries) ListChangeRequestItems(ctx context.Context, requestID int64) (
 }
 
 const listChangeRequests = `-- name: ListChangeRequests :many
-SELECT r.id, r.source, r.status, r.requester_user_id, r.target_person_id, r.supplied_name, r.supplied_call_sign, r.supplied_contact, r.stated_relationship, r.summary, r.received_by, r.submitted_at, r.triaged_by, r.triaged_at, r.resolved_at, r.withdrawn_at, r.source_ip_hash, r.created_at, r.updated_at, r.version,
+SELECT r.id, r.source, r.status, r.requester_user_id, r.target_person_id, r.supplied_name, r.supplied_call_sign, r.supplied_contact, r.stated_relationship, r.summary, r.received_by, r.submitted_at, r.triaged_by, r.triaged_at, r.resolved_at, r.withdrawn_at, r.source_ip_hash, r.created_at, r.updated_at, r.version, r.resolved_by, r.resolution_note,
        p.display_name AS target_display_name
   FROM member_change_requests r
   LEFT JOIN persons p ON p.id = r.target_person_id
@@ -352,12 +356,17 @@ SELECT r.id, r.source, r.status, r.requester_user_id, r.target_person_id, r.supp
    AND (?4 = 0
         OR (r.target_person_id IS NULL
             AND r.status NOT IN ('resolved', 'withdrawn')))
+   -- open_only is what the queue opens on. A pile where finished work looks
+   -- exactly like outstanding work is a pile an officer re-reads every month
+   -- (bcars-portal-ssz.6).
+   AND (?5 = 0
+        OR r.status NOT IN ('resolved', 'withdrawn'))
  ORDER BY r.submitted_at DESC, r.id DESC
  -- Named, not bare ` + "`" + `?` + "`" + `. sqlc numbers named parameters (?3, ?4, ...) and leaves
  -- a bare ` + "`" + `?` + "`" + ` positional, so mixing the two in one query makes SQLite expect
  -- arguments at indices the generated call never binds. That fails at runtime
  -- with "missing argument with index N", not at generation time.
- LIMIT ?6 OFFSET ?5
+ LIMIT ?7 OFFSET ?6
 `
 
 type ListChangeRequestsParams struct {
@@ -365,6 +374,7 @@ type ListChangeRequestsParams struct {
 	Source          interface{}
 	RequesterUserID interface{}
 	UntargetedOnly  interface{}
+	OpenOnly        interface{}
 	PageOffset      int64
 	PageLimit       int64
 }
@@ -390,6 +400,8 @@ type ListChangeRequestsRow struct {
 	CreatedAt          string
 	UpdatedAt          string
 	Version            int64
+	ResolvedBy         sql.NullInt64
+	ResolutionNote     sql.NullString
 	TargetDisplayName  sql.NullString
 }
 
@@ -406,6 +418,7 @@ func (q *Queries) ListChangeRequests(ctx context.Context, arg ListChangeRequests
 		arg.Source,
 		arg.RequesterUserID,
 		arg.UntargetedOnly,
+		arg.OpenOnly,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -437,6 +450,8 @@ func (q *Queries) ListChangeRequests(ctx context.Context, arg ListChangeRequests
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.ResolvedBy,
+			&i.ResolutionNote,
 			&i.TargetDisplayName,
 		); err != nil {
 			return nil, err
@@ -453,7 +468,7 @@ func (q *Queries) ListChangeRequests(ctx context.Context, arg ListChangeRequests
 }
 
 const listChangeRequestsForRequester = `-- name: ListChangeRequestsForRequester :many
-SELECT id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version FROM member_change_requests
+SELECT id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version, resolved_by, resolution_note FROM member_change_requests
  WHERE requester_user_id = ?
  ORDER BY submitted_at DESC, id DESC
  LIMIT ? OFFSET ?
@@ -497,6 +512,8 @@ func (q *Queries) ListChangeRequestsForRequester(ctx context.Context, arg ListCh
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.ResolvedBy,
+			&i.ResolutionNote,
 		); err != nil {
 			return nil, err
 		}
@@ -512,7 +529,7 @@ func (q *Queries) ListChangeRequestsForRequester(ctx context.Context, arg ListCh
 }
 
 const listUntargetedChangeRequests = `-- name: ListUntargetedChangeRequests :many
-SELECT id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version FROM member_change_requests
+SELECT id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version, resolved_by, resolution_note FROM member_change_requests
  WHERE target_person_id IS NULL
    AND status NOT IN ('resolved', 'withdrawn')
  ORDER BY submitted_at DESC, id DESC
@@ -555,6 +572,8 @@ func (q *Queries) ListUntargetedChangeRequests(ctx context.Context, arg ListUnta
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.ResolvedBy,
+			&i.ResolutionNote,
 		); err != nil {
 			return nil, err
 		}
@@ -641,6 +660,74 @@ func (q *Queries) MarkChangeRequestItemApplied(ctx context.Context, arg MarkChan
 	return i, err
 }
 
+const resolveChangeRequest = `-- name: ResolveChangeRequest :one
+UPDATE member_change_requests
+   SET status = 'resolved',
+       resolved_at = ?1,
+       resolved_by = ?2,
+       resolution_note = ?3,
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+       version = version + 1
+ WHERE id = ?4
+   AND version = ?5
+   AND status NOT IN ('resolved', 'withdrawn')
+RETURNING id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version, resolved_by, resolution_note
+`
+
+type ResolveChangeRequestParams struct {
+	ResolvedAt     sql.NullString
+	ResolvedBy     sql.NullInt64
+	ResolutionNote sql.NullString
+	ID             int64
+	Version        int64
+}
+
+// An officer declaring they are finished with a request (bcars-portal-ssz.6).
+//
+// Distinct from SetChangeRequestStatus, which the review path uses when the
+// last item becomes terminal. This one is an ACT: it names the officer and
+// carries what they did about it, and it is the only way a request carrying
+// nothing appliable -- a note -- ever leaves the queue.
+//
+// Guarded on status so a resolved or withdrawn request is not silently
+// resolved twice, and on version so two officers closing the same note produce
+// a conflict rather than one overwriting the other.
+func (q *Queries) ResolveChangeRequest(ctx context.Context, arg ResolveChangeRequestParams) (MemberChangeRequest, error) {
+	row := q.db.QueryRowContext(ctx, resolveChangeRequest,
+		arg.ResolvedAt,
+		arg.ResolvedBy,
+		arg.ResolutionNote,
+		arg.ID,
+		arg.Version,
+	)
+	var i MemberChangeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.Source,
+		&i.Status,
+		&i.RequesterUserID,
+		&i.TargetPersonID,
+		&i.SuppliedName,
+		&i.SuppliedCallSign,
+		&i.SuppliedContact,
+		&i.StatedRelationship,
+		&i.Summary,
+		&i.ReceivedBy,
+		&i.SubmittedAt,
+		&i.TriagedBy,
+		&i.TriagedAt,
+		&i.ResolvedAt,
+		&i.WithdrawnAt,
+		&i.SourceIpHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+		&i.ResolvedBy,
+		&i.ResolutionNote,
+	)
+	return i, err
+}
+
 const setChangeRequestStatus = `-- name: SetChangeRequestStatus :one
 UPDATE member_change_requests
    SET status = ?1,
@@ -650,7 +737,7 @@ UPDATE member_change_requests
        version = version + 1
  WHERE id = ?4
    AND version = ?5
-RETURNING id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version
+RETURNING id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version, resolved_by, resolution_note
 `
 
 type SetChangeRequestStatusParams struct {
@@ -691,6 +778,8 @@ func (q *Queries) SetChangeRequestStatus(ctx context.Context, arg SetChangeReque
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.ResolvedBy,
+		&i.ResolutionNote,
 	)
 	return i, err
 }
@@ -704,7 +793,7 @@ UPDATE member_change_requests
        version = version + 1
  WHERE id = ?4
    AND version = ?5
-RETURNING id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version
+RETURNING id, source, status, requester_user_id, target_person_id, supplied_name, supplied_call_sign, supplied_contact, stated_relationship, summary, received_by, submitted_at, triaged_by, triaged_at, resolved_at, withdrawn_at, source_ip_hash, created_at, updated_at, version, resolved_by, resolution_note
 `
 
 type SetChangeRequestTargetParams struct {
@@ -747,6 +836,8 @@ func (q *Queries) SetChangeRequestTarget(ctx context.Context, arg SetChangeReque
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.ResolvedBy,
+		&i.ResolutionNote,
 	)
 	return i, err
 }

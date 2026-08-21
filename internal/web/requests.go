@@ -68,6 +68,7 @@ func (h *Handler) RequestRoutes() []GuardedRoute {
 		{Pattern: "POST " + RouteAdminRequests + "/{id}/items/{item_id}/decision", Capability: "change_request.review", AuditAction: "change_request.item.decide", ResourceKind: "change_request_item", handler: h.requestDecide},
 		{Pattern: "POST " + RouteAdminRequests + "/{id}/apply", Capability: "change_request.review", AuditAction: "change_request.item.decide", ResourceKind: "change_request", handler: h.requestApply},
 		{Pattern: "POST " + RouteAdminRequests + "/{id}/decline", Capability: "change_request.review", AuditAction: "change_request.item.decide", ResourceKind: "change_request", handler: h.requestDecline},
+		{Pattern: "POST " + RouteAdminRequests + "/{id}/done", Capability: "change_request.review", AuditAction: "change_request.resolve", ResourceKind: "change_request", handler: h.requestDone},
 	}
 }
 
@@ -134,6 +135,14 @@ func statusLabel(status string) string {
 	}
 }
 
+// closedWithoutDecisionLabel is what an undecided item reads as once an officer
+// has finished with the request.
+//
+// "Awaiting decision" on a request marked done is a contradiction a reader has
+// to resolve themselves. Nobody refused this item and nobody applied it: the
+// officer dealt with the request another way, which is exactly what a note is.
+const closedWithoutDecisionLabel = "Closed with the request"
+
 func itemStatusLabel(status string) string {
 	switch status {
 	case changerequests.ItemPending:
@@ -168,6 +177,9 @@ type labelledValue struct {
 }
 
 type requestFilters struct {
+	// OpenOnly reports that this view is hiding finished work, so the page can
+	// say so rather than looking like the whole queue.
+	OpenOnly     bool
 	Status       string
 	Source       string
 	UnlinkedOnly bool
@@ -189,6 +201,12 @@ type officerRequestRow struct {
 	Linked       bool
 	PendingItems int64
 	SubmittedAt  string
+	// ResolvedAt, ResolvedByEmail and ResolutionNote say that an officer
+	// finished with this and what they did, so the queue is readable as
+	// history rather than as a pile of unread work (bcars-portal-ssz.6).
+	ResolvedAt      string
+	ResolvedByEmail string
+	ResolutionNote  string
 }
 
 func (h *Handler) requestQueue(w http.ResponseWriter, r *http.Request) {
@@ -199,11 +217,19 @@ func (h *Handler) requestQueue(w http.ResponseWriter, r *http.Request) {
 		Source:       r.URL.Query().Get("source"),
 		UnlinkedOnly: r.URL.Query().Get("unlinked") == "1",
 	}
+	// The queue opens on what is outstanding. Asking for a status explicitly --
+	// including "any" -- is how an officer looks at finished work, which is a
+	// deliberate act rather than the default view (bcars-portal-ssz.6).
+	filters.OpenOnly = r.URL.Query().Get("status") == ""
+	if r.URL.Query().Get("status") == "any" {
+		filters.Status = ""
+	}
 
 	list, err := h.changeRequests.List(r.Context(), p, changerequests.ListFilter{
 		Status:               filters.Status,
 		Source:               filters.Source,
 		UnresolvedTargetOnly: filters.UnlinkedOnly,
+		OpenOnly:             filters.OpenOnly,
 		Limit:                changerequests.MaxLimit,
 	})
 	if err != nil {
@@ -227,14 +253,16 @@ func (h *Handler) requestQueue(w http.ResponseWriter, r *http.Request) {
 
 func officerRequestRowFrom(req changerequests.Request) officerRequestRow {
 	row := officerRequestRow{
-		ID:           req.ID,
-		Source:       sourceLabel(req.Source),
-		Kind:         requestKind(req),
-		Status:       statusLabel(req.Status),
-		Summary:      req.Summary,
-		Linked:       req.TargetPersonID != 0,
-		PendingItems: req.PendingItems,
-		SubmittedAt:  memberDate(req.SubmittedAt),
+		ID:             req.ID,
+		Source:         sourceLabel(req.Source),
+		Kind:           requestKind(req),
+		Status:         statusLabel(req.Status),
+		Summary:        req.Summary,
+		Linked:         req.TargetPersonID != 0,
+		PendingItems:   req.PendingItems,
+		SubmittedAt:    memberDate(req.SubmittedAt),
+		ResolvedAt:     memberDate(req.ResolvedAt),
+		ResolutionNote: req.ResolutionNote,
 	}
 	switch {
 	case req.TargetDisplayName != "":
@@ -267,7 +295,11 @@ func suppliedDescription(req changerequests.Request) string {
 
 func statusOptions() []labelledValue {
 	return []labelledValue{
-		{"", "Any status"},
+		// The empty value is the default view and says what it actually shows.
+		// "Any status" as a default made a queue of finished work look exactly
+		// like a queue of outstanding work (bcars-portal-ssz.6).
+		{"", "Still open"},
+		{"any", "Any status, including closed"},
 		{changerequests.StatusSubmitted, "Submitted"},
 		{changerequests.StatusInReview, "In review"},
 		{changerequests.StatusResolved, "Resolved"},
@@ -409,9 +441,18 @@ func (h *Handler) requestDetail(w http.ResponseWriter, r *http.Request) {
 		_ = h.db.QueryRowContext(r.Context(),
 			`SELECT email FROM users WHERE id = ?`, req.RequesterUserID).Scan(&data.Supplied.SubmittedBy)
 	}
+	if req.ResolvedBy != 0 {
+		_ = h.db.QueryRowContext(r.Context(),
+			`SELECT email FROM users WHERE id = ?`, req.ResolvedBy).Scan(&data.Request.ResolvedByEmail)
+	}
 	current := h.currentValues(r, p, req)
+	requestClosed := req.Status == changerequests.StatusResolved ||
+		req.Status == changerequests.StatusWithdrawn
 	for _, item := range req.Items {
 		row := officerItemRowFrom(item)
+		if requestClosed && item.Status == changerequests.ItemPending {
+			row.Status = closedWithoutDecisionLabel
+		}
 		row.CurrentValue = current[item.ID].Current
 		if label := current[item.ID].Label; label != "" {
 			row.Label = label
@@ -501,9 +542,15 @@ func officerItemRowFrom(item changerequests.Item) officerItemRow {
 		DecisionReason:   item.DecisionReason,
 		VerificationNote: item.VerificationNote,
 		AppliedAt:        memberDate(item.AppliedAt),
-		Appliable:        changerequests.Adapters[item.Operation] != changerequests.AdapterNone,
-		EditValue:        plainProposedValue(item.Operation, item.ProposedValue),
-		AppliedValue:     item.AppliedValue,
+		// Appliable also requires a target. An item naming no record cannot be
+		// applied by anything -- linking the REQUEST does not give the ITEM a
+		// target -- so offering it is the loop bcars-portal-3la describes:
+		// the officer is told to link a request they have already linked.
+		// Those are read as notes and acted on by editing the record.
+		Appliable: changerequests.Adapters[item.Operation] != changerequests.AdapterNone &&
+			item.TargetID != 0,
+		EditValue:    plainProposedValue(item.Operation, item.ProposedValue),
+		AppliedValue: item.AppliedValue,
 		AppliedDiffers: item.AppliedValueRecorded &&
 			item.AppliedValue != plainProposedValue(item.Operation, item.ProposedValue),
 	}
@@ -837,6 +884,56 @@ func (h *Handler) requestDecline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, target+"?success="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+// requestDone is an officer saying they are finished with a request
+// (bcars-portal-ssz.6).
+//
+// It is what closes a NOTE. A note proposes nothing, so no decision empties its
+// queue slot; without this the pile only grows and next month's officer
+// re-reads what was dealt with weeks ago.
+//
+// The optional line is what saves that reader from opening the record to find
+// out what happened. It is optional because requiring it turns a note into
+// paperwork, and the officer who has just done the thing is the one paying.
+func (h *Handler) requestDone(w http.ResponseWriter, r *http.Request) {
+	p := h.principalFromRequest(r)
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
+
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		return
+	}
+	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
+
+	_, err := h.changeRequests.Resolve(r.Context(), p, id, changerequests.ResolveParams{
+		Note:            strings.TrimSpace(r.FormValue("resolution_note")),
+		ExpectedVersion: version,
+	}, time.Now())
+
+	switch {
+	case err == nil:
+		// No flash. The page now carries a permanent banner saying who marked
+		// it done and what they did, which says more than a flash could and
+		// does not vanish on the next reload.
+		http.Redirect(w, r, target, http.StatusSeeOther)
+	case errors.Is(err, changerequests.ErrNotFound):
+		h.renderError(w, r, http.StatusNotFound, "No such request.")
+	case errors.Is(err, changerequests.ErrAlreadyResolved):
+		http.Redirect(w, r, target+"?error=This+was+already+closed", http.StatusSeeOther)
+	case errors.Is(err, changerequests.ErrPendingItems):
+		http.Redirect(w, r,
+			target+"?error=Apply+or+decline+the+proposed+changes+first,+so+the+member+gets+an+answer+about+them",
+			http.StatusSeeOther)
+	case errors.Is(err, db.ErrStale):
+		http.Redirect(w, r,
+			target+"?error=Another+officer+changed+this+while+you+were+reading+it.+Reload+and+look+again",
+			http.StatusSeeOther)
+	default:
+		h.log.Error("request resolve", slog.String("error", err.Error()))
+		http.Redirect(w, r, target+"?error=That+could+not+be+saved.+Please+try+again", http.StatusSeeOther)
+	}
 }
 
 func appliedMessage(applied int) string {

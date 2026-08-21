@@ -1,19 +1,20 @@
 {{template "member_layout.html" .}}
 
-{{define "title"}}Suggest a correction about someone else - BCARS Portal{{end}}
+{{define "title"}}Tell the officers about another member - BCARS Portal{{end}}
 
 {{define "content"}}
 <p class="breadcrumb"><a href="/member/">Your records</a></p>
 
-<h2>Suggest a correction about another member</h2>
+<h2>Tell the officers about another member</h2>
 
 {{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
 
 <div class="alert alert-info">
-    Tell us who this is about in your own words.
+    Tell us who this is about and what you know, in your own words. An officer
+    reads it and puts it right on the record.
     This form does not look anyone up, so it cannot confirm whether the person is in the club's records —
-    an officer works that out when they review your suggestion.
-    Sending a suggestion does not give you access to anyone's record.
+    an officer works that out when they read your note.
+    Sending a note does not give you access to anyone's record.
 </div>
 
 <form method="post" action="/member/suggest" class="card">
@@ -37,26 +38,11 @@
         <p class="form-hint">Context for the officers. It gives you no access to their record.</p>
     </div>
 
-    <fieldset>
-        <legend>What needs correcting?</legend>
-        {{range $i, $k := .Kinds}}
-        <label>
-            <input type="radio" name="kind" value="{{$k.Operation}}"
-                   {{if eq $.Submitted.Kind $k.Operation}}checked{{else if and (eq $.Submitted.Kind "") (eq $i 0)}}checked{{end}}>
-            {{$k.Label}}
-        </label>
-        {{end}}
-    </fieldset>
-
     <div class="form-group">
-        <label for="proposed_value">What it should be</label>
-        <input type="text" id="proposed_value" name="proposed_value" value="{{.Submitted.ProposedValue}}" maxlength="2000">
-        <p class="form-hint">Leave this empty only if you chose “Something else”.</p>
-    </div>
-
-    <div class="form-group">
-        <label for="summary">Anything else the officers should know (optional)</label>
-        <textarea id="summary" name="summary" rows="4" maxlength="4000">{{.Submitted.Summary}}</textarea>
+        <label for="summary">What should the officers know?</label>
+        <textarea id="summary" name="summary" rows="4" maxlength="4000"
+                  placeholder="For example: Joe has a new mobile number, 814-555-0199">{{.Submitted.Summary}}</textarea>
+        <p class="form-hint">This is the whole of your note, so say what you would say in person.</p>
     </div>
 
     <button type="submit" class="btn btn-primary">Send to the officers</button>

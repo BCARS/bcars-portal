@@ -146,7 +146,7 @@ type GetMyRecordOutput struct {
 }
 
 type MemberRequestItemBody struct {
-	Operation     string `json:"operation" minLength:"1" doc:"Must be an allowlisted operation. There is no arbitrary field path."`
+	Operation     string `json:"operation" minLength:"1" doc:"Must be an allowlisted operation. There is no arbitrary field path. About somebody else, only 'other' is accepted: such a report is a note an officer acts on, not a change anything can apply."`
 	ProposedValue string `json:"proposed_value,omitempty" maxLength:"2000" doc:"Required for every operation except 'other'."`
 	TargetKind    string `json:"target_kind,omitempty" enum:"person,contact_method" doc:"Only for one of your own records, and only a resource on that record."`
 	TargetID      int64  `json:"target_id,omitempty"`
@@ -154,7 +154,7 @@ type MemberRequestItemBody struct {
 }
 
 type SubmitMyRequestBody struct {
-	AboutPersonID int64  `json:"about_person_id,omitempty" doc:"One of your own records. Omit it to suggest a correction about someone else and describe them instead."`
+	AboutPersonID int64  `json:"about_person_id,omitempty" doc:"One of your own records. Omit it to report something about someone else, which is a note: describe them and say what you know, and an officer acts on it."`
 	AboutName     string `json:"about_name,omitempty" maxLength:"200" doc:"Who this is about, in your words. No lookup is performed and nothing is confirmed."`
 	AboutCallSign string `json:"about_call_sign,omitempty" maxLength:"200"`
 
@@ -607,10 +607,24 @@ func memberItems(in []MemberRequestItemBody, aboutSelf bool, about memberprofile
 			TargetVersion: item.TargetVersion,
 		}
 
+		// A submission about SOMEBODY ELSE carries no structured change
+		// (ADR-0014.4). It used to, and nothing could ever apply the result:
+		// the item named no record, and linking the request did not give the
+		// item one, so an officer was told to link what they had just linked
+		// (bcars-portal-3la). The words were always the useful part.
+		//
+		// Refused rather than quietly converted to a note: a client that
+		// believes it proposed a call-sign change should be told it did not.
+		if !aboutSelf && item.Operation != changerequests.OpOther {
+			return nil, huma.Error422UnprocessableEntity(
+				"items[" + strconv.Itoa(i) + "]: a suggestion about someone else carries no structured change; " +
+					"use operation \"other\" and describe it in the summary, which an officer reads and acts on")
+		}
+
 		switch {
 		case item.TargetKind == "" && item.TargetID == 0:
-			// No target named. Always allowed: an officer resolves what the
-			// item concerns during review.
+			// No target named. Allowed for the caller's own record, where an
+			// officer resolves what the item concerns during review.
 		case !aboutSelf:
 			return nil, huma.Error422UnprocessableEntity(
 				"items[" + strconv.Itoa(i) + "]: a suggestion about someone else cannot name a target resource")

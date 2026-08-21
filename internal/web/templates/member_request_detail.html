@@ -25,6 +25,7 @@
     </table>
 </div>
 
+{{if .HasProposals}}
 <div class="card">
     <h2>The changes you proposed</h2>
     <table>
@@ -52,6 +53,7 @@
         </tbody>
     </table>
 </div>
+{{end}}
 
 {{if .Request.Withdrawable}}
 <div class="card">

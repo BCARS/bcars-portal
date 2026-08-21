@@ -75,39 +75,19 @@ func (h *Handler) MemberRoutes() []GuardedRoute {
 	}
 }
 
-// suggestionKinds is what a member may propose from the UI.
+// A report about a record the member cannot see carries NO structured change
+// (ADR-0014.4, bcars-portal-ssz.4).
 //
-// It is a subset of changerequests.SupportedOperations, chosen because each one
-// is something a member can state without knowing how the club stores it. The
-// list is here rather than in a template so a template cannot invent an
-// operation the review path has no adapter for.
-var suggestionKinds = []struct {
-	Operation string
-	Label     string
-	// ValueLabel prompts for the proposed value. Empty means the kind takes
-	// none, which is only true of the catch-all.
-	ValueLabel string
-}{
-	{"person.display_name.set", "My name is wrong", "What your name should be"},
-	{"person.call_sign.set", "My call sign is wrong", "What your call sign should be"},
-	{"contact_method.update", "One of my contact details is wrong", "What it should be"},
-	{changerequests.OpOther, "Something else", "What should change"},
-}
-
-// otherSuggestionKinds is the same list phrased for a suggestion about someone
-// else. Contact corrections are included, but without a target: the member
-// describes the change and an officer decides which record and which value it
-// applies to.
-var otherSuggestionKinds = []struct {
-	Operation  string
-	Label      string
-	ValueLabel string
-}{
-	{"person.display_name.set", "Their name is wrong", "What their name should be"},
-	{"person.call_sign.set", "Their call sign is wrong", "What their call sign should be"},
-	{"contact_method.update", "Their contact details are wrong", "What they should be"},
-	{changerequests.OpOther, "Something else", "What should change"},
-}
+// It used to offer the same field list as the own-record form -- their name,
+// their call sign, their contact details -- and produce an item with no target,
+// because naming the target would mean looking the person up, which this form
+// must never do. Nothing could ever apply such an item: an officer who linked
+// the request was told to link the request (bcars-portal-3la).
+//
+// So it is a note. The member writes what they know, an officer reads it and
+// edits the record directly, which is what they would do with the same sentence
+// heard at a meeting. The submission boundary ADR-0013 protects is unchanged:
+// no grant, no relationship, no lookup, and nothing learned by sending it.
 
 // memberDate turns a stored value into something a member reads.
 //
@@ -379,23 +359,13 @@ func (h *Handler) loadMemberRecord(w http.ResponseWriter, r *http.Request) (memb
 
 // --- Suggesting a correction ---
 
+// memberSuggestData is the note form about somebody else. It names no record
+// and offers no field list, because a note proposes nothing (ADR-0014.4).
 type memberSuggestData struct {
-	// About names the record this concerns, and is empty for a suggestion
-	// about someone else. That emptiness is the whole difference between the
-	// two forms.
-	About memberRecordRow
-	Kinds []suggestionKind
 	// Submitted holds what the member typed, so a rejected submission comes
 	// back with their words rather than an empty form.
 	Submitted memberSuggestForm
 	Error     string
-}
-
-// suggestionKind is the template-facing shape of the allowlist.
-type suggestionKind struct {
-	Operation  string
-	Label      string
-	ValueLabel string
 }
 
 type memberSuggestForm struct {
@@ -410,14 +380,6 @@ type memberSuggestForm struct {
 	Relationship    string
 	Summary         string
 	ContactSelected string
-}
-
-func otherKinds() []suggestionKind {
-	out := make([]suggestionKind, 0, len(otherSuggestionKinds))
-	for _, k := range otherSuggestionKinds {
-		out = append(out, suggestionKind(k))
-	}
-	return out
 }
 
 // --- The member's edit form (bcars-portal-ssz.2, ADR-0014) ---
@@ -732,7 +694,6 @@ func (h *Handler) memberSuggestOtherForm(w http.ResponseWriter, r *http.Request)
 	// arrives is a starting point the sender can correct, not an identification
 	// the portal has made.
 	h.renderPage(w, r, "member_suggest_other.html", http.StatusOK, memberSuggestData{
-		Kinds: otherKinds(),
 		Submitted: memberSuggestForm{
 			AboutName:     strings.TrimSpace(r.URL.Query().Get("about_name")),
 			AboutCallSign: strings.TrimSpace(r.URL.Query().Get("about_call_sign")),
@@ -752,7 +713,6 @@ func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Reques
 	form, problem := readSuggestForm(r)
 	render := func(msg string, status int) {
 		h.renderPage(w, r, "member_suggest_other.html", status, memberSuggestData{
-			Kinds:     otherKinds(),
 			Submitted: form,
 			Error:     msg,
 		})
@@ -778,32 +738,21 @@ func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Reques
 		StatedRelationship: form.Relationship,
 		Summary:            form.Summary,
 		SourceIPHash:       h.clientIP.HashRequest(r),
-		Items: []changerequests.ItemInput{{
-			Operation:     form.Kind,
-			ProposedValue: form.ProposedValue,
-		}},
+		// One item, and it is the note itself. `other` can never be approved,
+		// which is right: there is nothing here to apply. An officer reads the
+		// summary, edits the record, and marks the request done.
+		Items: []changerequests.ItemInput{{Operation: changerequests.OpOther}},
 	}, idempotencyKeyFor(r), time.Now())
 	if err != nil {
-		h.log.Error("member suggestion about another", slog.String("error", err.Error()))
+		h.log.Error("member note about another", slog.String("error", err.Error()))
 		render(friendlyError(err), http.StatusBadRequest)
 		return
 	}
 
-	http.Redirect(w, r, RouteMemberRequests+"/"+strconv.FormatInt(created.ID, 10)+"?success=Your+suggestion+has+been+sent+to+the+officers",
+	http.Redirect(w, r, RouteMemberRequests+"/"+strconv.FormatInt(created.ID, 10)+"?success=Your+note+has+been+sent+to+the+officers",
 		http.StatusSeeOther)
 }
 
-// readSuggestForm parses and bounds what a member typed. It returns the parsed
-// form and a message to show the member, empty when the form is usable.
-//
-// The message is a string rather than an error because it is copy addressed to
-// a person, not a condition another function handles: an error value here would
-// invite a caller to wrap it, log it, or compare it, none of which is what a
-// sentence in a form belongs to.
-//
-// The operation is matched against the allowlist rather than passed through, so
-// a hand-built form cannot propose an operation the review path has no adapter
-// for — and cannot smuggle one the UI deliberately does not offer.
 // readSuggestForm reads the form about SOMEBODY ELSE.
 //
 // The own-record form is an edit form now (ADR-0014) and is read by
@@ -825,31 +774,10 @@ func readSuggestForm(r *http.Request) (memberSuggestForm, string) {
 		Summary:       strings.TrimSpace(r.FormValue("summary")),
 	}
 
-	known := false
-	for _, k := range suggestionKinds {
-		if k.Operation == form.Kind {
-			known = true
-		}
-	}
-	if !known {
-		return form, "Choose what needs correcting."
-	}
-
-	// The note is optional. It was required, which turned an ordinary
-	// correction — "my call sign should be W3XYZ" — into a short essay before
-	// the form would accept it (bcars-portal-245).
-	//
-	// What a submission may never be is empty of content. A specific kind
-	// carries its value; the catch-all carries only the note, so there the note
-	// is the whole of it.
-	if form.Kind == changerequests.OpOther {
-		if form.Summary == "" {
-			return form, "Tell the officers what should change."
-		}
-		return form, ""
-	}
-	if form.ProposedValue == "" {
-		return form, "Give the corrected value."
+	// The note IS the submission (ADR-0014.4). There is no field to choose and
+	// no value to propose, so the only thing that can be missing is the words.
+	if form.Summary == "" {
+		return form, "Tell the officers what they should know."
 	}
 	return form, ""
 }
@@ -892,8 +820,13 @@ type memberRequestRow struct {
 type memberRequestDetailData struct {
 	Request memberRequestRow
 	Items   []memberRequestItemRow
-	Success string
-	Error   string
+	// HasProposals reports that this carries something an officer decides,
+	// rather than being a note. A note's words are already on the page under
+	// what the member asked for; repeating them in a table headed "the changes
+	// you proposed" tells them they proposed a change they did not.
+	HasProposals bool
+	Success      string
+	Error        string
 }
 
 type memberRequestItemRow struct {
@@ -961,6 +894,9 @@ func (h *Handler) memberRequestDetail(w http.ResponseWriter, r *http.Request) {
 			Status:         item.Status,
 			DecisionReason: item.DecisionReason,
 		})
+		if item.Operation != changerequests.OpOther {
+			data.HasProposals = true
+		}
 	}
 	h.renderPage(w, r, "member_request_detail.html", http.StatusOK, data)
 }

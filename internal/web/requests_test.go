@@ -818,3 +818,147 @@ func TestASensitiveChangeStillNeedsItsVerificationNote(t *testing.T) {
 	require.NoError(t, e.h.db.QueryRow(`SELECT call_sign FROM persons WHERE id = ?`, personID).Scan(&callSign))
 	assert.Equal(t, "W3NEW", callSign.String)
 }
+
+// A note is closed by an officer saying so, because nothing in it can be
+// decided (bcars-portal-ssz.6, ADR-0014.4).
+func TestAnOfficerMarksANoteDoneAndItLeavesTheQueue(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	member := e.signInMember(t)
+
+	w := e.post(t, RouteMemberSuggest, url.Values{
+		"about_name": {"Marguerite Ashby"},
+		"summary":    {"Her mobile number has changed to 814-555-0177."},
+	}, member)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var requestID, version int64
+	var status string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT id, version, status FROM member_change_requests ORDER BY id DESC LIMIT 1`).
+		Scan(&requestID, &version, &status))
+	assert.Equal(t, "submitted", status,
+		"a note arrives outstanding: nothing may resolve it on the way in")
+
+	// It is in the queue an officer opens.
+	queue := e.getAs(t, RouteAdminRequests, officer).Body.String()
+	assert.Contains(t, queue, "Marguerite Ashby")
+
+	// The review screen offers nothing to apply, because a note proposes
+	// nothing an adapter could write.
+	detail := e.getAs(t, fmt.Sprintf("%s/%d", RouteAdminRequests, requestID), officer).Body.String()
+	assert.NotContains(t, detail, "Apply the ticked changes",
+		"there is nothing here to apply; an officer edits the record instead")
+	assert.Contains(t, detail, "Mark done")
+
+	w = e.post(t, fmt.Sprintf("%s/%d/done", RouteAdminRequests, requestID), url.Values{
+		"version":         {fmt.Sprint(version)},
+		"resolution_note": {"Added the new mobile to her record."},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var resolvedBy sql.NullInt64
+	var resolvedAt, note sql.NullString
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT status, resolved_at, resolved_by, resolution_note
+		   FROM member_change_requests WHERE id = ?`, requestID).
+		Scan(&status, &resolvedAt, &resolvedBy, &note))
+	assert.Equal(t, "resolved", status)
+	assert.True(t, resolvedAt.Valid)
+	assert.True(t, resolvedBy.Valid, "who finished with it is recorded, not only when")
+	assert.Equal(t, "Added the new mobile to her record.", note.String)
+
+	// And the queue an officer opens no longer holds it.
+	queue = e.getAs(t, RouteAdminRequests, officer).Body.String()
+	assert.NotContains(t, queue, "Marguerite Ashby",
+		"finished work must not sit in the pile of outstanding work")
+	assert.Contains(t, e.getAs(t, RouteAdminRequests+"?status=any", officer).Body.String(), "Marguerite Ashby",
+		"but it is still there for an officer who asks for it")
+}
+
+// Marking done must not swallow a change nobody decided. The member would be
+// told their suggestion was dealt with when no officer ever looked at it.
+func TestMarkingDoneIsRefusedWhileAChangeIsStillPending(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.grant(t, "Dale Rutherford")
+	req := e.seedOwnRequest(t, personID, "Dale Rutherford Jr")
+
+	w := e.post(t, fmt.Sprintf("%s/%d/done", RouteAdminRequests, req.ID), url.Values{
+		"version": {fmt.Sprint(req.Version)},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Contains(t, w.Header().Get("Location"), "error=Apply+or+decline")
+
+	var status string
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT status FROM member_change_requests WHERE id = ?`, req.ID).Scan(&status))
+	assert.NotEqual(t, "resolved", status, "the request stays open until that change is answered")
+}
+
+// An item that names no record is not offered for apply. Linking the REQUEST
+// does not give the ITEM a target, so offering it produced the loop
+// bcars-portal-3la describes: the officer is told to link what they just linked.
+func TestAnItemWithNoTargetIsNotOfferedForApply(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	personID := e.seedPersonRow(t, "Marguerite Ashby", "W3MGA")
+
+	// A stored item of the old shape: an operation with an adapter, and no
+	// target. Nothing creates these now; rows like it exist from before.
+	req, err := e.h.changeRequests.Create(context.Background(),
+		&authz.Principal{UserID: e.memberUserID},
+		changerequests.CreateParams{
+			Source:          changerequests.SourceMember,
+			RequesterUserID: e.memberUserID,
+			SuppliedName:    "Marguerite Ashby",
+			Summary:         "Her call sign is printed wrong.",
+			Items:           []changerequests.ItemInput{{Operation: "person.call_sign.set", ProposedValue: "W3MGB"}},
+		}, "legacy-untargeted", time.Now().UTC())
+	require.NoError(t, err)
+
+	// Even once linked, the item is presented as words rather than as work.
+	_, err = e.h.changeRequests.Triage(context.Background(), e.officerPrincipal(), req.ID,
+		changerequests.TriageParams{TargetPersonID: personID, ExpectedVersion: req.Version}, time.Now().UTC())
+	require.NoError(t, err)
+
+	detail := e.getAs(t, fmt.Sprintf("%s/%d", RouteAdminRequests, req.ID), officer).Body.String()
+	assert.NotContains(t, detail, "Apply the ticked changes",
+		"an item naming no record must not be offered for apply after linking")
+	assert.Contains(t, detail, "Mark done",
+		"the officer closes it after acting on the record")
+}
+
+// An undecided item on a request an officer finished with is not "awaiting" a
+// decision that is never coming. Nobody refused it and nobody applied it: the
+// officer dealt with the request another way, which is what a note is.
+func TestAnUndecidedItemOnAClosedRequestSaysSo(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	member := e.signInMember(t)
+
+	w := e.post(t, RouteMemberSuggest, url.Values{
+		"about_name": {"Marguerite Ashby"},
+		"summary":    {"Her mobile number has changed."},
+	}, member)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	var requestID, version int64
+	require.NoError(t, e.h.db.QueryRow(
+		`SELECT id, version FROM member_change_requests ORDER BY id DESC LIMIT 1`).Scan(&requestID, &version))
+
+	before := e.getAs(t, fmt.Sprintf("%s/%d", RouteAdminRequests, requestID), officer).Body.String()
+	assert.Contains(t, before, "Awaiting decision", "while it is open, it is genuinely awaiting one")
+
+	w = e.post(t, fmt.Sprintf("%s/%d/done", RouteAdminRequests, requestID), url.Values{
+		"version": {fmt.Sprint(version)},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	after := e.getAs(t, fmt.Sprintf("%s/%d", RouteAdminRequests, requestID), officer).Body.String()
+	assert.Contains(t, after, "Closed with the request")
+	assert.NotContains(t, after, "Awaiting decision",
+		"a closed request must not claim to be waiting for anything")
+	assert.Contains(t, after, "Marked done",
+		"and the page says who finished with it, permanently rather than as a flash")
+}
