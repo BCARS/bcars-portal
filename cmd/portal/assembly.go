@@ -17,6 +17,7 @@ import (
 
 // assemblyConfig holds everything the production HTTP assembly needs beyond
 // the database handle.
+// no-op comment
 type assemblyConfig struct {
 	Logger       *slog.Logger
 	Version      string
