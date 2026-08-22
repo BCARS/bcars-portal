@@ -40,6 +40,11 @@ Numbered in walk order. The role prefix is the account the screen was captured
 as; each role runs in its own browser session, so no role's cookie leaks into
 another's screens.
 
+The member files a correction and a note before the officer screens are taken,
+even though the member screens come last. An empty queue photographs as an
+empty queue, and the two screens carrying the correction workflow have nothing
+to show without one of each.
+
 ### Officer / administrator
 
 | | Screen | File |
@@ -47,37 +52,44 @@ another's screens.
 | 01 | Dashboard — club-wide counts and recent audit events | [`01-admin-dashboard.png`](01-admin-dashboard.png) |
 | 02 | Member list with search | [`02-admin-members.png`](02-admin-members.png) |
 | 03 | Member detail — contact methods, memberships, notes | [`03-admin-member-detail.png`](03-admin-member-detail.png) |
-| 04 | Correction requests awaiting review | [`04-admin-requests.png`](04-admin-requests.png) |
-| 05 | Groups.io import — upload and staging | [`05-admin-imports.png`](05-admin-imports.png) |
-| 06 | Dashboard at the larger text size | [`06-admin-dashboard-large.png`](06-admin-dashboard-large.png) |
+| 04 | Correction requests, opening on what is still outstanding | [`04-admin-requests.png`](04-admin-requests.png) |
+| 05 | Reviewing an edit — each change beside the value on the record, editable, tick to include, one apply | [`05-admin-request-review.png`](05-admin-request-review.png) |
+| 06 | Reviewing a note — nothing to apply, so an officer acts on the record and marks it done | [`06-admin-note-review.png`](06-admin-note-review.png) |
+| 07 | Groups.io import — upload and staging | [`07-admin-imports.png`](07-admin-imports.png) |
+| 08 | Dashboard at the larger text size | [`08-admin-dashboard-large.png`](08-admin-dashboard-large.png) |
 
 ### Treasurer
 
 | | Screen | File |
 |---|---|---|
-| 07 | Treasury home — dues standing as of a date | [`07-treasurer-treasury-home.png`](07-treasurer-treasury-home.png) |
-| 08 | Full dues standing | [`08-treasurer-dues-standing.png`](08-treasurer-dues-standing.png) |
-| 09 | Payment batches | [`09-treasurer-batches.png`](09-treasurer-batches.png) |
-| 10 | Single payment entry | [`10-treasurer-payment-entry.png`](10-treasurer-payment-entry.png) |
-| 11 | Renewal worksheet options | [`11-treasurer-worksheet-opts.png`](11-treasurer-worksheet-opts.png) |
-| 12 | Printable renewal worksheet | [`12-treasurer-worksheet-sheet.png`](12-treasurer-worksheet-sheet.png) |
-| 13 | Payment batch entry — defaults, grid and totals | [`13-treasurer-batch-entry.png`](13-treasurer-batch-entry.png) |
+| 09 | Treasury home — dues standing as of a date | [`09-treasurer-treasury-home.png`](09-treasurer-treasury-home.png) |
+| 10 | Full dues standing | [`10-treasurer-dues-standing.png`](10-treasurer-dues-standing.png) |
+| 11 | Payment batches | [`11-treasurer-batches.png`](11-treasurer-batches.png) |
+| 12 | Single payment entry | [`12-treasurer-payment-entry.png`](12-treasurer-payment-entry.png) |
+| 13 | Renewal worksheet options | [`13-treasurer-worksheet-opts.png`](13-treasurer-worksheet-opts.png) |
+| 14 | Printable renewal worksheet | [`14-treasurer-worksheet-sheet.png`](14-treasurer-worksheet-sheet.png) |
+| 15 | Payment batch entry — defaults, grid and totals | [`15-treasurer-batch-entry.png`](15-treasurer-batch-entry.png) |
 
 ### Member
 
 | | Screen | File |
 |---|---|---|
-| 14 | Member landing — your own records | [`14-member-landing.png`](14-member-landing.png) |
-| 15 | Member directory | [`15-member-directory.png`](15-member-directory.png) |
-| 16 | Directory print view | [`16-member-directory-print.png`](16-member-directory-print.png) |
-| 17 | Text size preference | [`17-member-text-size.png`](17-member-text-size.png) |
-| 18 | Suggest a correction — one question, each contact detail a choice | [`18-member-suggest.png`](18-member-suggest.png) |
+| 16 | Member landing — your own records | [`16-member-landing.png`](16-member-landing.png) |
+| 17 | Member directory | [`17-member-directory.png`](17-member-directory.png) |
+| 18 | Directory print view | [`18-member-directory-print.png`](18-member-directory-print.png) |
+| 19 | Text size preference | [`19-member-text-size.png`](19-member-text-size.png) |
+| 20 | Correcting your details — the record as a form, every field holding its own value | [`20-member-edit.png`](20-member-edit.png) |
+| 21 | Telling the officers about another member — a note, proposing nothing structured | [`21-member-note.png`](21-member-note.png) |
 
 ### Signed out
 
 | | Screen | File |
 |---|---|---|
-| 19 | Not found, as a signed-out visitor sees it — no navigation, one way back | [`19-public-not-found.png`](19-public-not-found.png) |
+| 22 | Not found, as a signed-out visitor sees it — no navigation, one way back | [`22-public-not-found.png`](22-public-not-found.png) |
+
+Screens 05, 06, 20 and 21 are the shape ADR-0014 describes: a member edits the
+record they can see, reports anything else as a note, and an officer amends and
+applies in one pass rather than answering yes or no a field at a time.
 
 These show the functional MVP layouts. Visual design and polish are the subject
 of the `6pz` design beads, so treat them as evidence of what each screen *does*

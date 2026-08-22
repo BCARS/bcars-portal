@@ -53,6 +53,10 @@ STEP_TIMEOUT="${STEP_TIMEOUT:-25}"
 # allowlist entry. An allowlist entry is a permanent hole in that gate.
 DEMO_DOMAIN="demo.local"
 
+# Where a member reports something about a record they cannot see. Named once
+# because the walk both fills it in and photographs it.
+MEMBER_NOTE_PATH="/member/suggest"
+
 VIEWPORT_W="${VIEWPORT_W:-1280}"
 VIEWPORT_H="${VIEWPORT_H:-900}"
 
@@ -180,12 +184,85 @@ shot() {
 echo "Walking $BASE_URL — screenshots to $OUT_DIR/"
 echo
 
+# --- Setup: the work the officer screens need to have something in them ------
+#
+# The member files first, even though the member screens are captured last.
+# An empty queue photographs as an empty queue, and the two screens that carry
+# the correction workflow -- reviewing an edit, and closing a note -- have
+# nothing to show without one of each (ADR-0014).
+sign_in member "joe@$DEMO_DOMAIN" joe
+
+member_record="$(ab member get html '#main' 2>/dev/null | grep -o '/member/records/[0-9]*' | head -1 || true)"
+if [ -z "$member_record" ]; then
+  die "member: could not find their own record, so nothing can be filed against it"
+fi
+
+# An edit changing two fields, one of them with a deliberate typo for the
+# officer to correct on the review screen. That correction IS the screen.
+if act member "open the edit form" open "$BASE_URL$member_record/suggest"; then
+  contact_field="$(ab member get html '#main' 2>/dev/null \
+    | grep -o 'name="contact_[0-9]*"' | head -1 | sed 's/name="//; s/"//' || true)"
+  act member "correct the name" fill 'input[name=display_name]' 'Joseph Kettering' || true
+  if [ -n "$contact_field" ]; then
+    # Assembled, not written out, for the reason DEMO_DOMAIN exists: an
+    # email-like literal in a tracked file fails the secrets gate, and an
+    # allowlist entry to let this one through would be a permanent hole in it.
+    # The trailing character is the point -- the officer's review screen is
+    # where it gets corrected.
+    act member "mistype a contact detail" fill "input[name=$contact_field]" \
+      "joe.kettering@${DEMO_DOMAIN}l" || true
+  fi
+  act member "send the edit" click 'form[action$="/suggest"] button[type=submit]' || true
+fi
+
+# A note about somebody the member cannot see. It proposes nothing; an officer
+# reads it, edits the record, and marks it done.
+if act member "open the note form" open "$BASE_URL$MEMBER_NOTE_PATH"; then
+  act member "name who it is about" fill 'input[name=about_name]' 'Bernice Coughenour' || true
+  act member "write the note" fill 'textarea[name=summary]' \
+    'Bernice has a new mobile number, 814-555-0188. She asked me to pass it on at the meeting.' || true
+  act member "send the note" click 'form[action$="/member/suggest"] button[type=submit]' || true
+fi
+
 # --- Officer ---------------------------------------------------------------
 sign_in admin "admin@$DEMO_DOMAIN" admin
 shot admin dashboard          "/admin/"                  "Active Memberships"
 shot admin members            "/admin/members"           "Whitfield"
 shot admin member-detail      "/admin/members/1"         "Whitfield"
 shot admin requests           "/admin/requests"          "Correction requests"
+
+# The two review screens. Which request is which is read from the page rather
+# than assumed from an id: a walk against a portal that already had requests in
+# it would otherwise photograph somebody else's.
+review_ids="$(ab admin get html '#main' 2>/dev/null \
+  | grep -o '/admin/requests/[0-9]*' | sort -u || true)"
+edit_shot_taken=""
+note_shot_taken=""
+for path in $review_ids; do
+  if ! ab admin open "$BASE_URL$path" >/dev/null 2>&1; then
+    continue
+  fi
+  body="$(ab admin get text 'main#main' 2>/dev/null || true)"
+  case "$body" in
+    *"Apply the ticked changes"*)
+      [ -n "$edit_shot_taken" ] && continue
+      shot admin request-review "$path" "On the record now"
+      edit_shot_taken=1 ;;
+    *"Mark done"*)
+      [ -n "$note_shot_taken" ] && continue
+      shot admin note-review "$path" "Mark done"
+      note_shot_taken=1 ;;
+  esac
+done
+if [ -z "$edit_shot_taken" ]; then
+  echo "  !! no request offered changes to apply; the review screen was not captured" >&2
+  failures=$((failures + 1))
+fi
+if [ -z "$note_shot_taken" ]; then
+  echo "  !! no note was waiting; the mark-done screen was not captured" >&2
+  failures=$((failures + 1))
+fi
+
 shot admin imports            "/admin/imports"           "Upload Import File"
 
 # The text size preference changes every page, so the screen it most needs to
@@ -266,27 +343,20 @@ case "$batch_url" in
 esac
 
 # --- Member ----------------------------------------------------------------
-sign_in member "joe@$DEMO_DOMAIN" joe
 shot member landing           "/member/"                 "Your records"
 shot member directory         "/member/directory"        "Zeller"
 shot member directory-print   "/member/directory/print"  "Zeller"
 shot member text-size         "/preferences/text-size"   "Text size"
 
-# The correction form: one question, with each of the member's own contact
-# details as a choice rather than a dropdown nothing governed
-# (bcars-portal-245). The record id comes from the landing page, so the walk
-# does not depend on a fixture's row numbering.
-if act member "open the landing" open "$BASE_URL/member/"; then
-  own_record="$(ab member get html '#main' 2>/dev/null | grep -o '/member/records/[0-9]*' | head -1 || true)"
-else
-  own_record=""
-fi
-if [ -n "$own_record" ]; then
-  shot member suggest "${own_record}/suggest" "What needs correcting"
-else
-  echo "  !! could not find the member's own record; the correction form was not captured" >&2
-  failures=$((failures + 1))
-fi
+# The edit form: the record as a form, every field holding its own current
+# value (ADR-0014). It replaced a single question that asked which field was
+# wrong, which made a member who had moved house send two suggestions.
+shot member edit "${member_record}/suggest" "Correct the details for"
+
+# The note: what a member sends about a record they cannot see. It proposes
+# nothing structured, because nothing could ever apply it -- an officer reads it
+# and edits the record (bcars-portal-ssz.4).
+shot member note "$MEMBER_NOTE_PATH" "Tell the officers about another member"
 
 # The screen a lost visitor sees, captured signed OUT. The session name is new
 # on purpose: the walk's other sessions hold a cookie, and the public not-found

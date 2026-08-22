@@ -1,6 +1,16 @@
 # Phase 3 Design: Reviewed Member Requests and Optional Access
 
-Status: planned under epic `bcars-portal-4ux`.
+Status: shipped under epic `bcars-portal-4ux`; the correction workflow was
+reshaped by [ADR-0014](adr/0014-corrections-are-edits-and-notes.md) under epic
+`bcars-portal-ssz`.
+
+ADR-0014 wins where this document and it disagree. It narrows
+[ADR-0013](adr/0013-authenticated-member-corrections.md) rather than replacing
+it: submission still requires authentication, there is still no public form, a
+member may still report about a person they cannot see with no grant and no
+recorded relationship, and members still cannot write canonical data. What
+changed is the SHAPE of a correction, described under "Corrections after
+ADR-0014" below.
 
 This document is the standalone design authority for Phase 3. It distills the
 member-directory and correction-workflow decisions that were previously present
@@ -19,8 +29,8 @@ their first password or replace a forgotten one; it is not a separate sign-in
 method. Active approved Full members may browse and print a private directory
 whose contact values are filtered by the server. Associate members may use their
 own optional access but may not browse the directory. Any authenticated member,
-including an Associate, may suggest a correction about another person without
-receiving profile access to that person.
+including an Associate, may report a correction about another person, as a
+note, without receiving profile access to that person.
 
 Member input never changes canonical records directly. An officer reviews each
 proposed item, and only an approved, supported item is applied through the
@@ -90,10 +100,12 @@ accessible MVP decisions until `bcars-portal-6pz` begins.
     note, the repository confirmation control, and a reviewer other than the
     requester. Ordinary officer-entered contact corrections may be entered and
     approved by the same officer when policy permits it.
-11. Any authenticated member, including an Associate, may suggest a correction
-    about another person without an access grant to that record. Submission
-    accepts bounded target hints for officer triage and returns no lookup result,
-    current value, or new access. Anonymous callers cannot submit.
+11. Any authenticated member, including an Associate, may report a correction
+    about another person without an access grant to that record. Since ADR-0014
+    such a report is a NOTE: it carries no structured item, because nothing
+    could apply one against a record the sender may not see. Submission accepts
+    bounded name/call-sign hints for officer triage and returns no lookup
+    result, current value, or new access. Anonymous callers cannot submit.
 12. Directory eligibility is based on an active approved Full membership, not
     dues standing. Honorary status changes dues, not the underlying Full or
     Associate rights.
@@ -166,9 +178,12 @@ The following existing hardening work was completed before the member shell:
 
 A request records its source, optional authenticated requester, optional target
 person, supplied requester/contact snapshot, stated relationship, status, and
-submission/triage timestamps. An authenticated cross-member suggestion may
-begin with only bounded name/call-sign hints; an officer links it later without
-changing what the submitter supplied. Member submission never performs a target
+submission/triage timestamps, and — once an officer has finished with it — who
+resolved it and optionally what they did. An authenticated cross-member report
+may begin with only bounded name/call-sign hints; an officer links it later
+without changing what the submitter supplied. Since ADR-0014 that link is a
+filing aid rather than a precondition for applying anything, because such a
+report carries no item to apply. Member submission never performs a target
 lookup for the caller.
 
 Each item records a typed operation, proposed value, optional target resource and
@@ -257,20 +272,96 @@ deterministic identifier tie-breaker. Pagination and print use the same filtered
 query/service; the print adapter may request the full filtered result within a
 documented club-sized maximum.
 
-## Authenticated cross-member suggestions
+## Corrections after ADR-0014
 
-A provisioned member may submit a correction suggestion about another person
-without an active access grant to that person's profile. This is submission
-authority, not delegated management: the caller receives no profile data,
-current contact values, match candidates, or directory access from the request.
-Every item remains pending until an officer reviews it.
+A correction takes one of three shapes, decided by what the sender can already
+see.
 
-Full members may start from a person already visible in the private directory.
-Associates cannot browse that directory, but receive the same correction ability
-through bounded name/call-sign hints that an officer resolves during triage. The
-response shows the requester only what they submitted and a generic review
-status. Anonymous callers use an offline channel through an officer; there is no
-public correction form or API.
+**An officer editing a record edits it.** No proposal and no queue. The review
+queue exists for people who cannot write to the record, not as ceremony around
+people who can.
+
+**A member who can see a record gets an edit form for it** — their own record,
+or one an officer granted them. The form mirrors the record: name, call sign,
+and the current value of each contact detail, each editable, plus a note box.
+Submitting creates ONE request carrying one item per field the member actually
+changed; unchanged fields propose nothing. Existing values only — adding or
+removing a contact detail is described in the note box and an officer does it,
+because a form that creates and archives rows needs a review screen that can
+apply creations and archives, and correcting a wrong digit does not need that.
+
+Each item carries the version its sender was looking at, so an approval weeks
+later is refused as a conflict rather than quietly undoing an officer's more
+recent edit.
+
+**Everything else is a note.** A member reporting something about a record they
+cannot see writes what they know and that is the whole submission: no items, no
+proposed values, and nothing to resolve a target for. An officer reads it and
+edits the record, which is what they would do with the same sentence heard at a
+meeting. The API refuses a structured item on such a submission rather than
+converting it silently, so a client that believes it proposed a change is told
+it did not.
+
+This replaced a form that asked which single field was wrong and produced an
+item naming no record. Nothing could ever apply one: linking the REQUEST did not
+give the ITEM a target, so an officer who linked it was told to link it
+(`bcars-portal-3la`). Items now exist only where the submitter could already
+read the record, so an item always arrives with its target known.
+
+### Review
+
+Review is one form over the whole request, not a decision per field. Each
+proposed change appears beside the value currently on the record, editable, with
+a tick to include it; one action applies everything ticked. An officer who can
+see that a member mistyped one character corrects it and approves, instead of
+rejecting and asking the member to send the whole thing again.
+
+What the member proposed is never rewritten. The applied value and the reviewing
+officer are recorded next to it, so a member reading their own suggestion
+afterwards sees both what they asked for and what was done, and those may
+differ.
+
+Unticking a change leaves it PENDING rather than rejecting it: a member is owed
+a reason for a refusal and an empty checkbox is not one. Declining is a separate
+action carrying one reason for everything still open. Each change applies in its
+own transaction and partial success is reported, so a stale target on the third
+change does not undo the first two.
+
+Per-field sensitivity policy is unchanged in intent: a sensitive change still
+requires a verification note, still cannot be approved by the member who
+requested it, and a replayed apply still returns the recorded outcome rather
+than applying twice.
+
+### Closing a request
+
+A request resolves on its own once every item is terminal. A note has no items,
+so nothing empties its queue slot: an officer marks it done explicitly, and that
+records who did it and, optionally, one line about what they did. The queue
+opens on what is still outstanding; finished work is behind a filter rather than
+mixed into the pile.
+
+Marking done is refused while a proposed change is still pending, because
+closing it would tell the member their suggestion was dealt with when no officer
+ever decided it.
+
+## Authenticated cross-member reports
+
+A provisioned member may report a correction about another person without an
+active access grant to that person's profile. This is submission authority, not
+delegated management: the caller receives no profile data, current contact
+values, match candidates, or directory access from the request.
+
+Full members may start from a person visible in the private directory.
+Associates cannot browse that directory and use the same form, describing the
+person in their own words. The response shows the requester only what they
+submitted and a generic review status; the officer's conclusion about who it
+concerned is never echoed back, nor is the value an officer applied to a record
+the caller may not see. Anonymous callers use an offline channel through an
+officer; there is no public correction form or API.
+
+Such a report carries no structured item (see "Corrections after ADR-0014"),
+so an officer resolves it by editing the record and marking the note done rather
+than by triaging an item onto a target.
 
 ## Informational relationships
 
@@ -282,8 +373,9 @@ not appear in the member directory.
 A relationship can help an officer understand why one person is suggesting a
 change for another. It does not grant profile visibility or approval rights, and
 it is not required for request submission. Any authenticated member already may
-suggest a correction about another person; a separate access grant is needed
-only to read that person's safe profile.
+report a correction about another person; a separate access grant is needed
+only to read that person's safe profile, and an edit form is offered only for a
+record the caller may already read.
 
 ## API contract
 
@@ -292,12 +384,13 @@ Exact paths are finalized in OpenAPI without changing these resource boundaries.
 | Operation family | Capability | Contract purpose |
 | --- | --- | --- |
 | officer request create/list/detail/triage | `change_request.manage` | Capture every channel and resolve unlinked target hints. |
-| per-item review/apply | `change_request.review` | Decide and apply supported items with concurrency, idempotency, and sensitivity policy. |
+| per-item review/apply | `change_request.review` | Decide and apply supported items with concurrency, idempotency, and sensitivity policy. A reviewer may supply the value to apply when it differs from the one proposed; the proposal is not overwritten. |
+| mark a request done | `change_request.review` | Close a request an officer has finished with, recording who and optionally what they did. Refused while an appliable item is still pending. |
 | member access grant/revoke | `member_access.manage` | Explicitly associate a provisioned user with person records. |
 | relationship CRUD | `relationship.manage` | Maintain informational links independently of access. |
 | password sign-in and recovery | public | Reuse the existing enumeration-safe recovery/password/session operations for members and officers. |
 | own records/profile/request history | `profile.self.read` | Return only explicitly granted safe data. |
-| member request submit/withdraw | `change_request.submit.member` | An authenticated member may suggest changes about self or another person without canonical mutation or target read access. |
+| member request submit/withdraw | `change_request.submit.member` | An authenticated member may propose changes to a record they may see, or send a note about anyone else, without canonical mutation or target read access. A submission about somebody else carries only `other` items. |
 | directory list/print feed | `directory.read` plus resource policy | Full-member-only, consent-filtered directory. |
 
 All operations are registered through the generic HTTP layer. Sensitive reads,
@@ -320,8 +413,9 @@ Associate members, and sign-out.
 The directory is a plain sortable table with name, call sign, email, and phone.
 Printing is a primary action. Hidden and absent contact cells say “Not shared,”
 and the print view identifies the Bedford County Amateur Radio Society. A link
-from the directory may start the reviewed correction flow for that listed
-person. Associates use target hints without gaining directory access.
+from the directory may start a note about that listed person. Associates send
+the same note without gaining directory access, describing the person in their
+own words.
 
 The UI remains a server-rendered adapter. It does not introduce a JavaScript or
 CSS framework, UI-only mutations, or authorization rules present only in a
