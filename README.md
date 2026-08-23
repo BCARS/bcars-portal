@@ -73,19 +73,28 @@ containing member data.
 
 ## Development workflow
 
+Development happens on Forgejo at
+<https://source.ytnoc.net/ytjohn/bcars-portal> — that is `origin`. The
+`github` remote is a push mirror of `main` and the forge releases are tagged
+on; do not open pull requests against it.
+
 `main` is protected by a local pre-push hook (installed by `make
-install-hooks`). All work goes through a pull request:
+install-hooks`) and by branch protection on Forgejo. All work goes through a
+pull request:
 
 ```sh
 git switch -c codex/<bead-id>-short-topic
 # ... edits ...
 make build && make test && make lint && make migration-updown && make sqlc-diff && make openapi-diff && make smoke
 git push -u origin HEAD
-gh pr create --fill
-gh run watch                 # wait for CI green
-gh pr merge --squash --delete-branch
+# open the pull request on Forgejo, then wait for CI
 git switch main && git pull --ff-only
 ```
+
+The single required check is `ci / ci-ok (pull_request)`, which aggregates
+every other job — Forgejo reports a path-gated job as `skipped` rather than
+`success`, so requiring the individual contexts would wedge docs-only pull
+requests. Read the individual jobs to find what actually broke.
 
 Repository agents may complete this workflow autonomously for a claimed Beads
 task: create a branch, commit, push, open a PR, wait for every required CI check,

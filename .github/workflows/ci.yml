@@ -194,3 +194,60 @@ jobs:
 
       - name: OpenAPI diff
         run: make openapi-diff
+
+  # The single required check for branch protection.
+  #
+  # Forgejo reports a job skipped by `if:` as "skipped", which is a distinct
+  # state from "success" — verified on pull request #5, where a docs-only change
+  # left build-test, demoseed-test, migrations-smoke, container and sqlc-diff
+  # all reporting "skipped". Requiring those contexts directly risks leaving
+  # every docs-only pull request unmergeable, which is the same trap the comment
+  # on the `changes` job describes for paths-ignore.
+  #
+  # So protection requires this job and nothing else. It always runs, and fails
+  # when anything it needed failed or was cancelled. Adding or renaming a CI job
+  # then means editing `needs` here rather than reconfiguring protection on two
+  # forges. The results are listed one per line on purpose: `needs.*.result`
+  # relies on object filtering that the runner may not implement, and an
+  # expression that silently evaluates to empty would make this gate pass
+  # vacuously — exactly the kind of green-but-meaningless check it exists to
+  # prevent.
+  ci-ok:
+    if: always()
+    needs:
+      - changes
+      - lint
+      - secrets
+      - build-test
+      - demoseed-test
+      - migrations-smoke
+      - container
+      - sqlc-diff
+      - openapi-diff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every job succeeded or was deliberately skipped
+        run: |
+          failed=0
+          check() {
+            printf '%-18s %s\n' "$1" "$2"
+            case "$2" in
+              success | skipped) ;;
+              *) failed=1 ;;
+            esac
+          }
+          check changes          '${{ needs.changes.result }}'
+          check lint             '${{ needs.lint.result }}'
+          check secrets          '${{ needs.secrets.result }}'
+          check build-test       '${{ needs.build-test.result }}'
+          check demoseed-test    '${{ needs.demoseed-test.result }}'
+          check migrations-smoke '${{ needs.migrations-smoke.result }}'
+          check container        '${{ needs.container.result }}'
+          check sqlc-diff        '${{ needs.sqlc-diff.result }}'
+          check openapi-diff     '${{ needs.openapi-diff.result }}'
+
+          if [ "$failed" -ne 0 ]; then
+            echo "ci-ok: at least one job did not pass" >&2
+            exit 1
+          fi
+          echo "ci-ok: all jobs passed or were skipped"

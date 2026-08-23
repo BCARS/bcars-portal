@@ -66,6 +66,24 @@ failures, and squash-merge the PR into `main` once every required check passes.
 Delete the merged branch. A current user instruction not to commit, push, or
 merge still overrides this profile.
 
+### Forges
+
+Development is Forgejo-primary. `origin` is
+`https://source.ytnoc.net/ytjohn/bcars-portal.git` and is where branches, pull
+requests, CI and merges happen. Use the Forgejo REST API under
+`/api/v1/repos/ytjohn/bcars-portal` for pull requests; `gh` talks to GitHub and
+is the wrong tool here.
+
+The `github` remote (`git@github.com:BCARS/bcars-portal.git`) is a **mirror, not
+a destination**. Forgejo push-mirrors `main` to it on a timer, so do not open
+pull requests there and do not push branches to it. Releases are still cut on
+GitHub: a `v*` tag triggers `.github/workflows/release.yml`, which builds and
+publishes the container image. Because the mirror is periodic rather than
+sync-on-commit, confirm GitHub `main` is at the intended commit before tagging.
+
+Both forges read the same `.github/workflows/ci.yml`; Forgejo Actions picks that
+path up natively, so there is no second copy to keep in step.
+
 The portal must work from a standalone clone. Do not depend on files, data, or
 source code in a parent directory or sibling repository. Checked-in synthetic
 fixtures are the only member-like data allowed in tests. Real exports,
@@ -153,10 +171,17 @@ When picking up work:
    test`, `make lint`, `make migration-updown`, `make sqlc-diff`, `make
    openapi-diff`, and `make smoke`. Generic `bd preflight` output does not
    replace these repository-specific gates.
-7. Review the diff and secret/PII scan, commit, push, and open a PR.
-8. Wait for every required CI check, fix failures, and never merge red CI.
+7. Review the diff and secret/PII scan, commit, push to `origin` (Forgejo), and
+   open the PR against Forgejo.
+8. Wait for every required CI check, fix failures, and never merge red CI. The
+   one required context is `ci / ci-ok (pull_request)`, which aggregates every
+   other job; read the individual jobs to find what broke. Forgejo reports a
+   path-gated job as `skipped`, which is why protection requires the aggregate
+   rather than each job — see the comment on `ci-ok` before changing it.
 9. Squash-merge, delete the branch, update local `main`, close the bead with the
-   PR in the reason, then run `bd dolt pull` and `bd dolt push`.
+   PR in the reason, then run `bd dolt pull` and `bd dolt push`. Adding or
+   renaming a CI job means updating `needs` on `ci-ok`, not the branch
+   protection rules.
 
 Functional MVP UI work has latitude to choose reasonable accessible layouts and
 copy. Full visual design and polish are intentionally deferred to the dedicated
