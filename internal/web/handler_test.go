@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bcars/bcars-portal/internal/authn"
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 )
 
@@ -24,10 +24,7 @@ type testEnv struct {
 
 func setupHandler(t *testing.T) *testEnv {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	// Create a test user with password and admin role.
 	hash, err := authn.HashPassword("testpass", nil, authn.DefaultParams())
@@ -80,10 +77,7 @@ func (e *testEnv) authedRequest(method, target string, body ...string) *http.Req
 }
 
 func TestLoginRequired(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	h, err := NewHandler(d, HandlerConfig{Mailer: testMailer(t)})
 	require.NoError(t, err)
@@ -99,10 +93,7 @@ func TestLoginRequired(t *testing.T) {
 }
 
 func TestLoginPage(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	h, err := NewHandler(d, HandlerConfig{Mailer: testMailer(t)})
 	require.NoError(t, err)
@@ -117,10 +108,7 @@ func TestLoginPage(t *testing.T) {
 }
 
 func TestLoginBadPassword(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	hash, err := authn.HashPassword("correct", nil, authn.DefaultParams())
 	require.NoError(t, err)

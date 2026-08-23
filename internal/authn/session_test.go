@@ -7,15 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 )
 
 func testDB(t *testing.T) *SessionStore {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	// Insert a test user.
 	_, err = d.Exec(`INSERT INTO users (email, is_active) VALUES ('test@example.com', 1)`)
@@ -62,10 +60,8 @@ func TestSessionRevoke(t *testing.T) {
 }
 
 func TestSessionExpiry(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 	_, err = d.Exec(`INSERT INTO users (email, is_active) VALUES ('test@example.com', 1)`)
 	require.NoError(t, err)
 

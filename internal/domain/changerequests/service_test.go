@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
 )
@@ -23,10 +23,8 @@ import (
 
 func newService(t *testing.T) (*changerequests.Service, *sql.DB) {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	_, err = d.Exec(`INSERT INTO users (email, is_active) VALUES ('member@bcars.example', 1)`)
 	require.NoError(t, err)

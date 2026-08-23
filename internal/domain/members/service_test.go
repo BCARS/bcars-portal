@@ -10,16 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 )
 
 func setupTest(t *testing.T) (*Service, *authz.Principal) {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	// Create a test user.
 	_, err = d.Exec(`INSERT INTO users (email, is_active) VALUES ('admin@bcars.org', 1)`)

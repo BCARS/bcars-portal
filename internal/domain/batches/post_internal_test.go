@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 )
 
@@ -23,10 +23,8 @@ import (
 // the rollback were not real, the ledger would be left holding money that no
 // posted batch accounts for.
 func TestPostRollsBackOnStorageFailure(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	_, err = d.Exec(`INSERT INTO users (email) VALUES ('treasurer@example.test')`)
 	require.NoError(t, err)
@@ -89,10 +87,8 @@ func TestPostRollsBackOnStorageFailure(t *testing.T) {
 // failure comes from the database itself rather than an injected error: a
 // second event superseding an already-superseded decision violates the schema.
 func TestPostRollsBackWhenACoverageWriteFails(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	_, err = d.Exec(`INSERT INTO users (email) VALUES ('treasurer@example.test')`)
 	require.NoError(t, err)

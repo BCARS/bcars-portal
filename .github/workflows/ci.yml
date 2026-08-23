@@ -96,6 +96,10 @@ jobs:
       - name: CI path classifier self-test
         run: ./scripts/ci-code-changed.sh --self-test
 
+  # Split out of one 14-minute job (bcars-portal-42d). These three run the same
+  # commands as before but in parallel, so the critical path is the slowest of
+  # them rather than their sum. Each pays ~15s of checkout and toolchain setup,
+  # which the overlap repays many times over.
   build-test:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -114,10 +118,34 @@ jobs:
       - name: Test (race)
         run: go test -race -count=1 ./...
 
-      # seed-demo is compiled out of default builds, so its guard tests only
-      # exist under the demoseed tag and need a separate run.
+  # seed-demo is compiled out of default builds, so its guard tests only exist
+  # under the demoseed tag and need a separate run.
+  demoseed-test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+
       - name: Test (demoseed build tag)
         run: go test -race -count=1 -tags demoseed ./cmd/portalctl/
+
+  migrations-smoke:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
 
       - name: Migration up/down/up round-trip
         run: make migration-updown

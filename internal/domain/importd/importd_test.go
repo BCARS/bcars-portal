@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 )
 
 // --- Parser tests ---
@@ -220,10 +220,8 @@ func TestNormalizeAllFixtureRowsJSON(t *testing.T) {
 // --- Match engine tests ---
 
 func TestMatchByCallSign(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	_, err = d.Exec(`INSERT INTO persons (display_name, sort_name, call_sign) VALUES ('Test', 'Test', 'KA9F01X')`)
 	require.NoError(t, err)
@@ -236,10 +234,8 @@ func TestMatchByCallSign(t *testing.T) {
 }
 
 func TestMatchByEmail(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	_, err = d.Exec(`INSERT INTO persons (display_name, sort_name) VALUES ('Test', 'Test')`)
 	require.NoError(t, err)
@@ -254,10 +250,8 @@ func TestMatchByEmail(t *testing.T) {
 }
 
 func TestMatchAmbiguousEmail(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	_, err = d.Exec(`INSERT INTO persons (display_name, sort_name) VALUES ('Alice', 'Alice')`)
 	require.NoError(t, err)
@@ -277,10 +271,8 @@ func TestMatchAmbiguousEmail(t *testing.T) {
 }
 
 func TestMatchByExternalID(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	_, err = d.Exec(`INSERT INTO persons (display_name, sort_name) VALUES ('Test', 'Test')`)
 	require.NoError(t, err)
@@ -295,10 +287,7 @@ func TestMatchByExternalID(t *testing.T) {
 }
 
 func TestMatchNone(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	defer d.Close()
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	matcher := NewMatcher(d)
 	result, err := matcher.Match(NormalizedRecord{CallSign: "ZZZZZZZ", Email: "nobody@nowhere.invalid"})
@@ -311,10 +300,8 @@ func TestMatchNone(t *testing.T) {
 
 func setupServiceDB(t *testing.T) (*Service, *sql.DB) {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	// Create a user for uploaded_by / committed_by.
 	_, err = d.Exec(`INSERT INTO users (email, is_active) VALUES ('admin@bcars.org', 1)`)

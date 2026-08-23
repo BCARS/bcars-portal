@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bcars/bcars-portal/internal/authn"
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
 )
@@ -40,10 +40,7 @@ type memberTestEnv struct {
 func setupMemberEnv(t *testing.T) *memberTestEnv {
 	t.Helper()
 
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	// The officer who does the provisioning. Ordinary password account.
 	hash, err := authn.HashPassword("officerpassword12345", nil, authn.DefaultParams())
