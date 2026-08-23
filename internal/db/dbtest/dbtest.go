@@ -43,10 +43,15 @@ func buildTemplate() ([]byte, error) {
 		return nil, err
 	}
 
-	// db.Open puts the database in WAL mode, which leaves the committed schema
-	// in a sidecar -wal file. Switching back to DELETE checkpoints that content
+	// db.Open puts the database in WAL mode, which leaves committed content in
+	// a sidecar -wal file. Switching back to DELETE checkpoints that content
 	// into the main file and removes the sidecar, so the bytes below are a
 	// complete database on their own.
+	//
+	// Closing the handle happens to checkpoint as well: dropping this pragma
+	// and re-running the equivalence test below still passed. Keep it anyway —
+	// it makes the guarantee explicit instead of resting on a side effect of
+	// Close that no test would catch regressing.
 	if _, err := d.Exec("PRAGMA journal_mode = DELETE"); err != nil {
 		d.Close()
 		return nil, err
