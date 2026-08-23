@@ -78,8 +78,14 @@ The `github` remote (`git@github.com:BCARS/bcars-portal.git`) is a **mirror, not
 a destination**. Forgejo push-mirrors `main` to it on a timer, so do not open
 pull requests there and do not push branches to it. Releases are still cut on
 GitHub: a `v*` tag triggers `.github/workflows/release.yml`, which builds and
-publishes the container image. Because the mirror is periodic rather than
-sync-on-commit, confirm GitHub `main` is at the intended commit before tagging.
+publishes the container image.
+
+The mirror syncs on commit, with an 8-hour periodic run only as a fallback.
+Merging pull request #6 on Forgejo reached GitHub 91 seconds later, so `main`
+is normally current within a couple of minutes of a merge and is ready to tag.
+Note that the `push_mirrors` API reports `sync_on_commit: false` regardless —
+that field does not reflect the setting, so check propagation by comparing the
+merge time against GitHub's `pushed_at` rather than believing it.
 
 Both forges read the same `.github/workflows/ci.yml`; Forgejo Actions picks that
 path up natively, so there is no second copy to keep in step.

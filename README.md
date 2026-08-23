@@ -76,7 +76,8 @@ containing member data.
 Development happens on Forgejo at
 <https://source.ytnoc.net/ytjohn/bcars-portal> — that is `origin`. The
 `github` remote is a push mirror of `main` and the forge releases are tagged
-on; do not open pull requests against it.
+on; do not open pull requests against it. The mirror syncs on commit, so
+GitHub `main` is current within a couple of minutes of a merge.
 
 `main` is protected by a local pre-push hook (installed by `make
 install-hooks`) and by branch protection on Forgejo. All work goes through a
