@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bcars/bcars-portal/internal/authn"
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 )
 
 // setupCookieHandler builds a real admin-UI handler with a known user, so the
@@ -19,10 +19,7 @@ import (
 // cookie helper alone.
 func setupCookieHandler(t *testing.T, allowInsecure bool) *http.ServeMux {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	hash, err := authn.HashPassword("testpass", nil, authn.DefaultParams())
 	require.NoError(t, err)

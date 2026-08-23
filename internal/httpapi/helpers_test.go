@@ -4,17 +4,11 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 )
 
-// openTestDB creates an in-memory SQLite database with all migrations applied.
+// openTestDB creates a SQLite database with all migrations applied.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
-	return d
+	return dbtest.Open(t)
 }

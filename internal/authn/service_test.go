@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 	"github.com/bcars/bcars-portal/internal/mail"
 )
 
@@ -23,10 +23,7 @@ type testEnv struct {
 
 func setupEnv(t *testing.T) *testEnv {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	pepper := []byte("test-pepper-32-bytes-exactly!!!!!")
 	store := NewSessionStore(d, SessionConfig{
@@ -189,10 +186,8 @@ func TestInvitationWithEmail(t *testing.T) {
 }
 
 func TestExpiredLinkFails(t *testing.T) {
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
+	var err error
 
 	mailer := mail.NewFilelogSender(t.TempDir())
 	links := NewEmailLinkService(d, mailer, EmailLinkConfig{

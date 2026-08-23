@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bcars/bcars-portal/internal/authn"
-	"github.com/bcars/bcars-portal/internal/db"
+	"github.com/bcars/bcars-portal/internal/db/dbtest"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/mail"
 )
@@ -23,10 +23,7 @@ import (
 // capabilities, which is the case that used to reach every admin route.
 func setupHandlerWithRoles(t *testing.T, roles ...string) *testEnv {
 	t.Helper()
-	d, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { d.Close() })
-	require.NoError(t, db.Migrate(d))
+	d := dbtest.Open(t)
 
 	hash, err := authn.HashPassword("testpass", nil, authn.DefaultParams())
 	require.NoError(t, err)
