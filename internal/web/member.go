@@ -834,6 +834,15 @@ type memberRequestItemRow struct {
 	ProposedValue  string
 	Status         string
 	DecisionReason string
+	// AppliedValue is what the officer actually wrote to the record. ADR-0014
+	// lets a reviewer amend a value before applying it, so "Applied" beside
+	// the member's own proposal can otherwise report a value that never
+	// reached the record (bcars-portal-ssz.7).
+	AppliedValue string
+	// AppliedDiffers is the only case worth showing. An officer who applied
+	// exactly what was proposed has told the member nothing they cannot
+	// already read one column to the left.
+	AppliedDiffers bool
 }
 
 func (h *Handler) memberRequests(w http.ResponseWriter, r *http.Request) {
@@ -887,13 +896,30 @@ func (h *Handler) memberRequestDetail(w http.ResponseWriter, r *http.Request) {
 		Success: r.URL.Query().Get("success"),
 		Error:   r.URL.Query().Get("error"),
 	}
+	// The applied value is a fact about the record, so it is shown only while
+	// the caller may still see that record. A member who reported something
+	// about somebody else, or whose grant was revoked after they wrote, learns
+	// nothing here about what the club holds -- the same rule the member API
+	// applies in memberRequestToResponse.
+	visibleTarget := false
+	if req.TargetPersonID != 0 {
+		if _, err := h.memberProfiles.Get(r.Context(), h.principalFromRequest(r), req.TargetPersonID); err == nil {
+			visibleTarget = true
+		}
+	}
+
 	for _, item := range req.Items {
-		data.Items = append(data.Items, memberRequestItemRow{
+		row := memberRequestItemRow{
 			Label:          kindLabel(item.Operation),
 			ProposedValue:  proposedValueLabel(item.Operation, item.ProposedValue),
 			Status:         item.Status,
 			DecisionReason: item.DecisionReason,
-		})
+		}
+		if visibleTarget && item.AppliedValueRecorded {
+			row.AppliedValue = item.AppliedValue
+			row.AppliedDiffers = item.AppliedValue != plainProposedValue(item.Operation, item.ProposedValue)
+		}
+		data.Items = append(data.Items, row)
 		if item.Operation != changerequests.OpOther {
 			data.HasProposals = true
 		}

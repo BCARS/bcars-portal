@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
+	"github.com/bcars/bcars-portal/internal/domain/memberaccess"
 	"github.com/bcars/bcars-portal/internal/domain/relationships"
 )
 
@@ -961,4 +963,102 @@ func TestAnUndecidedItemOnAClosedRequestSaysSo(t *testing.T) {
 		"a closed request must not claim to be waiting for anything")
 	assert.Contains(t, after, "Marked done",
 		"and the page says who finished with it, permanently rather than as a flash")
+}
+
+// The member is owed both halves of the story: what they asked for and what
+// the officer actually wrote. ADR-0014.6 makes the two deliberately capable of
+// differing, so a page that renders only the proposal beside an "Applied"
+// badge tells the member their value reached the record when it did not
+// (bcars-portal-ssz.7).
+//
+// This asserts through the member's own page rather than the API. The API had
+// carried applied_value since ssz.1 while this template never rendered it, so
+// an assertion one layer down reports a property the member cannot see.
+func TestTheMemberSeesTheValueTheOfficerAppliedNotOnlyTheirOwn(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	member := e.signInMember(t)
+	personID := e.grant(t, "Dale Rutherford")
+
+	req := e.seedOwnRequest(t, personID, "Dale Rutherfrod")
+
+	// The officer corrects the member's typo before applying it, which is the
+	// whole point of the editable review field.
+	w := e.post(t, fmt.Sprintf("%s/%d/apply", RouteAdminRequests, req.ID), url.Values{
+		"version":                                {strconv.FormatInt(req.Version, 10)},
+		"include":                                {strconv.FormatInt(req.Items[0].ID, 10)},
+		fmt.Sprintf("value_%d", req.Items[0].ID): {"Dale Rutherford"},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	body := e.getAs(t, fmt.Sprintf("%s/%d", RouteMemberRequests, req.ID), member).Body.String()
+
+	assert.Contains(t, body, "Dale Rutherfrod",
+		"what the member proposed must survive on their own page")
+	assert.Contains(t, body, "Dale Rutherford",
+		"the member must be able to see the value the officer actually applied")
+}
+
+// The reverse case is what stops the fix becoming noise: an officer who
+// applies exactly what was proposed has added nothing for the member to read,
+// and saying "applied as <the same string>" twice invites them to hunt for a
+// difference that is not there.
+func TestAnUnamendedApplyDoesNotRepeatItselfToTheMember(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	member := e.signInMember(t)
+	personID := e.grant(t, "Dale Rutherford")
+
+	req := e.seedOwnRequest(t, personID, "Dale R Rutherford")
+
+	w := e.post(t, fmt.Sprintf("%s/%d/apply", RouteAdminRequests, req.ID), url.Values{
+		"version":                                {strconv.FormatInt(req.Version, 10)},
+		"include":                                {strconv.FormatInt(req.Items[0].ID, 10)},
+		fmt.Sprintf("value_%d", req.Items[0].ID): {"Dale R Rutherford"},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	body := e.getAs(t, fmt.Sprintf("%s/%d", RouteMemberRequests, req.ID), member).Body.String()
+
+	assert.NotContains(t, body, "Applied as",
+		"an unamended apply has nothing extra to tell the member")
+}
+
+// The applied value is a fact about what the club's records now hold, so it
+// travels with the right to see that record rather than with authorship of the
+// request. A member who could see a record when they wrote, and cannot when
+// they come back, must not learn the current value from their own suggestion
+// page -- that would make the page a back door to a record an officer revoked.
+func TestARevokedGrantHidesTheAppliedValueFromTheMember(t *testing.T) {
+	e := setupMemberEnv(t)
+	officer := e.officerCookie(t)
+	member := e.signInMember(t)
+	personID := e.grant(t, "Dale Rutherford")
+
+	req := e.seedOwnRequest(t, personID, "Dale Rutherfrod")
+
+	w := e.post(t, fmt.Sprintf("%s/%d/apply", RouteAdminRequests, req.ID), url.Values{
+		"version":                                {strconv.FormatInt(req.Version, 10)},
+		"include":                                {strconv.FormatInt(req.Items[0].ID, 10)},
+		fmt.Sprintf("value_%d", req.Items[0].ID): {"Dale Rutherford"},
+	}, officer)
+	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
+
+	// While the grant stands, the member sees what was written.
+	target := fmt.Sprintf("%s/%d", RouteMemberRequests, req.ID)
+	require.Contains(t, e.getAs(t, target, member).Body.String(), "Applied as",
+		"precondition: a granted member sees the applied value")
+
+	_, err := e.access.RevokeAccess(context.Background(),
+		&authz.Principal{UserID: e.officerUserID}, e.memberUserID,
+		memberaccess.RevokeParams{PersonID: personID, Reason: "test revocation"},
+		time.Now().UTC())
+	require.NoError(t, err)
+
+	body := e.getAs(t, target, member).Body.String()
+
+	assert.Contains(t, body, "Dale Rutherfrod",
+		"their own words stay on their own page")
+	assert.NotContains(t, body, "Applied as",
+		"a revoked grant must take the record's current value with it")
 }

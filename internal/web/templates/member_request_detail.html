@@ -46,6 +46,7 @@
                     {{else if eq .Status "rejected"}}<span class="badge badge-red">Not applied</span>
                     {{else if eq .Status "needs_verification"}}<span class="badge badge-yellow">An officer needs to check this</span>
                     {{else}}<span class="badge badge-gray">Not decided yet</span>{{end}}
+                    {{if .AppliedDiffers}}<div style="font-size:0.8125rem;">Applied as <strong>{{.AppliedValue}}</strong></div>{{end}}
                     {{if .DecisionReason}}<div class="note">{{.DecisionReason}}</div>{{end}}
                 </td>
             </tr>
