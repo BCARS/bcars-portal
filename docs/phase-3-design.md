@@ -85,7 +85,7 @@ accessible MVP decisions until `bcars-portal-6pz` begins.
 5. An informational family relationship and a record-access grant are separate
    facts. Neither creates the other. Explicit access permits viewing the safe
    own-profile model, never direct editing or approval. It is not required to
-   submit a reviewed correction suggestion.
+   report a correction about another person.
 6. Every supported officer or authenticated-member intake channel uses the same
    request and item model. Source affects provenance and triage, not which
    canonical validation rules apply.
@@ -198,7 +198,7 @@ Initial structured operations are:
 - change the person's ACS/ARES sharing preference;
 - add or correct an informational family relationship.
 
-Suggestions about membership lifecycle/type, FCC verification, dues coverage,
+Changes proposed to membership lifecycle/type, FCC verification, dues coverage,
 payments, honorary status, or an unsupported field remain visible to officers as
 an `other` item. They cannot be approved through a generic mutation path; an
 officer uses the existing specialized workflow if action is warranted.
@@ -317,7 +317,7 @@ see that a member mistyped one character corrects it and approves, instead of
 rejecting and asking the member to send the whole thing again.
 
 What the member proposed is never rewritten. The applied value and the reviewing
-officer are recorded next to it, so a member reading their own suggestion
+officer are recorded next to it, so a member reading their own correction
 afterwards sees both what they asked for and what was done, and those may
 differ.
 
@@ -341,7 +341,7 @@ opens on what is still outstanding; finished work is behind a filter rather than
 mixed into the pile.
 
 Marking done is refused while a proposed change is still pending, because
-closing it would tell the member their suggestion was dealt with when no officer
+closing it would tell the member their correction was dealt with when no officer
 ever decided it.
 
 ## Authenticated cross-member reports
@@ -383,7 +383,7 @@ Exact paths are finalized in OpenAPI without changing these resource boundaries.
 
 | Operation family | Capability | Contract purpose |
 | --- | --- | --- |
-| officer request create/list/detail/triage | `change_request.manage` | Capture every channel and resolve unlinked target hints. |
+| officer request create/list/detail/triage | `change_request.manage` | Capture every channel and link a request to the person an officer decides it concerns. Linking is provenance for the request; it does not give an item a target, and an item that names no record is a note (see "Corrections after ADR-0014"). |
 | per-item review/apply | `change_request.review` | Decide and apply supported items with concurrency, idempotency, and sensitivity policy. A reviewer may supply the value to apply when it differs from the one proposed; the proposal is not overwritten. |
 | mark a request done | `change_request.review` | Close a request an officer has finished with, recording who and optionally what they did. Refused while an appliable item is still pending. |
 | member access grant/revoke | `member_access.manage` | Explicitly associate a provisioned user with person records. |
@@ -400,13 +400,15 @@ private field values into log messages.
 
 ## UI boundary
 
-The officer MVP provides a request queue, channel-aware request entry,
-authenticated cross-member target triage, per-item current-versus-proposed
-review, verification notes, access grant/revoke, and relationship maintenance.
+The officer MVP provides a request queue that opens on outstanding work,
+channel-aware request entry, linking a request to the person it concerns, one
+review form showing each proposed change beside the record's current value with
+a per-field tick and a single apply, marking a note done, verification notes,
+access grant/revoke, and relationship maintenance.
 
 The member MVP provides password setup/recovery, password sign-in,
 granted-record selection, safe profile and dues standing, request
-submission/status/withdrawal, preference suggestions, directory navigation for
+submission/status/withdrawal, proposed preference changes, directory navigation for
 eligible Full members, a correction-about-someone-else entry point for Full and
 Associate members, and sign-out.
 
@@ -454,7 +456,7 @@ fake/filelog mail to set a member password, sign out and sign back in with that
 password, preserve canonical data before review, apply a mixed decision exactly
 once, protect stale and self-sensitive review, show only a safe dues summary,
 enforce directory eligibility and field filtering, revoke access immediately,
-allow an Associate to submit a suggestion about an ungranted target while
+allow an Associate to send a note about a person they cannot see while
 rejecting anonymous submission, and keep relationships separate from
 authorization.
 

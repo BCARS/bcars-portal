@@ -43,7 +43,8 @@ changing canonical data. Per-item review/apply (`4ux.3`) follows, using explicit
 domain adapters, optimistic concurrency, idempotency, sensitivity policy, and
 the generic confirmation control.
 
-Authenticated cross-member suggestions join the same workflow in `4ux.6`.
+Authenticated cross-member reports join the same workflow in `4ux.6`; under
+ADR-0014 such a report is a note rather than a structured suggestion.
 `4ux.9`, the accidental anonymous-public intake story, is superseded by that
 member request contract.
 
@@ -70,7 +71,7 @@ filters every target contact value before serialization. The screen and print UI
 ### WS5 - Thin MVP adapters
 
 The officer UI (`4ux.10`) follows all request-review, access, relationship, and
-member-suggestion triage APIs. The member UI (`4ux.11`) follows shared password
+member-correction triage APIs. The member UI (`4ux.11`) follows shared password
 authentication and profile/request APIs. Both may make reasonable accessible
 layout and copy decisions. Full interactive polish remains deferred.
 
@@ -114,11 +115,11 @@ full acceptance criteria are in Beads.
 | `4ux.3` | Per-field review/apply API | Explicit adapters, sensitivity policy, conflict/idempotency/self-review controls | `4ux.2`, `6q6.1` |
 | `4ux.4` | Member access provisioning API | Explicit user-to-person grants and revocation; shared mailbox support; no officer-chosen password | `4ux.1` |
 | `4ux.5` | Member password onboarding and sign-in | Initial password via recovery, normal password sign-in, one cookie, member-safe routing | `4ux.4`, `6q6.3`, `fmc.20`, `4ux.15` |
-| `4ux.6` | Profile/dues/member-request API | Grant-bound reads; authenticated self-or-other suggestions; submit/status/withdraw | `4ux.2`, `4ux.4`, `4ux.16` |
+| `4ux.6` | Profile/dues/member-request API | Grant-bound reads; edits to a record the member may see and notes about anyone else; submit/status/withdraw | `4ux.2`, `4ux.4`, `4ux.16` |
 | `4ux.7` | Full-member directory API | Caller eligibility, target eligibility, contact filtering, stable query | `4ux.1` |
-| `4ux.8` | Informational relationships | Context only; neither access authority nor a prerequisite for suggestions | `4ux.1` |
+| `4ux.8` | Informational relationships | Context only; neither access authority nor a prerequisite for submitting a correction | `4ux.1` |
 | `4ux.9` | Superseded public correction intake | No anonymous portal surface; intended member behavior moved to `4ux.6` | `4ux.16` |
-| `4ux.10` | Officer request/access UI | Queue, capture, member-suggestion triage, per-item review, access and relationships | `4ux.3`, `4ux.4`, `4ux.6`, `4ux.8` |
+| `4ux.10` | Officer request/access UI | Queue, capture, request linking, one-form review with per-field include and a single apply, access and relationships | `4ux.3`, `4ux.4`, `4ux.6`, `4ux.8` |
 | `4ux.11` | Member profile/request UI | Password setup/sign-in entry, record chooser, safe profile, request tracking | `4ux.5`, `4ux.6` |
 | `4ux.12` | Directory and print UI | Plain sortable table, “Not shared,” letter-print view | `4ux.7`, `4ux.11` |
 | `4ux.13` | Production smoke and completion audit | Real binaries and synthetic end-to-end authorization/review proof | every other Phase 3 story |
@@ -141,7 +142,7 @@ independently but are not hidden prerequisites for this phase.
 - Do not split `4ux.1` across agents; it owns the first Phase 3 migration,
   capability seed, generated queries, and identity/access ADR.
 - `fmc.20` owns the reusable attempt-limiter storage/service used by recovery.
-  Authenticated member suggestions do not add an anonymous intake limiter.
+  Authenticated member corrections do not add an anonymous intake limiter.
 - After `4ux.1`, request intake, access provisioning, and directory API may run
   in parallel.
 - `4ux.3` owns request-decision/apply semantics. UI tasks do not reproduce those

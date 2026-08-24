@@ -24,8 +24,8 @@ testing exists to keep them that way:
 | --- | --- |
 | An access **grant** | reading one person record |
 | A **relationship** | nothing at all; it is context for a reviewing officer |
-| Submitting a **suggestion** | needs neither of the above, only an authenticated member |
-| **Applying** a suggestion | needs an officer capability, and is the only path to canonical change |
+| Submitting a **correction** | needs neither of the above, only an authenticated member |
+| **Applying** a proposed change | needs an officer capability, and is the only path to canonical change |
 
 The tempting collapse is the second row into the first — "she's his wife, so of
 course she can see his record." ADR-0010 refuses it, because a marriage ending
@@ -42,7 +42,8 @@ own pull requests, and the plan documents were rewritten rather than patched:
   adds permissions to it. An officer who is also a member holds both roles on
   one account (ADR-0012).
 - **`4ux.16` (#86)** — anonymous public correction intake was withdrawn and
-  replaced by authenticated member suggestions (ADR-0013). `4ux.9`, the bead
+  replaced by authenticated member corrections (ADR-0013, since narrowed by
+  ADR-0014). `4ux.9`, the bead
   that would have built the public form, is closed as **superseded** rather
   than quietly dropped.
 
@@ -93,11 +94,12 @@ own cause.
 - **Full-member directory filtering.** An eligible Full member browses and
   prints; an Associate is refused screen, print, and API alike, and receives
   nothing that distinguishes refusal from absence.
-- **Suggestions from both member kinds.** A Full member and an Associate each
-  suggest a correction about somebody they cannot see. Neither submission
-  creates a grant or alters any canonical record.
+- **Notes from both member kinds.** A Full member and an Associate each report
+  a correction about somebody they cannot see. Under ADR-0014 such a report is
+  a note carrying no structured item, and neither submission creates a grant or
+  alters any canonical record.
 - **No anonymous intake.** An unauthenticated submission is refused; four
-  plausible public correction paths answer 404; and the member suggestion form
+  plausible public correction paths answer 404; and the member correction form
   redirects an anonymous browser to sign-in.
 - **Officer triage of an unresolved hint.** The officer links a member's
   free-text description to a record, and what the member wrote survives beside
@@ -150,7 +152,7 @@ These are open beads, not oversights:
   workflow.
 - **`4ux.18`** — officer triage takes a typed record number rather than
   offering a search-as-you-type picker. Officer-side only: the member
-  suggestion form must keep having no lookup, since that is what stops it
+  correction form must keep having no lookup, since that is what stops it
   answering "is this person a member".
 - **`4ux.19`** — the directory domain service sorts by name or call sign, but
   the `/directory` HTTP operation exposes no sort parameter. The UI sorts; the
