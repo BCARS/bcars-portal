@@ -128,7 +128,7 @@ Run a single test:
 go test -run TestFoo ./internal/...
 ```
 
-Requires: Go 1.26.0, `make`, `git`. Optional lint tools: `staticcheck`, `golangci-lint`.
+Requires: Go 1.26.0 or newer, `make`, `git`. Optional lint tools: `staticcheck`, `golangci-lint`.
 
 ## Architecture Overview
 

@@ -7,8 +7,18 @@ PKGS         := ./...
 GOBIN				?= $(BIN_DIR)
 GOOSE        := $(BIN_DIR)/goose
 
-# Ensure the toolchain matches go.mod so fmt/lint use the correct Go version.
-export GOTOOLCHAIN := go1.26.0
+# Never build with a Go older than go.mod requires, without insisting on one
+# exact patch release.
+#
+# auto uses the local toolchain when it satisfies go.mod's `go` directive and
+# downloads a conforming one only when it does not. Pinning go1.26.0 instead
+# meant a machine on a newer 1.26.x fetched and ran the older toolchain: in CI,
+# where setup-go installs 1.26.8, every target downloaded a second toolchain
+# before doing anything (bcars-portal-ak6).
+#
+# ?= so the environment wins, which is how CI sets it and how a developer
+# pins a specific toolchain for a one-off.
+export GOTOOLCHAIN ?= auto
 
 # Version stamp. Overridable: `make build VERSION=v1.2.3`.
 # Defaults to the nearest git tag (e.g. "v1.2.3"); when the repo has no tag

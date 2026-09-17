@@ -31,8 +31,9 @@ documents are the human-readable completion records. See:
 
 ## Prerequisites
 
-- Go 1.26.0 (auto-downloaded via the `toolchain` directive if you have any
-  recent Go installed and `GOTOOLCHAIN=auto`, which is the default).
+- Go 1.26.0 or newer. The Makefile sets `GOTOOLCHAIN=auto`, so a Go that
+  already satisfies `go.mod` is used as it stands, and an older one fetches a
+  conforming toolchain.
 - `make`, `git`.
 - `bd` (Beads) for development task hydration and coordination.
 

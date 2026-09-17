@@ -17,7 +17,8 @@ Secure-cookie requirements for local development only.
 
 ## Prerequisites
 
-- Go 1.26.0 (the Makefile selects this toolchain)
+- Go 1.26.0 or newer. The Makefile sets `GOTOOLCHAIN=auto`, so a newer Go is
+  used as it stands and an older one fetches a conforming toolchain.
 - SQLite is embedded through a pure-Go driver; no separate install is needed
 - No external services required
 
