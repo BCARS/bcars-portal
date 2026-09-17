@@ -1,7 +1,10 @@
 -- name: GetLatestVisibility :one
+--
+-- Ties on effective_at break on id, the same order the directory query uses,
+-- so the decision a reviewer is shown is the one the directory applies.
 SELECT * FROM contact_method_visibility_events
 WHERE contact_method_id = ?
-ORDER BY effective_at DESC
+ORDER BY effective_at DESC, id DESC
 LIMIT 1;
 
 -- name: ListVisibilityHistory :many

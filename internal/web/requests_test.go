@@ -313,7 +313,7 @@ func TestOfficerCannotApproveTheirOwnSensitiveRequest(t *testing.T) {
 			Summary:         "Hide my email from the directory",
 			Items: []changerequests.ItemInput{{
 				Operation:     "contact_method.visibility.set",
-				ProposedValue: "officers",
+				ProposedValue: "hidden",
 				TargetKind:    "contact_method",
 				TargetID:      contactID,
 				TargetVersion: contactVersion,
@@ -356,7 +356,7 @@ func TestSensitiveApprovalNeedsAVerificationNote(t *testing.T) {
 			Summary:         "Hide my email from the directory",
 			Items: []changerequests.ItemInput{{
 				Operation:     "contact_method.visibility.set",
-				ProposedValue: "officers",
+				ProposedValue: "hidden",
 				TargetKind:    "contact_method",
 				TargetID:      contactID,
 				TargetVersion: contactVersion,

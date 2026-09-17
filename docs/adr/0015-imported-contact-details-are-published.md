@@ -69,9 +69,31 @@ other than import, and removing it would be a silent change to who is listed.
 - Imports committed before this ADR keep their NULL rows and their current
   visibility. Backfilling them is tracked separately; a backfill can only
   record that the club decided, not who or when.
-- A member still cannot change their own sharing preference — they must ask an
-  officer. Telling them the rule is the part this ADR fixes; giving them the
-  control is separate work.
+- A member still cannot change their own sharing preference directly. Telling
+  them the rule is the part this ADR fixes; the control is described below.
+
+## Update: a member can ask to change it (bcars-portal-qku)
+
+The member's correction form now offers, for each email address and telephone
+number, "List this in the member directory?" with two answers. Changing it
+files a `contact_method.visibility.set` item, which an officer reviews and
+applies like any other correction; the resulting event records
+`source=member_request`. A postal address gets no choice, because the directory
+never lists one.
+
+It is a proposal rather than a switch for the same reason every other field on
+that form is (ADR-0013, ADR-0014): only an officer changes canonical data, and a
+visibility decision is canonical data the directory reads.
+
+The form offers two answers, not three. `hidden` and `officers_only` both keep
+a detail out of the directory, so to a member they are one answer, and leaving
+an officers-only detail on "No" proposes nothing. An officer reviewing the item
+still chooses among all three.
+
+Audiences are now a closed set enforced in the domain, at filing and at apply.
+Before this, only the HTTP API's enum held it; an officer amending a reviewed
+value could have recorded any string, which the directory would have read as
+"not `full_members`" and hidden without anyone choosing that.
 
 ## Rejected alternatives
 

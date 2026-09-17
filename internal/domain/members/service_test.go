@@ -579,9 +579,18 @@ func TestSharingPreferences(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set directory visibility.
-	vis, err := svc.SetDirectoryVisibility(ctx, p, email.ID, "members_only", PrefSourceOfficer)
+	vis, err := svc.SetDirectoryVisibility(ctx, p, email.ID, AudienceFullMembers, PrefSourceOfficer)
 	require.NoError(t, err)
-	assert.Equal(t, "members_only", vis.Audience)
+	assert.Equal(t, AudienceFullMembers, vis.Audience)
+
+	// An audience the directory does not know is refused, not recorded. This
+	// test used to record "members_only", which the directory would have read
+	// as "not full_members" and silently hidden.
+	_, err = svc.SetDirectoryVisibility(ctx, p, email.ID, "members_only", PrefSourceOfficer)
+	require.ErrorIs(t, err, ErrInvalidAudience)
+	latest, err := svc.Q.GetLatestVisibility(ctx, email.ID)
+	require.NoError(t, err)
+	assert.Equal(t, AudienceFullMembers, latest.Audience, "a refused audience must not be written")
 
 	// Set ACS/ARES sharing.
 	sharing, err := svc.SetAcsAresSharing(ctx, p, person.ID, true, "Joined ARES team", PrefSourceOfficer)

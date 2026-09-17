@@ -112,10 +112,12 @@ func (q *Queries) GetLatestAcsAresSharing(ctx context.Context, personID int64) (
 const getLatestVisibility = `-- name: GetLatestVisibility :one
 SELECT id, contact_method_id, audience, source, effective_at, actor_user_id, note, created_at FROM contact_method_visibility_events
 WHERE contact_method_id = ?
-ORDER BY effective_at DESC
+ORDER BY effective_at DESC, id DESC
 LIMIT 1
 `
 
+// Ties on effective_at break on id, the same order the directory query uses,
+// so the decision a reviewer is shown is the one the directory applies.
 func (q *Queries) GetLatestVisibility(ctx context.Context, contactMethodID int64) (ContactMethodVisibilityEvent, error) {
 	row := q.db.QueryRowContext(ctx, getLatestVisibility, contactMethodID)
 	var i ContactMethodVisibilityEvent

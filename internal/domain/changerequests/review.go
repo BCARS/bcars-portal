@@ -351,8 +351,8 @@ func (s *Service) applyItem(
 		return applyResult{Kind: "contact_method", ID: item.TargetID}, nil
 	case AdapterContactVisibility:
 		audience := strings.TrimSpace(item.ProposedValue)
-		if audience == "" {
-			return applyResult{}, ErrBadValue
+		if !members.ValidAudience(audience) {
+			return applyResult{}, fmt.Errorf("%w: unknown directory audience %q", ErrBadValue, audience)
 		}
 		ev, err := memberSvc.SetDirectoryVisibility(ctx, p, item.TargetID, audience,
 			members.PrefSourceMemberRequest)

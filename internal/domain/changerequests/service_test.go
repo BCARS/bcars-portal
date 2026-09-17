@@ -207,3 +207,31 @@ func TestCreateChangesNoCanonicalData(t *testing.T) {
 	assert.Equal(t, "W3DLR", callSign,
 		"a proposal is inert until an officer approves it")
 }
+
+// TestAVisibilityRequestNamesAKnownAudience holds the closed vocabulary at
+// filing time. The web form offers a select, but the domain is what every
+// writer shares, and an unknown audience that reached the record would read as
+// "not full_members" in the directory -- hidden, with nobody having chosen it
+// (bcars-portal-qku).
+func TestAVisibilityRequestNamesAKnownAudience(t *testing.T) {
+	svc, _ := newService(t)
+	ctx := context.Background()
+
+	visibility := func(value string) changerequests.CreateParams {
+		params := memberParams("Directory listing")
+		params.Items = []changerequests.ItemInput{{
+			Operation:     "contact_method.visibility.set",
+			ProposedValue: value,
+		}}
+		return params
+	}
+
+	for _, bad := range []string{"officers", "members_only", "yes", "FULL_MEMBERS"} {
+		_, err := svc.Create(ctx, memberPrincipal(1), visibility(bad), "vis-"+bad, time.Now())
+		assert.ErrorIs(t, err, changerequests.ErrBadValue, "audience %q", bad)
+	}
+	for _, good := range []string{"full_members", "hidden", "officers_only"} {
+		_, err := svc.Create(ctx, memberPrincipal(1), visibility(good), "vis-"+good, time.Now())
+		assert.NoError(t, err, "audience %q", good)
+	}
+}

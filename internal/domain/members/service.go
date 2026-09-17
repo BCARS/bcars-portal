@@ -35,6 +35,33 @@ const (
 	PrefSourceImportDefault = "import_default"
 )
 
+// Directory audiences a contact method's visibility decision may name.
+//
+// The directory lists a contact only when its latest decision is
+// AudienceFullMembers. The other two keep it out of the directory; officers
+// read contact details through their own capability either way.
+const (
+	AudienceFullMembers  = "full_members"
+	AudienceHidden       = "hidden"
+	AudienceOfficersOnly = "officers_only"
+)
+
+// ErrInvalidAudience is returned for a visibility decision naming an audience
+// the directory does not know. The HTTP API enforced the set with an enum, but
+// the reviewed-request path did not, and an officer amending a value in a text
+// box could otherwise record "yes" as an audience -- which the directory would
+// read as "not full_members" and silently hide.
+var ErrInvalidAudience = errors.New("members: unknown directory audience")
+
+// ValidAudience reports whether a is an audience the directory understands.
+func ValidAudience(a string) bool {
+	switch a {
+	case AudienceFullMembers, AudienceHidden, AudienceOfficersOnly:
+		return true
+	}
+	return false
+}
+
 // WithTx returns a Service bound to tx, so several adapters can be composed
 // into one atomic change. Applying a reviewed request needs this: a request
 // approving two items must not leave the first written and the second not.
@@ -863,6 +890,9 @@ func (s *Service) SetDirectoryVisibility(ctx context.Context, p *authz.Principal
 	if err := authz.Authorize(ctx, p, "sharing_pref.write.officer", nil); err != nil {
 		return sqlcgen.ContactMethodVisibilityEvent{}, err
 	}
+	if !ValidAudience(audience) {
+		return sqlcgen.ContactMethodVisibilityEvent{}, fmt.Errorf("%w: %q", ErrInvalidAudience, audience)
+	}
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	ev, err := s.Q.CreateVisibilityEvent(ctx, sqlcgen.CreateVisibilityEventParams{
@@ -878,6 +908,26 @@ func (s *Service) SetDirectoryVisibility(ctx context.Context, p *authz.Principal
 
 	audit.StampResource(ctx, "contact_method", contactMethodID)
 	return ev, nil
+}
+
+// DirectoryVisibility returns the audience of a contact method's latest
+// visibility decision, or "" when no decision is on file.
+//
+// Unlike GetAcsAresSharing, "nothing on file" is not an error here: the
+// directory gives it a meaning (the club default, ADR-0015), and every caller
+// needs to show that meaning rather than handle a failure.
+func (s *Service) DirectoryVisibility(ctx context.Context, p *authz.Principal, contactMethodID int64) (string, error) {
+	if err := authz.Authorize(ctx, p, "member.read", nil); err != nil {
+		return "", err
+	}
+	ev, err := s.Q.GetLatestVisibility(ctx, contactMethodID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("members: read visibility: %w", err)
+	}
+	return ev.Audience, nil
 }
 
 // GetAcsAresSharing returns a person's current ACS/ARES sharing preference.

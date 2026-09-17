@@ -26,6 +26,7 @@ import (
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/idem"
+	"github.com/bcars/bcars-portal/internal/domain/members"
 )
 
 // Sources a request may arrive through. Source affects provenance and triage,
@@ -788,6 +789,13 @@ func validateCreate(params CreateParams) error {
 		// submitter to invent a meaningless one.
 		if RequiresValue(in.Operation) && strings.TrimSpace(in.ProposedValue) == "" {
 			return fmt.Errorf("%w: %s", ErrValueRequired, in.Operation)
+		}
+		// A visibility decision has a closed vocabulary, so a bad one is
+		// refused when it is filed rather than discovered when an officer
+		// tries to apply it.
+		if Adapters[in.Operation] == AdapterContactVisibility &&
+			!members.ValidAudience(strings.TrimSpace(in.ProposedValue)) {
+			return fmt.Errorf("%w: unknown directory audience", ErrBadValue)
 		}
 		if (in.TargetKind == "") != (in.TargetID == 0) {
 			return ErrTargetIncomplete

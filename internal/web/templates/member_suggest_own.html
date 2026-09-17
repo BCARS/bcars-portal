@@ -35,6 +35,15 @@
         <input type="text" id="{{.Field}}" name="{{.Field}}"
                value="{{.Value}}" maxlength="2000" autocomplete="off">
     </div>
+    {{if .ShareField}}
+    <div class="form-group">
+        <label for="{{.ShareField}}">{{.ShareLabel}}</label>
+        <select id="{{.ShareField}}" name="{{.ShareField}}">
+            <option value="full_members"{{if .Listed}} selected{{end}}>Yes, list it</option>
+            <option value="hidden"{{if not .Listed}} selected{{end}}>No, keep it out of the directory</option>
+        </select>
+    </div>
+    {{end}}
     {{end}}
 
     <div class="form-group">
@@ -43,7 +52,8 @@
                   placeholder="For example: please remove the old work number, or add a new mobile: 814-555-0199">{{.Submitted.Note}}</textarea>
         <p class="form-hint">
             This form changes details the club already holds. To have one added
-            or removed, ask here and an officer will do it.
+            or removed, ask here and an officer will do it. A change to what the
+            directory lists is checked by an officer too.
         </p>
     </div>
 

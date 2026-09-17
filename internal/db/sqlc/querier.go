@@ -186,6 +186,9 @@ type Querier interface {
 	GetImportRun(ctx context.Context, id int64) (ImportRun, error)
 	GetImportRunByIdempotencyKey(ctx context.Context, idempotencyKey string) (ImportRun, error)
 	GetLatestAcsAresSharing(ctx context.Context, personID int64) (AcsAresSharingEvent, error)
+	//
+	// Ties on effective_at break on id, the same order the directory query uses,
+	// so the decision a reviewer is shown is the one the directory applies.
 	GetLatestVisibility(ctx context.Context, contactMethodID int64) (ContactMethodVisibilityEvent, error)
 	GetMemberAccessGrant(ctx context.Context, id int64) (MemberAccessGrant, error)
 	GetMembership(ctx context.Context, id int64) (Membership, error)

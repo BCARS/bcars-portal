@@ -13,6 +13,7 @@ import (
 
 	"github.com/bcars/bcars-portal/internal/domain/changerequests"
 	"github.com/bcars/bcars-portal/internal/domain/memberprofile"
+	"github.com/bcars/bcars-portal/internal/domain/members"
 )
 
 // The member self-service UI (bcars-portal-4ux.11).
@@ -147,10 +148,16 @@ func kindLabel(operation string) string {
 		return "Call sign"
 	case "contact_method.update":
 		return "Contact detail"
+	case opContactVisibility:
+		return "Directory listing"
 	default:
 		return "Something else"
 	}
 }
+
+// opContactVisibility is the change-request operation that asks for a contact
+// detail to be listed in, or kept out of, the member directory.
+const opContactVisibility = "contact_method.visibility.set"
 
 // proposedValueLabel renders a proposed value the way a reader should see it.
 //
@@ -164,6 +171,9 @@ func kindLabel(operation string) string {
 // Anything that does not carry the encoding is shown as written. Older rows
 // predate it, and no display should turn into an error page over a value.
 func proposedValueLabel(operation, raw string) string {
+	if operation == opContactVisibility {
+		return audienceChoiceLabel(raw)
+	}
 	if operation != "contact_method.update" && operation != "contact_method.create" {
 		return raw
 	}
@@ -177,6 +187,17 @@ func proposedValueLabel(operation, raw string) string {
 	default:
 		return raw
 	}
+}
+
+// appliedValueLabel renders what an officer actually applied. It differs from
+// proposedValueLabel only in that an applied value is stored plain, never
+// with the "kind:" encoding, so the only value that needs words is a
+// directory audience.
+func appliedValueLabel(operation, value string) string {
+	if operation == opContactVisibility {
+		return audienceChoiceLabel(value)
+	}
+	return value
 }
 
 // --- Landing ---
@@ -326,17 +347,53 @@ type memberContactRow struct {
 // and they have no control to inspect either (bcars-portal-v5j).
 func sharedWithLabel(audience, kind, baseType string) string {
 	switch audience {
-	case "full_members":
+	case members.AudienceFullMembers:
 		return "Full members"
-	case "officers_only":
+	case members.AudienceOfficersOnly:
 		return "Officers only"
-	case "hidden":
+	case members.AudienceHidden:
 		return "Not in the directory"
 	case "":
-		if baseType == "full" && (kind == "email" || kind == "phone") {
+		if effectiveAudience("", kind, baseType) == members.AudienceFullMembers {
 			return "Full members (club default)"
 		}
 		return "Not in the directory (club default)"
+	default:
+		return audience
+	}
+}
+
+// effectiveAudience is the audience the directory actually applies: the latest
+// recorded decision, or the club default when there is none. It mirrors the
+// NULL branch in ListDirectoryContacts (ADR-0015), and must change with it.
+func effectiveAudience(audience, kind, baseType string) string {
+	if audience != "" {
+		return audience
+	}
+	if baseType == "full" && directoryListable(kind) {
+		return members.AudienceFullMembers
+	}
+	return members.AudienceHidden
+}
+
+// directoryListable reports whether the directory can list a contact of this
+// kind at all. It lists email addresses and telephone numbers and nothing
+// else, so offering a member the choice to list their postal address would be
+// offering a control that does nothing.
+func directoryListable(kind string) bool {
+	return kind == "email" || kind == "phone"
+}
+
+// audienceChoiceLabel names an audience as a decision about the directory,
+// for a request line: "Directory listing: Not in the directory".
+func audienceChoiceLabel(audience string) string {
+	switch audience {
+	case members.AudienceFullMembers:
+		return "Listed in the member directory"
+	case members.AudienceHidden:
+		return "Not in the directory"
+	case members.AudienceOfficersOnly:
+		return "Officers only"
 	default:
 		return audience
 	}
@@ -445,6 +502,12 @@ type memberEditContact struct {
 	Field   string
 	Value   string
 	Version int64
+	// ShareField is the name of the directory-listing choice, "share_12", and
+	// empty for a kind the directory never lists. Listed is the choice the
+	// form shows as selected.
+	ShareField string
+	ShareLabel string
+	Listed     bool
 }
 
 // memberEditForm is what the member posted.
@@ -453,7 +516,10 @@ type memberEditForm struct {
 	CallSign    string
 	// Contacts maps a contact id to the value the member typed for it.
 	Contacts map[int64]string
-	Note     string
+	// Shares maps a listable contact id to the audience the member chose:
+	// full_members to be listed, hidden to be kept out.
+	Shares map[int64]string
+	Note   string
 }
 
 func (h *Handler) memberSuggestOwnForm(w http.ResponseWriter, r *http.Request) {
@@ -480,6 +546,7 @@ func memberEditDataFor(profile memberprofile.Profile, submitted memberEditForm, 
 			DisplayName: profile.DisplayName,
 			CallSign:    profile.CallSign,
 			Contacts:    map[int64]string{},
+			Shares:      map[int64]string{},
 			Note:        "",
 		}
 	}
@@ -492,15 +559,42 @@ func memberEditDataFor(profile memberprofile.Profile, submitted memberEditForm, 
 				value = typed
 			}
 		}
-		data.Contacts = append(data.Contacts, memberEditContact{
+		row := memberEditContact{
 			ID:      c.ID,
 			Label:   label,
 			Field:   contactFieldName(c.ID),
 			Value:   value,
 			Version: c.Version,
-		})
+		}
+		if directoryListable(c.Kind) {
+			choice := currentShareChoice(c, profile.BaseType)
+			if filled {
+				if chosen, ok := submitted.Shares[c.ID]; ok {
+					choice = chosen
+				}
+			}
+			row.ShareField = shareFieldName(c.ID)
+			row.ShareLabel = "List this " + strings.ToLower(label) + " in the member directory?"
+			row.Listed = choice == members.AudienceFullMembers
+		}
+		data.Contacts = append(data.Contacts, row)
 	}
 	return data
+}
+
+// currentShareChoice is the two-way choice the form offers, read from what the
+// directory does now. Officers-only and hidden both keep a detail out of the
+// directory, so to a member they are the same answer, and leaving an
+// officers-only detail on "No" proposes nothing.
+func currentShareChoice(c memberprofile.Contact, baseType string) string {
+	if effectiveAudience(c.SharedWith, c.Kind, baseType) == members.AudienceFullMembers {
+		return members.AudienceFullMembers
+	}
+	return members.AudienceHidden
+}
+
+func shareFieldName(id int64) string {
+	return "share_" + strconv.FormatInt(id, 10)
 }
 
 // contactFieldLabel names a contact detail the way its owner would: the kind,
@@ -590,9 +684,23 @@ func readMemberEditForm(r *http.Request, profile memberprofile.Profile) (memberE
 		CallSign:    strings.TrimSpace(r.FormValue("call_sign")),
 		Note:        strings.TrimSpace(r.FormValue("note")),
 		Contacts:    make(map[int64]string, len(profile.Contacts)),
+		Shares:      make(map[int64]string, len(profile.Contacts)),
 	}
 	for _, c := range profile.Contacts {
 		form.Contacts[c.ID] = strings.TrimSpace(r.FormValue(contactFieldName(c.ID)))
+		if !directoryListable(c.Kind) {
+			continue
+		}
+		// A form rendered before this choice existed posts nothing for it,
+		// and that is "no change", not a request to be hidden.
+		switch chosen := r.FormValue(shareFieldName(c.ID)); chosen {
+		case "":
+			form.Shares[c.ID] = currentShareChoice(c, profile.BaseType)
+		case members.AudienceFullMembers, members.AudienceHidden:
+			form.Shares[c.ID] = chosen
+		default:
+			return form, "Please choose whether each detail is listed in the member directory."
+		}
 	}
 
 	// A field cleared to blank is a REMOVAL, and this form does not do
@@ -658,6 +766,22 @@ func memberEditItems(profile memberprofile.Profile, form memberEditForm) (items 
 		})
 		changed = append(changed, strings.ToLower(contactFieldLabel(c)))
 	}
+	// A directory choice is its own item, so an officer can apply a corrected
+	// number and still decline, or ask about, the listing change.
+	for _, c := range profile.Contacts {
+		chosen, ok := form.Shares[c.ID]
+		if !ok || chosen == currentShareChoice(c, profile.BaseType) {
+			continue
+		}
+		items = append(items, changerequests.ItemInput{
+			Operation:     opContactVisibility,
+			ProposedValue: chosen,
+			TargetKind:    "contact_method",
+			TargetID:      c.ID,
+			TargetVersion: c.Version,
+		})
+		changed = append(changed, "directory listing for "+strings.ToLower(contactFieldLabel(c)))
+	}
 	return items, changed
 }
 
@@ -701,7 +825,7 @@ func memberEditIdempotencyKey(r *http.Request, personID int64) string {
 	// different key for the same form on the next request.
 	keys := make([]string, 0, len(r.PostForm))
 	for name := range r.PostForm {
-		if strings.HasPrefix(name, "contact_") {
+		if strings.HasPrefix(name, "contact_") || strings.HasPrefix(name, "share_") {
 			keys = append(keys, name)
 		}
 	}
@@ -947,7 +1071,7 @@ func (h *Handler) memberRequestDetail(w http.ResponseWriter, r *http.Request) {
 			DecisionReason: item.DecisionReason,
 		}
 		if visibleTarget && item.AppliedValueRecorded {
-			row.AppliedValue = item.AppliedValue
+			row.AppliedValue = appliedValueLabel(item.Operation, item.AppliedValue)
 			row.AppliedDiffers = item.AppliedValue != plainProposedValue(item.Operation, item.ProposedValue)
 		}
 		data.Items = append(data.Items, row)

@@ -91,7 +91,7 @@ func TestDirectoryListsSharedContactsOnly(t *testing.T) {
 	e.dirContactShared(t, shares, "phone", "540-555-0101", "full_members", "")
 
 	withholds := e.dirPerson(t, "Bob Withholds", "W3BOB", "full")
-	e.dirContactShared(t, withholds, "email", "bob-private@example.test", "officers", "")
+	e.dirContactShared(t, withholds, "email", "bob-private@example.test", "officers_only", "")
 
 	e.dirPerson(t, "Carol Hasnone", "W3CAR", "full")
 
@@ -116,7 +116,7 @@ func TestWithheldAndAbsentAreIndistinguishable(t *testing.T) {
 	cookie, _ := e.eligibleMember(t)
 
 	withholds := e.dirPerson(t, "Bob Withholds", "W3BOB", "full")
-	e.dirContactShared(t, withholds, "phone", "540-555-0199", "officers", "")
+	e.dirContactShared(t, withholds, "phone", "540-555-0199", "officers_only", "")
 	e.dirPerson(t, "Carol Hasnone", "W3CAR", "full")
 
 	body := e.getAs(t, RouteMemberDirectory, cookie).Body.String()
@@ -231,7 +231,7 @@ func TestPrintShowsTheSameFilteredListAndNamesTheClub(t *testing.T) {
 	shares := e.dirPerson(t, "Alice Shares", "W3ALS", "full")
 	e.dirContactShared(t, shares, "email", "alice@example.test", "full_members", "")
 	withholds := e.dirPerson(t, "Bob Withholds", "W3BOB", "full")
-	e.dirContactShared(t, withholds, "email", "bob-private@example.test", "officers", "")
+	e.dirContactShared(t, withholds, "email", "bob-private@example.test", "officers_only", "")
 
 	w := e.getAs(t, RouteMemberDirectoryPrint, cookie)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -388,7 +388,7 @@ func TestDirectoryTotalDoesNotVaryByViewer(t *testing.T) {
 	shares := e.dirPerson(t, "Alice Shares", "W3ALS", "full")
 	e.dirContactShared(t, shares, "email", "alice@example.test", "full_members", "")
 	withholds := e.dirPerson(t, "Bob Withholds", "W3BOB", "full")
-	e.dirContactShared(t, withholds, "email", "bob-private@example.test", "officers", "")
+	e.dirContactShared(t, withholds, "email", "bob-private@example.test", "officers_only", "")
 
 	body := e.getAs(t, RouteMemberDirectory, cookie).Body.String()
 	assert.Contains(t, body, "of 3 members",

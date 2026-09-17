@@ -389,6 +389,9 @@ type officerItemRow struct {
 	// AppliedDiffers is true when the reviewer amended the value, which is the
 	// only case worth drawing a reader's eye to.
 	AppliedDiffers bool
+	// AudienceChoice marks a directory-listing item, whose value is one of a
+	// closed set and is edited with a select rather than typed.
+	AudienceChoice bool
 }
 
 // itemContext is what the review screen knows about an item from the RECORD
@@ -525,6 +528,28 @@ func (h *Handler) currentValues(r *http.Request, p *authz.Principal, req changer
 				}
 				out[item.ID] = itemContext{Current: c.ValueRaw, Label: label}
 			}
+		case opContactVisibility:
+			c, ok := contacts[item.TargetID]
+			if !ok {
+				continue
+			}
+			label := "Directory listing: " + strings.ToUpper(c.Kind[:1]) + c.Kind[1:]
+			if c.Label.Valid && c.Label.String != "" {
+				label += " (" + c.Label.String + ")"
+			}
+			// The reviewer is told what the directory does NOW, including when
+			// that is only the club default, so "keep it out" is not approved
+			// against a blank.
+			audience, err := h.members.DirectoryVisibility(ctx, p, c.ID)
+			if err != nil {
+				out[item.ID] = itemContext{Label: label}
+				continue
+			}
+			current := audienceChoiceLabel(audience)
+			if audience == "" {
+				current = "No choice on file; the club default applies"
+			}
+			out[item.ID] = itemContext{Current: current, Label: label}
 		}
 	}
 	return out
@@ -550,9 +575,10 @@ func officerItemRowFrom(item changerequests.Item) officerItemRow {
 		Appliable: changerequests.Adapters[item.Operation] != changerequests.AdapterNone &&
 			item.TargetID != 0,
 		EditValue:    plainProposedValue(item.Operation, item.ProposedValue),
-		AppliedValue: item.AppliedValue,
+		AppliedValue: appliedValueLabel(item.Operation, item.AppliedValue),
 		AppliedDiffers: item.AppliedValueRecorded &&
 			item.AppliedValue != plainProposedValue(item.Operation, item.ProposedValue),
+		AudienceChoice: item.Operation == opContactVisibility,
 	}
 }
 
