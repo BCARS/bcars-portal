@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bcars/bcars-portal/internal/db/dbtest"
+	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 )
 
 // --- Parser tests ---
@@ -905,4 +906,101 @@ func TestCommitUpdateKeepsWhatTheExportDoesNotSay(t *testing.T) {
 		`SELECT COALESCE(license_class, '') FROM persons WHERE call_sign = 'KA1KEP'`).Scan(&class))
 	assert.Equal(t, "extra", class,
 		"an empty Class column must not erase a licence class the club already holds")
+}
+
+// TestCommitRecordsVisibilityDecisions checks that a committed import leaves a
+// recorded decision behind for every contact method it creates, rather than a
+// NULL the directory query reads as "publish" (bcars-portal-v5j, ADR-0015).
+func TestCommitRecordsVisibilityDecisions(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\n" +
+		"Alice Test,KA1AAA,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Bedford,15522,PA,false\n" +
+		"Bob Test,KA1BBB,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Bedford,15522,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "vis-1")
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+
+	// Every contact method carries a decision, and none is left to the NULL.
+	var undecided int
+	err = d.QueryRow(`SELECT count(*) FROM contact_methods cm
+	                   WHERE NOT EXISTS (SELECT 1 FROM contact_method_visibility_events ev
+	                                      WHERE ev.contact_method_id = cm.id)`).Scan(&undecided)
+	require.NoError(t, err)
+	assert.Equal(t, 0, undecided, "an imported contact method with no recorded decision")
+
+	// The decision names the import and the officer who committed it, which is
+	// the whole point: the audit trail must not imply the member chose.
+	rows, err := d.Query(`SELECT cm.kind, m.base_type, ev.audience, ev.source, ev.actor_user_id
+	                        FROM contact_method_visibility_events ev
+	                        JOIN contact_methods cm ON cm.id = ev.contact_method_id
+	                        JOIN memberships m ON m.person_id = cm.person_id
+	                       ORDER BY m.base_type, cm.kind`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	type decision struct{ baseType, kind, audience string }
+	got := map[decision]string{}
+	for rows.Next() {
+		var kind, baseType, audience, source string
+		var actor sql.NullInt64
+		require.NoError(t, rows.Scan(&kind, &baseType, &audience, &source, &actor))
+		assert.Equal(t, "import_default", source)
+		assert.True(t, actor.Valid, "no actor recorded for %s/%s", baseType, kind)
+		assert.Equal(t, int64(1), actor.Int64)
+		got[decision{baseType, kind, audience}] = source
+	}
+	require.NoError(t, rows.Err())
+
+	// A Full member's email and telephone are published; their address is not,
+	// and an Associate's nothing is.
+	for _, want := range []decision{
+		{"full", "email", "full_members"},
+		{"full", "phone", "full_members"},
+		{"full", "postal", "hidden"},
+		{"associate", "email", "hidden"},
+		{"associate", "phone", "hidden"},
+		{"associate", "postal", "hidden"},
+	} {
+		assert.Contains(t, got, want)
+	}
+}
+
+// TestCommitLeavesDirectoryVisibilityUnchanged holds the property the recorded
+// decisions were meant to preserve. Writing an explicit event is only safe if
+// the directory lists exactly who it listed before, so this asserts through the
+// directory query rather than through the events table.
+func TestCommitLeavesDirectoryVisibilityUnchanged(t *testing.T) {
+	svc, d := setupServiceDB(t)
+
+	csv := "Contact Name,Call Sign,Current Until,Note,Membership Type,Class,Phone,Email,Street Address,City,Postal Code,State/Province,Volunteer Examiner\n" +
+		"Alice Test,KA1AAA,12/31/2026,,Full,General,555-111-1111,alice@example.invalid,1 Main,Bedford,15522,PA,false\n" +
+		"Bob Test,KA1BBB,12/31/2026,,Associate,,555-222-2222,bob@example.invalid,2 Main,Bedford,15522,PA,false\n"
+
+	up, err := svc.Upload(context.Background(), strings.NewReader(csv), "csv", "test.csv", 1, "vis-2")
+	require.NoError(t, err)
+	_, err = svc.Preview(context.Background(), up.RunID)
+	require.NoError(t, err)
+	_, err = svc.Commit(context.Background(), up.RunID, 1)
+	require.NoError(t, err)
+
+	contacts, err := sqlcgen.New(d).ListDirectoryContacts(context.Background(), sqlcgen.ListDirectoryContactsParams{
+		PageLimit: 50,
+	})
+	require.NoError(t, err)
+
+	listed := map[string]bool{}
+	for _, c := range contacts {
+		listed[c.Value] = true
+	}
+
+	assert.True(t, listed["alice@example.invalid"], "the Full member's email should be listed")
+	assert.True(t, listed["555-111-1111"], "the Full member's telephone should be listed")
+	assert.False(t, listed["1 Main"], "no address belongs in the directory")
+	assert.False(t, listed["bob@example.invalid"], "an Associate's email should not be listed")
+	assert.False(t, listed["555-222-2222"], "an Associate's telephone should not be listed")
 }

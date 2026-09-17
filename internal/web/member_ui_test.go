@@ -1135,3 +1135,63 @@ func TestSendingANoteStillRevealsNothing(t *testing.T) {
 	assert.NotContains(t, body, "member record",
 		"and no hint that a record exists")
 }
+
+// TestRecordSaysWhatTheClubDefaultResolvesTo holds the half of
+// bcars-portal-v5j the member can see. "Club default" named a rule without
+// stating it, on a value the member has no control over, so the page has to
+// say what the club actually does with each detail.
+func TestRecordSaysWhatTheClubDefaultResolvesTo(t *testing.T) {
+	e := setupMemberEnv(t)
+	personID := e.grant(t, "Dale Rutherford")
+	cookie := e.signInMember(t)
+
+	_, err := e.h.db.Exec(
+		`INSERT INTO memberships (person_id, base_type, lifecycle, joined_on)
+		 VALUES (?, 'full', 'approved', '2026-01-01')`, personID)
+	require.NoError(t, err)
+
+	// An email with no decision on file: the club default applies, and the
+	// directory publishes it.
+	_, err = e.h.db.Exec(
+		`INSERT INTO contact_methods (person_id, kind, value_raw, value_norm, is_primary)
+		 VALUES (?, 'email', 'dale@example.test', 'dale@example.test', 1)`, personID)
+	require.NoError(t, err)
+
+	// An address, which the club never publishes whatever the membership type.
+	_, err = e.h.db.Exec(
+		`INSERT INTO contact_methods (person_id, kind, value_raw, value_norm)
+		 VALUES (?, 'postal', '1 Main Street', '1 Main Street')`, personID)
+	require.NoError(t, err)
+
+	w := e.getAs(t, fmt.Sprintf("/member/records/%d", personID), cookie)
+	require.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	assert.NotContains(t, body, ">Club default<",
+		"a bare Club default names a rule the member cannot look up")
+	assert.Contains(t, body, "Full members (club default)",
+		"the member should learn that their email is published to Full members")
+	assert.Contains(t, body, "Not in the directory (club default)",
+		"the member should learn that their address is not published")
+}
+
+func TestSharedWithLabel(t *testing.T) {
+	cases := []struct {
+		audience, kind, baseType, want string
+	}{
+		{"full_members", "email", "full", "Full members"},
+		{"hidden", "email", "full", "Not in the directory"},
+		{"officers_only", "phone", "full", "Officers only"},
+		// No decision on file is the club default, which turns on the
+		// membership type and the kind of detail (ADR-0015).
+		{"", "email", "full", "Full members (club default)"},
+		{"", "phone", "full", "Full members (club default)"},
+		{"", "postal", "full", "Not in the directory (club default)"},
+		{"", "email", "associate", "Not in the directory (club default)"},
+		{"", "email", "", "Not in the directory (club default)"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, sharedWithLabel(c.audience, c.kind, c.baseType),
+			"audience=%q kind=%q baseType=%q", c.audience, c.kind, c.baseType)
+	}
+}

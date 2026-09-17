@@ -14,6 +14,7 @@ import (
 	"time"
 
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
+	"github.com/bcars/bcars-portal/internal/domain/members"
 )
 
 // Errors returned by the import service.
@@ -547,8 +548,13 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 	}
 
 	// Create contact methods.
+	//
+	// Each one gets an explicit visibility event straight away. The club
+	// decided that a roster's contact details may be published (ADR-0015), and
+	// the audit trail has to carry that as a recorded decision rather than as
+	// an absent row the directory query happens to read as "publish".
 	if norm.Email != "" {
-		_, err = qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
+		cm, err := qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
 			PersonID:  person.ID,
 			Kind:      "email",
 			ValueRaw:  norm.Email,
@@ -558,12 +564,15 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		if err != nil {
 			return fmt.Errorf("create email: %w", err)
 		}
+		if err := recordImportVisibility(ctx, qtx, cm.ID, "email", baseType, now, actorID); err != nil {
+			return err
+		}
 	}
 
 	if norm.Phone != "" && norm.PhoneValid {
 		var raw RawRecord
 		_ = json.Unmarshal([]byte(staged.RawJson), &raw)
-		_, err = qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
+		cm, err := qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
 			PersonID:  person.ID,
 			Kind:      "phone",
 			ValueRaw:  raw.Phone,
@@ -572,10 +581,13 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		if err != nil {
 			return fmt.Errorf("create phone: %w", err)
 		}
+		if err := recordImportVisibility(ctx, qtx, cm.ID, "phone", baseType, now, actorID); err != nil {
+			return err
+		}
 	}
 
 	if norm.StreetAddress != "" {
-		_, err = qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
+		cm, err := qtx.CreateContactMethod(ctx, sqlcgen.CreateContactMethodParams{
 			PersonID:         person.ID,
 			Kind:             "postal",
 			ValueRaw:         norm.StreetAddress,
@@ -587,6 +599,9 @@ func (s *Service) applyCreateTx(ctx context.Context, qtx *sqlcgen.Queries, stage
 		})
 		if err != nil {
 			return fmt.Errorf("create postal: %w", err)
+		}
+		if err := recordImportVisibility(ctx, qtx, cm.ID, "postal", baseType, now, actorID); err != nil {
+			return err
 		}
 	}
 
@@ -815,6 +830,39 @@ func createImportNotes(ctx context.Context, qtx *sqlcgen.Queries, personID int64
 		if err != nil {
 			return fmt.Errorf("create note: %w", err)
 		}
+	}
+	return nil
+}
+
+// recordImportVisibility plants the club's decision about an imported contact
+// detail, so the directory's behaviour rests on a recorded row rather than on
+// the absence of one.
+//
+// The audience deliberately reproduces what the NULL fallback already did, so
+// committing an import changes no one's visibility: a Full member's email and
+// telephone are shown to Full members, and everything else is hidden. A postal
+// address is hidden whatever the membership type, because the directory has
+// never published one and the club's decision (ADR-0015) was about the details
+// a Groups.io roster already circulated among its members.
+//
+// This is a legacy default, not consent, and the note says so. A member who
+// later chooses differently supersedes it like any other preference event.
+func recordImportVisibility(ctx context.Context, qtx *sqlcgen.Queries, contactMethodID int64, kind, baseType, now string, actorID int64) error {
+	audience := "hidden"
+	if baseType == "full" && (kind == "email" || kind == "phone") {
+		audience = "full_members"
+	}
+
+	_, err := qtx.CreateVisibilityEvent(ctx, sqlcgen.CreateVisibilityEventParams{
+		ContactMethodID: contactMethodID,
+		Audience:        audience,
+		Source:          members.PrefSourceImportDefault,
+		EffectiveAt:     now,
+		ActorUserID:     sql.NullInt64{Int64: actorID, Valid: actorID != 0},
+		Note:            sqlNullString("club default recorded at import; not the member's own choice"),
+	})
+	if err != nil {
+		return fmt.Errorf("record %s visibility: %w", kind, err)
 	}
 	return nil
 }

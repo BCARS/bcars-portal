@@ -304,13 +304,42 @@ type memberRecordData struct {
 }
 
 type memberContactRow struct {
-	ID         int64
-	Kind       string
-	Label      string
-	Value      string
-	Primary    bool
-	SharedWith string
-	Version    int64
+	ID      int64
+	Kind    string
+	Label   string
+	Value   string
+	Primary bool
+	// SharedWithLabel is what the member is shown. The raw audience does not
+	// reach the template: it is empty when no decision is on file, and a blank
+	// cell is exactly the thing this row exists to stop saying.
+	SharedWithLabel string
+	Version         int64
+}
+
+// sharedWithLabel says in words who can see a contact value in the member
+// directory.
+//
+// An absent visibility decision is not "no answer given". The directory reads
+// it as the club default, which publishes a Full member's email address and
+// telephone number and nothing else (ADR-0015). A record that said only "Club
+// default" told the member a rule existed without telling them what it was,
+// and they have no control to inspect either (bcars-portal-v5j).
+func sharedWithLabel(audience, kind, baseType string) string {
+	switch audience {
+	case "full_members":
+		return "Full members"
+	case "officers_only":
+		return "Officers only"
+	case "hidden":
+		return "Not in the directory"
+	case "":
+		if baseType == "full" && (kind == "email" || kind == "phone") {
+			return "Full members (club default)"
+		}
+		return "Not in the directory (club default)"
+	default:
+		return audience
+	}
 }
 
 func (h *Handler) memberRecord(w http.ResponseWriter, r *http.Request) {
@@ -328,7 +357,9 @@ func (h *Handler) memberRecord(w http.ResponseWriter, r *http.Request) {
 	for _, c := range profile.Contacts {
 		data.Contacts = append(data.Contacts, memberContactRow{
 			ID: c.ID, Kind: c.Kind, Label: c.Label, Value: c.Value,
-			Primary: c.Primary, SharedWith: c.SharedWith, Version: c.Version,
+			Primary:         c.Primary,
+			SharedWithLabel: sharedWithLabel(c.SharedWith, c.Kind, profile.BaseType),
+			Version:         c.Version,
 		})
 	}
 

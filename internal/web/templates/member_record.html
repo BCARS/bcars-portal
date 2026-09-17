@@ -37,7 +37,9 @@
     <h2>Contact details</h2>
     {{if .Contacts}}
     <table>
-        <caption>“Shared with” is who can see a value in the member directory.</caption>
+        <caption>“Shared with” is who can see a value in the member directory. Where it says
+            &ldquo;club default&rdquo;, nobody has chosen for this value and the club’s standing rule
+            applies; an officer can set it to something else for you.</caption>
         <thead>
             <tr>
                 <th scope="col">Type</th>
@@ -50,7 +52,7 @@
             <tr>
                 <td>{{.Kind}}{{if .Label}} <span class="note">({{.Label}})</span>{{end}}{{if .Primary}} <span class="badge badge-gray">Main</span>{{end}}</td>
                 <td>{{.Value}}</td>
-                <td>{{if eq .SharedWith "full_members"}}Full members{{else if .SharedWith}}{{.SharedWith}}{{else}}<span class="note">Club default</span>{{end}}</td>
+                <td>{{.SharedWithLabel}}</td>
             </tr>
             {{end}}
         </tbody>

@@ -71,6 +71,12 @@ SELECT p.id           AS person_id,
 -- Associate's is not. An imported import_default event is a recorded decision
 -- like any other, so it keeps its result until an officer supersedes it.
 --
+-- The fallback publishes by omission, which is the club's decision and not an
+-- accident (ADR-0015). The importer now writes an explicit import_default
+-- event reproducing it, so new imports do not rely on the NULL branch; the
+-- branch stays for every contact method created before that and by every other
+-- path.
+--
 -- Primary first, then by id, so a member's main number leads.
 WITH page AS (
     SELECT p.id AS person_id, p.sort_name AS sort_name, m.base_type AS base_type
