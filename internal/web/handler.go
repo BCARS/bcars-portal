@@ -1395,13 +1395,63 @@ type importDetailRow struct {
 	MatchMethod    string
 	RequiresManual bool
 	ManualReason   string
+	// DecidedBy names the officer who ruled on this row, empty when nobody
+	// did. A decision clears requires_manual, so without this the row is
+	// indistinguishable from one the matcher resolved by itself
+	// (bcars-portal-7kp).
+	DecidedBy     string
+	DecidedAt     string
+	DecidedAction string
+}
+
+// Decided reports whether an officer ruled on this row.
+func (r importDetailRow) Decided() bool { return r.DecidedBy != "" }
+
+// NeedsDecision reports whether this row is still waiting on an officer.
+func (r importDetailRow) NeedsDecision() bool { return r.RequiresManual }
+
+// Automatic reports whether the matcher resolved this row with nobody's help.
+// It is the only one of the three that "Auto" ever meant.
+func (r importDetailRow) Automatic() bool { return !r.RequiresManual && r.DecidedBy == "" }
+
+// manualReasonText turns the staging layer's reason code into a sentence an
+// officer can act on. The page printed the code itself --
+// "lifetime_like_date_needs_confirmation" -- which names the rule without
+// saying what to do about it (bcars-portal-7kp).
+//
+// An unrecognised code is shown as it stands rather than hidden: a reason the
+// UI has not been taught is still the only explanation the officer has.
+func manualReasonText(code string) string {
+	switch code {
+	case "":
+		return ""
+	case "honorary_type_unspecified":
+		return "The export says honorary but not which membership type to grant. Choose one, or skip the row."
+	case "lifetime_like_date_needs_confirmation":
+		return "The paid-through date looks like a stand-in for \"never expires\". Confirm this is a lifetime membership, or skip the row."
+	case "ambiguous_email":
+		return "More than one member record has this email address, so the matcher cannot tell which one this row is."
+	default:
+		if rest, ok := strings.CutPrefix(code, "ambiguous_"); ok {
+			return "More than one member record matches this row's " + strings.ReplaceAll(rest, "_", " ") + "."
+		}
+		return code
+	}
 }
 
 type importDetailData struct {
-	Run         sqlcgen.ImportRun
-	TotalRows   int
+	Run       sqlcgen.ImportRun
+	TotalRows int
+	// The three are counted apart on purpose. AutoRows used to include every
+	// row an officer had decided, so a run where three rows were ruled on by
+	// hand reported 21 of 21 automatic (bcars-portal-7kp).
 	AutoRows    int
+	DecidedRows int
 	ManualRows  int
+	// ManualItems holds every row that ever needed a decision, including the
+	// ones already decided. Filtering on requires_manual dropped a decided row
+	// out of the review table altogether, so the officer's own ruling left no
+	// trace on the page they were reading.
 	ManualItems []importDetailRow
 	AllItems    []importDetailRow
 	Error       string
@@ -1430,13 +1480,35 @@ func (h *Handler) importDetail(w http.ResponseWriter, r *http.Request) {
 		Success:   success,
 	}
 
+	// Decisions are read back so the page can tell a row the matcher resolved
+	// from a row a person ruled on. Both clear requires_manual; only one of
+	// them is automatic.
+	decisions := map[int64]sqlcgen.ListRunDecisionsRow{}
+	if decided, err := h.queries.ListRunDecisions(ctx, id); err == nil {
+		for _, d := range decided {
+			decisions[d.StagedImportRowID] = d
+		}
+	} else {
+		h.log.Error("list run decisions", slog.Int64("run_id", id), slog.String("error", err.Error()))
+	}
+
 	for _, row := range rows {
 		item := stagedToRow(row)
+		if d, ok := decisions[row.ID]; ok {
+			item.DecidedBy = d.DecidedByEmail
+			item.DecidedAt = memberDate(d.DecidedAt)
+			item.DecidedAction = d.DecisionAction
+		}
 		data.AllItems = append(data.AllItems, item)
-		if row.RequiresManual == 1 {
+
+		switch {
+		case item.NeedsDecision():
 			data.ManualRows++
 			data.ManualItems = append(data.ManualItems, item)
-		} else {
+		case item.Decided():
+			data.DecidedRows++
+			data.ManualItems = append(data.ManualItems, item)
+		default:
 			data.AutoRows++
 		}
 	}
@@ -1455,7 +1527,7 @@ func stagedToRow(row sqlcgen.StagedImportRow) importDetailRow {
 		item.MatchMethod = row.MatchMethod.String
 	}
 	if row.ManualReason.Valid {
-		item.ManualReason = row.ManualReason.String
+		item.ManualReason = manualReasonText(row.ManualReason.String)
 	}
 
 	// Extract name and call sign from normalized JSON.

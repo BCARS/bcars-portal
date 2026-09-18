@@ -530,6 +530,68 @@ func (q *Queries) ListImportRuns(ctx context.Context, arg ListImportRunsParams) 
 	return items, nil
 }
 
+const listRunDecisions = `-- name: ListRunDecisions :many
+SELECT d.staged_import_row_id AS staged_import_row_id,
+       d.action               AS decision_action,
+       d.decided_at           AS decided_at,
+       d.decided_by           AS decided_by,
+       u.email                AS decided_by_email
+  FROM reconciliation_decisions d
+  JOIN staged_import_rows s ON s.id = d.staged_import_row_id
+  JOIN users u ON u.id = d.decided_by
+ WHERE s.import_run_id = ?
+ ORDER BY d.decided_at, d.id
+`
+
+type ListRunDecisionsRow struct {
+	StagedImportRowID int64
+	DecisionAction    string
+	DecidedAt         string
+	DecidedBy         int64
+	DecidedByEmail    string
+}
+
+// The officer decisions recorded against a run's staged rows
+// (bcars-portal-7kp).
+//
+// Recording a decision clears requires_manual on the row, which is right --
+// the row no longer needs one -- but it left the import page unable to tell a
+// row the matcher resolved from a row a person ruled on. Both read as "Auto",
+// the Auto-Resolvable tile counted them together, and the decision was visible
+// nowhere. The page an officer reviews before committing real member data
+// overstated how much of the run was automatic.
+//
+// The decider is joined in by email because "decided by an officer" without
+// saying which one is only half an audit trail on the screen that matters.
+func (q *Queries) ListRunDecisions(ctx context.Context, importRunID int64) ([]ListRunDecisionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRunDecisions, importRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRunDecisionsRow{}
+	for rows.Next() {
+		var i ListRunDecisionsRow
+		if err := rows.Scan(
+			&i.StagedImportRowID,
+			&i.DecisionAction,
+			&i.DecidedAt,
+			&i.DecidedBy,
+			&i.DecidedByEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStagedRows = `-- name: ListStagedRows :many
 SELECT id, import_run_id, source_row_index, source_external_id, raw_json, normalized_json, match_person_id, match_method, proposed_action, proposed_changes_json, validation_errors_json, requires_manual, manual_reason, created_at FROM staged_import_rows
 WHERE import_run_id = ?

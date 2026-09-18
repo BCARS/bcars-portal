@@ -470,6 +470,20 @@ type Querier interface {
 	ListRelationshipsForPerson(ctx context.Context, personID int64) ([]ListRelationshipsForPersonRow, error)
 	ListRoleCapabilities(ctx context.Context) ([]RoleCapability, error)
 	ListRoles(ctx context.Context) ([]Role, error)
+	//
+	// The officer decisions recorded against a run's staged rows
+	// (bcars-portal-7kp).
+	//
+	// Recording a decision clears requires_manual on the row, which is right --
+	// the row no longer needs one -- but it left the import page unable to tell a
+	// row the matcher resolved from a row a person ruled on. Both read as "Auto",
+	// the Auto-Resolvable tile counted them together, and the decision was visible
+	// nowhere. The page an officer reviews before committing real member data
+	// overstated how much of the run was automatic.
+	//
+	// The decider is joined in by email because "decided by an officer" without
+	// saying which one is only half an audit trail on the screen that matters.
+	ListRunDecisions(ctx context.Context, importRunID int64) ([]ListRunDecisionsRow, error)
 	ListStagedRows(ctx context.Context, arg ListStagedRowsParams) ([]StagedImportRow, error)
 	ListStagedRowsRequiringManual(ctx context.Context, arg ListStagedRowsRequiringManualParams) ([]StagedImportRow, error)
 	//

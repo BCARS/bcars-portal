@@ -42,20 +42,25 @@
         <div class="value">{{.TotalRows}}</div>
     </div>
     <div class="stat-card">
-        <div class="label">Auto-Resolvable</div>
+        <div class="label">Matched automatically</div>
         <div class="value">{{.AutoRows}}</div>
     </div>
     <div class="stat-card">
-        <div class="label">Manual Review</div>
+        <div class="label">Decided by an officer</div>
+        <div class="value">{{.DecidedRows}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Awaiting a decision</div>
         <div class="value">{{.ManualRows}}</div>
     </div>
 </div>
 
 {{if .ManualItems}}
 <div class="card">
-    <h3>Rows Requiring Manual Review</h3>
+    <h3>Rows the matcher could not settle</h3>
     <p style="font-size: 0.875rem; color: var(--text-helper); margin-bottom: 12px;">
         These rows need a decision before the import can be committed. Use Skip to exclude a row, or Approve to include it.
+        Rows already decided stay listed, with who decided them, so this section is the record of what was done by hand.
     </p>
     <table>
         <thead>
@@ -65,9 +70,7 @@
                 <th>Action</th>
                 <th>Reason</th>
                 <th>Match</th>
-                {{if or (eq $.Run.Status "validated") (eq $.Run.Status "previewed")}}
                 <th>Decision</th>
-                {{end}}
             </tr>
         </thead>
         <tbody>
@@ -75,12 +78,15 @@
         <tr>
             <td>{{.SourceRowIndex}}</td>
             <td>{{.DisplayName}}</td>
-            <td><span class="badge badge-yellow">{{.ProposedAction}}</span></td>
+            <td>
+                {{if .Decided}}<span class="badge badge-blue">{{.ProposedAction}}</span>
+                {{else}}<span class="badge badge-yellow">{{.ProposedAction}}</span>
+                {{end}}
+            </td>
             <td>{{.ManualReason}}</td>
             <td>{{if .MatchMethod}}{{.MatchMethod}}{{else}}-{{end}}</td>
-            {{if or (eq $.Run.Status "validated") (eq $.Run.Status "previewed")}}
             <td>
-                {{if .RequiresManual}}
+                {{if and .NeedsDecision (or (eq $.Run.Status "validated") (eq $.Run.Status "previewed"))}}
                 <div style="display: flex; gap: 4px;">
                     <form method="post" action="/admin/imports/{{$.Run.ID}}/rows/{{.ID}}/decide" style="display:inline;">
                         <input type="hidden" name="action" value="skip">
@@ -91,11 +97,15 @@
                         <button type="submit" class="btn btn-sm btn-primary">Approve</button>
                     </form>
                 </div>
+                {{else if .Decided}}
+                <span class="badge badge-green">Decided</span>
+                <div style="font-size: 0.8125rem; color: var(--text-helper);">
+                    {{.DecidedBy}}{{if .DecidedAt}}, {{.DecidedAt}}{{end}}
+                </div>
                 {{else}}
-                <span class="badge badge-green">Resolved</span>
+                <span class="badge badge-yellow">Never decided</span>
                 {{end}}
             </td>
-            {{end}}
         </tr>
         {{end}}
         </tbody>
@@ -131,8 +141,9 @@
             </td>
             <td>{{if .MatchMethod}}{{.MatchMethod}}{{else}}-{{end}}</td>
             <td>
-                {{if .RequiresManual}}<span class="badge badge-yellow">Manual</span>
-                {{else}}<span class="badge badge-green">Auto</span>
+                {{if .NeedsDecision}}<span class="badge badge-yellow">Awaiting a decision</span>
+                {{else if .Decided}}<span class="badge badge-blue">Decided by {{.DecidedBy}}</span>
+                {{else}}<span class="badge badge-green">Automatic</span>
                 {{end}}
             </td>
         </tr>
