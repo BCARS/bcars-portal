@@ -54,29 +54,31 @@
 
 <div class="card">
     {{if .Rows}}
-    <table>
-        <caption>Showing {{len .Rows}} of {{.Total}} members.</caption>
-        <thead>
-            <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Call sign</th>
-                <th scope="col">Email</th>
-                <th scope="col">Phone</th>
-                <th scope="col"><span class="visually-hidden">Actions</span></th>
-            </tr>
-        </thead>
-        <tbody>
-        {{range .Rows}}
-            <tr>
-                <td>{{.DisplayName}}</td>
-                <td>{{if .CallSign}}{{.CallSign}}{{else}}<span class="dir-notshared">-</span>{{end}}</td>
-                <td>{{if .EmailShared}}{{.Email}}{{else}}<span class="dir-notshared">{{.Email}}</span>{{end}}</td>
-                <td>{{if .PhoneShared}}{{.Phone}}{{else}}<span class="dir-notshared">{{.Phone}}</span>{{end}}</td>
-                <td><a href="{{.SuggestURL}}">Suggest a correction</a></td>
-            </tr>
-        {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <caption>Showing {{len .Rows}} of {{.Total}} members.</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Call sign</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Rows}}
+                <tr>
+                    <td>{{.DisplayName}}</td>
+                    <td>{{if .CallSign}}{{.CallSign}}{{else}}<span class="dir-notshared">-</span>{{end}}</td>
+                    <td>{{if .EmailShared}}{{.Email}}{{else}}<span class="dir-notshared">{{.Email}}</span>{{end}}</td>
+                    <td>{{if .PhoneShared}}{{.Phone}}{{else}}<span class="dir-notshared">{{.Phone}}</span>{{end}}</td>
+                    <td><a href="{{.SuggestURL}}">Suggest a correction</a></td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
 
     {{if or .HasPrev .HasNext}}
     <p class="dir-pager">

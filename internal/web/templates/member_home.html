@@ -8,35 +8,37 @@
 <div class="card">
     <h2>Your records</h2>
     {{if .Records}}
-    <table>
-        <caption>A club officer decides which records this account can see. Ask an officer if something is missing.</caption>
-        <thead>
-            <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Dues</th>
-                <th scope="col">Access</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Records}}
-            <tr>
-                <td>
-                    <a href="/member/records/{{.PersonID}}">{{.DisplayName}}</a>
-                    {{if .CallSign}}<div class="note">{{.CallSign}}</div>{{end}}
-                </td>
-                <td>
-                    {{if eq .DuesStatus "current"}}<span class="badge badge-green">Paid up</span>
-                    {{else if eq .DuesStatus "expiring"}}<span class="badge badge-yellow">Due soon</span>
-                    {{else if eq .DuesStatus "expired"}}<span class="badge badge-red">Overdue</span>
-                    {{else if eq .DuesStatus "honorary_waived"}}<span class="badge badge-green">Honorary</span>
-                    {{else}}<span class="badge badge-gray">Not recorded</span>{{end}}
-                    {{if .PaidThrough}}<div class="note">Through {{.PaidThrough}}</div>{{end}}
-                </td>
-                <td>{{if eq .AccessKind "self"}}Your own record{{else}}On behalf of this member{{end}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <caption>A club officer decides which records this account can see. Ask an officer if something is missing.</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Dues</th>
+                    <th scope="col">Access</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Records}}
+                <tr>
+                    <td>
+                        <a href="/member/records/{{.PersonID}}">{{.DisplayName}}</a>
+                        {{if .CallSign}}<div class="note">{{.CallSign}}</div>{{end}}
+                    </td>
+                    <td>
+                        {{if eq .DuesStatus "current"}}<span class="badge badge-green">Paid up</span>
+                        {{else if eq .DuesStatus "expiring"}}<span class="badge badge-yellow">Due soon</span>
+                        {{else if eq .DuesStatus "expired"}}<span class="badge badge-red">Overdue</span>
+                        {{else if eq .DuesStatus "honorary_waived"}}<span class="badge badge-green">Honorary</span>
+                        {{else}}<span class="badge badge-gray">Not recorded</span>{{end}}
+                        {{if .PaidThrough}}<div class="note">Through {{.PaidThrough}}</div>{{end}}
+                    </td>
+                    <td>{{if eq .AccessKind "self"}}Your own record{{else}}On behalf of this member{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p class="empty-state">
         This account is not linked to any member record yet. A club officer links

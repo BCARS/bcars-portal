@@ -26,52 +26,54 @@
 {{if .Runs}}
 <div class="card">
     <h3>Import Runs</h3>
-    <table>
-        <thead>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>File</th>
+                    <th>Source</th>
+                    <th>Status</th>
+                    <th>Uploaded</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Runs}}
             <tr>
-                <th>ID</th>
-                <th>File</th>
-                <th>Source</th>
-                <th>Status</th>
-                <th>Uploaded</th>
-                <th></th>
+                <td>{{.ID}}</td>
+                <td>{{.SourceFilename}}</td>
+                <td><span class="badge badge-gray">{{.SourceKind}}</span></td>
+                <td>
+                    {{if or (eq .Status "validated") (eq .Status "previewed")}}<span class="badge badge-yellow">Pending Review</span>
+                    {{else if eq .Status "committed"}}<span class="badge badge-green">Committed</span>
+                    {{else if eq .Status "discarded"}}<span class="badge badge-gray">Discarded</span>
+                    {{else}}<span class="badge badge-blue">{{.Status}}</span>
+                    {{end}}
+                </td>
+                <td>{{.UploadedAt}}</td>
+                <td>
+                    {{if or (eq .Status "validated") (eq .Status "previewed")}}
+                    <div style="display: flex; gap: 4px;">
+                        <a href="/admin/imports/{{.ID}}" class="btn btn-sm btn-secondary">Review</a>
+                        <form method="post" action="/admin/imports/{{.ID}}/commit" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-primary"
+                                    onclick="return confirm('Commit this import? Auto-resolvable rows will be applied.');">Commit</button>
+                        </form>
+                        <form method="post" action="/admin/imports/{{.ID}}/discard" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    onclick="return confirm('Discard this import? No data will be applied.');">Discard</button>
+                        </form>
+                    </div>
+                    {{else if eq .Status "committed"}}
+                    <a href="/admin/imports/{{.ID}}" class="btn btn-sm btn-secondary">View</a>
+                    {{end}}
+                </td>
             </tr>
-        </thead>
-        <tbody>
-        {{range .Runs}}
-        <tr>
-            <td>{{.ID}}</td>
-            <td>{{.SourceFilename}}</td>
-            <td><span class="badge badge-gray">{{.SourceKind}}</span></td>
-            <td>
-                {{if or (eq .Status "validated") (eq .Status "previewed")}}<span class="badge badge-yellow">Pending Review</span>
-                {{else if eq .Status "committed"}}<span class="badge badge-green">Committed</span>
-                {{else if eq .Status "discarded"}}<span class="badge badge-gray">Discarded</span>
-                {{else}}<span class="badge badge-blue">{{.Status}}</span>
-                {{end}}
-            </td>
-            <td>{{.UploadedAt}}</td>
-            <td>
-                {{if or (eq .Status "validated") (eq .Status "previewed")}}
-                <div style="display: flex; gap: 4px;">
-                    <a href="/admin/imports/{{.ID}}" class="btn btn-sm btn-secondary">Review</a>
-                    <form method="post" action="/admin/imports/{{.ID}}/commit" style="display: inline;">
-                        <button type="submit" class="btn btn-sm btn-primary"
-                                onclick="return confirm('Commit this import? Auto-resolvable rows will be applied.');">Commit</button>
-                    </form>
-                    <form method="post" action="/admin/imports/{{.ID}}/discard" style="display: inline;">
-                        <button type="submit" class="btn btn-sm btn-danger"
-                                onclick="return confirm('Discard this import? No data will be applied.');">Discard</button>
-                    </form>
-                </div>
-                {{else if eq .Status "committed"}}
-                <a href="/admin/imports/{{.ID}}" class="btn btn-sm btn-secondary">View</a>
-                {{end}}
-            </td>
-        </tr>
-        {{end}}
-        </tbody>
-    </table>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
 </div>
 {{else}}
 <div class="card">

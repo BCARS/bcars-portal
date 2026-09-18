@@ -75,74 +75,78 @@
     </p>
     <p style="margin: 0 0 12px;">{{.YearEndRule}}</p>
 
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 2em;">#</th>
-                <th>Name</th>
-                <th>Call sign</th>
-                {{if .ShowContact}}<th>{{.ContactKind}}</th>{{end}}
-                <th>Dues paid through</th>
-                {{if .FollowUp}}<th>Paid since last sheet</th>{{end}}
-                <th class="write-box">Amount</th>
-                <th class="write-box">Method</th>
-                <th class="write-box">Check no.</th>
-                <th class="write-box">Date</th>
-                <th style="width: 3em;">Done</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Rows}}
-            <tr>
-                <td>{{.Ordinal}}</td>
-                <td>{{.DisplayName}}</td>
-                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
-                {{if $.ShowContact}}<td>{{.Contact}}</td>{{end}}
-                <td>
-                    {{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}
-                    {{if eq .DuesStatus "expired"}}<br>Expired{{end}}
-                    {{if eq .DuesStatus "unknown"}}<br>No dues recorded{{end}}
-                    {{if eq .DuesStatus "honorary_waived"}}<br>Waived{{end}}
-                </td>
-                {{if $.FollowUp}}<td>{{if .EnteredSince}}Yes &mdash; already entered{{else}}No{{end}}</td>{{end}}
-                <td class="write-box"><span class="rule"></span></td>
-                <td class="write-box"><span class="rule"></span></td>
-                <td class="write-box"><span class="rule"></span></td>
-                <td class="write-box"><span class="rule"></span></td>
-                <td><span class="rule"></span></td>
-            </tr>
-            {{end}}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 2em;">#</th>
+                    <th>Name</th>
+                    <th>Call sign</th>
+                    {{if .ShowContact}}<th>{{.ContactKind}}</th>{{end}}
+                    <th>Dues paid through</th>
+                    {{if .FollowUp}}<th>Paid since last sheet</th>{{end}}
+                    <th class="write-box">Amount</th>
+                    <th class="write-box">Method</th>
+                    <th class="write-box">Check no.</th>
+                    <th class="write-box">Date</th>
+                    <th style="width: 3em;">Done</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Rows}}
+                <tr>
+                    <td>{{.Ordinal}}</td>
+                    <td>{{.DisplayName}}</td>
+                    <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                    {{if $.ShowContact}}<td>{{.Contact}}</td>{{end}}
+                    <td>
+                        {{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}
+                        {{if eq .DuesStatus "expired"}}<br>Expired{{end}}
+                        {{if eq .DuesStatus "unknown"}}<br>No dues recorded{{end}}
+                        {{if eq .DuesStatus "honorary_waived"}}<br>Waived{{end}}
+                    </td>
+                    {{if $.FollowUp}}<td>{{if .EnteredSince}}Yes &mdash; already entered{{else}}No{{end}}</td>{{end}}
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td><span class="rule"></span></td>
+                </tr>
+                {{end}}
 
-            {{range .GuestRows}}
-            <tr>
-                <td>G{{.}}</td>
-                <td><span class="rule"></span></td>
-                <td><span class="rule"></span></td>
-                {{if $.ShowContact}}<td><span class="rule"></span></td>{{end}}
-                <td><span class="rule"></span></td>
-                {{if $.FollowUp}}<td><span class="rule"></span></td>{{end}}
-                <td class="write-box"><span class="rule"></span></td>
-                <td class="write-box"><span class="rule"></span></td>
-                <td class="write-box"><span class="rule"></span></td>
-                <td class="write-box"><span class="rule"></span></td>
-                <td><span class="rule"></span></td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+                {{range .GuestRows}}
+                <tr>
+                    <td>G{{.}}</td>
+                    <td><span class="rule"></span></td>
+                    <td><span class="rule"></span></td>
+                    {{if $.ShowContact}}<td><span class="rule"></span></td>{{end}}
+                    <td><span class="rule"></span></td>
+                    {{if $.FollowUp}}<td><span class="rule"></span></td>{{end}}
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td class="write-box"><span class="rule"></span></td>
+                    <td><span class="rule"></span></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
 
-    <table style="margin-top: 12px; width: auto;">
-        <caption style="text-align: left; font-weight: 600; padding: 4px 0;">
-            Reconciliation &mdash; fill in at the end of the meeting
-        </caption>
-        <tbody>
-            <tr><th>Rows listed</th><td>{{.Run.RowCount}}</td></tr>
-            <tr><th>Cash counted</th><td class="write-box"><span class="rule"></span></td></tr>
-            <tr><th>Checks counted</th><td class="write-box"><span class="rule"></span></td></tr>
-            <tr><th>Other</th><td class="write-box"><span class="rule"></span></td></tr>
-            <tr><th>Total handed to the treasurer</th><td class="write-box"><span class="rule"></span></td></tr>
-            <tr><th>Counted by</th><td class="write-box"><span class="rule"></span></td></tr>
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table style="margin-top: 12px; width: auto;">
+            <caption style="text-align: left; font-weight: 600; padding: 4px 0;">
+                Reconciliation &mdash; fill in at the end of the meeting
+            </caption>
+            <tbody>
+                <tr><th>Rows listed</th><td>{{.Run.RowCount}}</td></tr>
+                <tr><th>Cash counted</th><td class="write-box"><span class="rule"></span></td></tr>
+                <tr><th>Checks counted</th><td class="write-box"><span class="rule"></span></td></tr>
+                <tr><th>Other</th><td class="write-box"><span class="rule"></span></td></tr>
+                <tr><th>Total handed to the treasurer</th><td class="write-box"><span class="rule"></span></td></tr>
+                <tr><th>Counted by</th><td class="write-box"><span class="rule"></span></td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 {{end}}

@@ -25,34 +25,36 @@
     </form>
 
     {{if .Rows}}
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Call sign</th>
-                <th>Membership</th>
-                <th>Dues standing</th>
-                <th>Dues paid through</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Rows}}
-            <tr>
-                <td>{{.DisplayName}}</td>
-                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
-                <td>{{.BaseType}}</td>
-                <td>{{.Status}}{{if .Honorary}} ({{.Honorary.Kind}}){{end}}</td>
-                <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
-                <td>
-                    {{if $.CanPost}}
-                    <a href="/admin/treasury/memberships/{{.MembershipID}}/payment">Record payment</a>
-                    {{end}}
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Call sign</th>
+                    <th>Membership</th>
+                    <th>Dues standing</th>
+                    <th>Dues paid through</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Rows}}
+                <tr>
+                    <td>{{.DisplayName}}</td>
+                    <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                    <td>{{.BaseType}}</td>
+                    <td>{{.Status}}{{if .Honorary}} ({{.Honorary.Kind}}){{end}}</td>
+                    <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
+                    <td>
+                        {{if $.CanPost}}
+                        <a href="/admin/treasury/memberships/{{.MembershipID}}/payment">Record payment</a>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p>No members match.</p>
     {{end}}

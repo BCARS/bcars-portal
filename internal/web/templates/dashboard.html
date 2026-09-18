@@ -72,17 +72,19 @@
     <div class="card">
         <h2>Recent Activity</h2>
         {{if .RecentAudit}}
-        <table>
-            <thead><tr><th>Action</th><th>When</th></tr></thead>
-            <tbody>
-            {{range .RecentAudit}}
-            <tr>
-                <td>{{.Action}}</td>
-                <td>{{.OccurredAt}}</td>
-            </tr>
-            {{end}}
-            </tbody>
-        </table>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Action</th><th>When</th></tr></thead>
+                <tbody>
+                {{range .RecentAudit}}
+                <tr>
+                    <td>{{.Action}}</td>
+                    <td>{{.OccurredAt}}</td>
+                </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
         {{else}}
         <div class="empty-state"><p>No recent activity.</p></div>
         {{end}}

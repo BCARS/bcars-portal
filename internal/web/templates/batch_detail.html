@@ -49,55 +49,57 @@
         {{.WorksheetDone}} of {{len .WorksheetRows}} entered. The order below is the order the
         sheet was printed in, so you can work straight down the paper.
     </p>
-    <table>
-        <thead>
-            <tr><th>#</th><th>Member</th><th>Call sign</th><th>Dues paid through</th>
-                <th>Entered</th><th></th></tr>
-        </thead>
-        <tbody>
-            {{range .WorksheetRows}}
-            <tr id="member-{{.MembershipID}}">
-                <td>{{.Ordinal}}</td>
-                <td>{{.DisplayName}}</td>
-                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
-                <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
-                <td>{{if .Entered}}Yes{{else}}Not yet{{end}}</td>
-                <td>
-                    {{if and (not .Entered) (eq $.Batch.State "open")}}
-                    <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries" method="post" class="add-row-form">
-                        <input type="hidden" name="membership_id" value="{{.MembershipID}}">
-                        <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
-                        <input type="text" name="amount" value="{{$.Defaults.Amount}}"
-                               inputmode="decimal" placeholder="{{$.Suggested}}" aria-label="Amount for {{.DisplayName}}" required>
-                        <select name="method" aria-label="Method for {{.DisplayName}}">
-                            <option value="cash">Cash</option>
-                            <option value="check">Check</option>
-                            <option value="other">Other</option>
-                        </select>
-                        <input type="text" name="reference" placeholder="Check no." aria-label="Reference for {{.DisplayName}}">
-                        {{/*
-                            Both dates were previously distinguishable only by
-                            their aria-label, so a screen reader was told which
-                            was which and a sighted treasurer was not
-                            (bcars-portal-yec).
-                        */}}
-                        <label class="date-field">
-                            <span>Received</span>
-                            <input type="date" name="received_on" value="{{$.Today}}" required>
-                        </label>
-                        <label class="date-field">
-                            <span>Dues paid through</span>
-                            <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}" required>
-                        </label>
-                        <input type="hidden" name="return_to" value="member-{{.MembershipID}}">
-                        <button type="submit" class="btn btn-primary btn-sm">Add row</button>
-                    </form>
-                    {{end}}
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>#</th><th>Member</th><th>Call sign</th><th>Dues paid through</th>
+                    <th>Entered</th><th></th></tr>
+            </thead>
+            <tbody>
+                {{range .WorksheetRows}}
+                <tr id="member-{{.MembershipID}}">
+                    <td>{{.Ordinal}}</td>
+                    <td>{{.DisplayName}}</td>
+                    <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                    <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
+                    <td>{{if .Entered}}Yes{{else}}Not yet{{end}}</td>
+                    <td>
+                        {{if and (not .Entered) (eq $.Batch.State "open")}}
+                        <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries" method="post" class="add-row-form">
+                            <input type="hidden" name="membership_id" value="{{.MembershipID}}">
+                            <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
+                            <input type="text" name="amount" value="{{$.Defaults.Amount}}"
+                                   inputmode="decimal" placeholder="{{$.Suggested}}" aria-label="Amount for {{.DisplayName}}" required>
+                            <select name="method" aria-label="Method for {{.DisplayName}}">
+                                <option value="cash">Cash</option>
+                                <option value="check">Check</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <input type="text" name="reference" placeholder="Check no." aria-label="Reference for {{.DisplayName}}">
+                            {{/*
+                                Both dates were previously distinguishable only by
+                                their aria-label, so a screen reader was told which
+                                was which and a sighted treasurer was not
+                                (bcars-portal-yec).
+                            */}}
+                            <label class="date-field">
+                                <span>Received</span>
+                                <input type="date" name="received_on" value="{{$.Today}}" required>
+                            </label>
+                            <label class="date-field">
+                                <span>Dues paid through</span>
+                                <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}" required>
+                            </label>
+                            <input type="hidden" name="return_to" value="member-{{.MembershipID}}">
+                            <button type="submit" class="btn btn-primary btn-sm">Add row</button>
+                        </form>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     <p style="margin: 8px 0 0; color: var(--text-secondary);">
         Nothing above is recorded until you enter an amount and add the row.
     </p>
@@ -108,31 +110,33 @@
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Rows</h3>
     {{if .Entries}}
-    <table>
-        <thead>
-            <tr><th>#</th><th>Member</th><th>Amount</th><th>Method</th><th>Reference</th>
-                <th>Received</th><th>Dues paid through</th><th></th></tr>
-        </thead>
-        <tbody>
-            {{range .Entries}}
-            <tr>
-                <td>{{.Sequence}}</td>
-                <td>{{if .MemberName}}{{.MemberName}}{{else}}Membership {{.MembershipID}}{{end}}</td>
-                <td>${{.Amount}}</td>
-                <td>{{.Method}}</td>
-                <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
-                <td>{{.ReceivedOn}}</td>
-                <td>{{.PaidThrough}}</td>
-                <td>
-                    <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries/{{.ID}}/delete" method="post">
-                        <input type="hidden" name="version" value="{{.Version}}">
-                        <button type="submit" class="btn btn-secondary btn-sm">Remove</button>
-                    </form>
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>#</th><th>Member</th><th>Amount</th><th>Method</th><th>Reference</th>
+                    <th>Received</th><th>Dues paid through</th><th></th></tr>
+            </thead>
+            <tbody>
+                {{range .Entries}}
+                <tr>
+                    <td>{{.Sequence}}</td>
+                    <td>{{if .MemberName}}{{.MemberName}}{{else}}Membership {{.MembershipID}}{{end}}</td>
+                    <td>${{.Amount}}</td>
+                    <td>{{.Method}}</td>
+                    <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
+                    <td>{{.ReceivedOn}}</td>
+                    <td>{{.PaidThrough}}</td>
+                    <td>
+                        <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries/{{.ID}}/delete" method="post">
+                            <input type="hidden" name="version" value="{{.Version}}">
+                            <button type="submit" class="btn btn-secondary btn-sm">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p>No rows yet.</p>
     {{end}}
@@ -150,42 +154,44 @@
     </form>
 
     {{if .Candidates}}
-    <table>
-        <thead><tr><th>Member</th><th>Call sign</th><th>Dues standing</th><th>Dues paid through</th><th></th></tr></thead>
-        <tbody>
-            {{range .Candidates}}
-            <tr>
-                <td>{{.DisplayName}}</td>
-                <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
-                <td>{{.Status}}</td>
-                <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
-                <td>
-                    <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries" method="post" class="add-row-form">
-                        <input type="hidden" name="membership_id" value="{{.MembershipID}}">
-                        <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
-                        <input type="text" name="amount" value="{{$.Defaults.Amount}}"
-                               inputmode="decimal" placeholder="{{$.Suggested}}" aria-label="Amount" required>
-                        <select name="method" aria-label="Method">
-                            <option value="cash">Cash</option>
-                            <option value="check">Check</option>
-                            <option value="other">Other</option>
-                        </select>
-                        <input type="text" name="reference" placeholder="Check no." aria-label="Reference">
-                        <label class="date-field">
-                            <span>Received</span>
-                            <input type="date" name="received_on" value="{{$.Today}}" required>
-                        </label>
-                        <label class="date-field">
-                            <span>Dues paid through</span>
-                            <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}" required>
-                        </label>
-                        <button type="submit" class="btn btn-primary btn-sm">Add row</button>
-                    </form>
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Member</th><th>Call sign</th><th>Dues standing</th><th>Dues paid through</th><th></th></tr></thead>
+            <tbody>
+                {{range .Candidates}}
+                <tr>
+                    <td>{{.DisplayName}}</td>
+                    <td>{{if .CallSign}}{{.CallSign}}{{else}}&mdash;{{end}}</td>
+                    <td>{{.Status}}</td>
+                    <td>{{if .PaidThrough}}{{.PaidThrough}}{{else}}Not recorded{{end}}</td>
+                    <td>
+                        <form action="/admin/treasury/batches/{{$.Batch.ID}}/entries" method="post" class="add-row-form">
+                            <input type="hidden" name="membership_id" value="{{.MembershipID}}">
+                            <input type="hidden" name="idempotency_key" value="{{$.IdempotencyKey}}-{{.MembershipID}}">
+                            <input type="text" name="amount" value="{{$.Defaults.Amount}}"
+                                   inputmode="decimal" placeholder="{{$.Suggested}}" aria-label="Amount" required>
+                            <select name="method" aria-label="Method">
+                                <option value="cash">Cash</option>
+                                <option value="check">Check</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <input type="text" name="reference" placeholder="Check no." aria-label="Reference">
+                            <label class="date-field">
+                                <span>Received</span>
+                                <input type="date" name="received_on" value="{{$.Today}}" required>
+                            </label>
+                            <label class="date-field">
+                                <span>Dues paid through</span>
+                                <input type="date" name="paid_through" value="{{$.Defaults.PaidThrough}}" required>
+                            </label>
+                            <button type="submit" class="btn btn-primary btn-sm">Add row</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else if .Search}}
     <p>No members match that search.</p>
     {{end}}
@@ -233,32 +239,34 @@
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">What was recorded</h3>
     {{if .Payments}}
-    <table>
-        <thead>
-            <tr><th>Member</th><th>Amount</th><th>Method</th><th>Reference</th>
-                <th>Received</th><th>Receipt</th><th></th></tr>
-        </thead>
-        <tbody>
-            {{range .Payments}}
-            <tr>
-                <td>{{.MemberName}}</td>
-                <td>
-                    {{if .Superseded}}<s>${{.Amount}}</s> <span style="color:var(--text-secondary);">(corrected)</span>
-                    {{else}}${{.Amount}}{{end}}
-                </td>
-                <td>{{.Method}}</td>
-                <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
-                <td>{{.ReceivedOn}}</td>
-                <td><a href="/admin/treasury/payments/{{.PaymentID}}/receipt">{{.ReceiptCode}}</a></td>
-                <td>
-                    {{if .CanCorrect}}
-                    <a href="/admin/treasury/payments/{{.PaymentID}}/correct">Fix this</a>
-                    {{end}}
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Member</th><th>Amount</th><th>Method</th><th>Reference</th>
+                    <th>Received</th><th>Receipt</th><th></th></tr>
+            </thead>
+            <tbody>
+                {{range .Payments}}
+                <tr>
+                    <td>{{.MemberName}}</td>
+                    <td>
+                        {{if .Superseded}}<s>${{.Amount}}</s> <span style="color:var(--text-secondary);">(corrected)</span>
+                        {{else}}${{.Amount}}{{end}}
+                    </td>
+                    <td>{{.Method}}</td>
+                    <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
+                    <td>{{.ReceivedOn}}</td>
+                    <td><a href="/admin/treasury/payments/{{.PaymentID}}/receipt">{{.ReceiptCode}}</a></td>
+                    <td>
+                        {{if .CanCorrect}}
+                        <a href="/admin/treasury/payments/{{.PaymentID}}/correct">Fix this</a>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p>Nothing was recorded from this batch.</p>
     {{end}}
@@ -301,13 +309,15 @@ if (window.location.hash === '#add-row') {
 {{end}}
 
 {{define "batch_totals"}}
-<table>
-    <thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead>
-    <tbody>
-        <tr><td>Cash</td><td>{{.CashCount}}</td><td>${{.CashTotal}}</td></tr>
-        <tr><td>Checks</td><td>{{.CheckCount}}</td><td>${{.CheckTotal}}</td></tr>
-        <tr><td>Other</td><td>{{.OtherCount}}</td><td>${{.OtherTotal}}</td></tr>
-        <tr><th scope="row">All rows</th><th>{{.Entries}}</th><th>${{.NetTotal}}</th></tr>
-    </tbody>
-</table>
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead>
+        <tbody>
+            <tr><td>Cash</td><td>{{.CashCount}}</td><td>${{.CashTotal}}</td></tr>
+            <tr><td>Checks</td><td>{{.CheckCount}}</td><td>${{.CheckTotal}}</td></tr>
+            <tr><td>Other</td><td>{{.OtherCount}}</td><td>${{.OtherTotal}}</td></tr>
+            <tr><th scope="row">All rows</th><th>{{.Entries}}</th><th>${{.NetTotal}}</th></tr>
+        </tbody>
+    </table>
+</div>
 {{end}}

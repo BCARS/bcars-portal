@@ -98,22 +98,24 @@
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Previous payments</h3>
     {{if .History}}
-    <table>
-        <thead>
-            <tr><th>Received</th><th>Amount</th><th>Method</th><th>Reference</th><th>Receipt</th></tr>
-        </thead>
-        <tbody>
-            {{range .History}}
-            <tr>
-                <td>{{.ReceivedOn}}</td>
-                <td>${{.Amount}}</td>
-                <td>{{.Method}}</td>
-                <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
-                <td>{{.ReceiptCode}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Received</th><th>Amount</th><th>Method</th><th>Reference</th><th>Receipt</th></tr>
+            </thead>
+            <tbody>
+                {{range .History}}
+                <tr>
+                    <td>{{.ReceivedOn}}</td>
+                    <td>${{.Amount}}</td>
+                    <td>{{.Method}}</td>
+                    <td>{{if .Reference}}{{.Reference}}{{else}}&mdash;{{end}}</td>
+                    <td>{{.ReceiptCode}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p>No payments recorded yet.</p>
     {{end}}

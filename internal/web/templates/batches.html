@@ -26,23 +26,25 @@
 
 <div class="card">
     {{if .Batches}}
-    <table>
-        <thead>
-            <tr><th>Batch</th><th>State</th><th>Rows</th><th>Total</th><th>Opened</th><th></th></tr>
-        </thead>
-        <tbody>
-            {{range .Batches}}
-            <tr>
-                <td>{{.Label}}</td>
-                <td>{{.State}}</td>
-                <td>{{.Entries}}</td>
-                <td>${{.Total}}</td>
-                <td>{{.OpenedAt}}</td>
-                <td><a href="/admin/treasury/batches/{{.ID}}">Open</a></td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Batch</th><th>State</th><th>Rows</th><th>Total</th><th>Opened</th><th></th></tr>
+            </thead>
+            <tbody>
+                {{range .Batches}}
+                <tr>
+                    <td>{{.Label}}</td>
+                    <td>{{.State}}</td>
+                    <td>{{.Entries}}</td>
+                    <td>${{.Total}}</td>
+                    <td>{{.OpenedAt}}</td>
+                    <td><a href="/admin/treasury/batches/{{.ID}}">Open</a></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p>No batches yet.</p>
     {{end}}

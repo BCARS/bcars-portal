@@ -22,33 +22,35 @@
 
     <div id="members-table">
         {{if .Members}}
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Call Sign</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-            {{range .Members}}
-                <tr>
-                    <td><a href="/admin/members/{{.ID}}">{{.DisplayName}}</a></td>
-                    <td>{{if .CallSign.Valid}}{{.CallSign.String}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
-                    <td>{{if .BaseType}}{{.BaseType}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
-                    <td>
-                        {{if .DeactivatedAt.Valid}}<span class="badge badge-red">Deactivated</span>
-                        {{else if .DeceasedAt.Valid}}<span class="badge badge-gray">Deceased</span>
-                        {{else}}<span class="badge badge-green">Active</span>
-                        {{end}}
-                    </td>
-                    <td><a href="/admin/members/{{.ID}}" class="btn btn-sm btn-secondary">View</a></td>
-                </tr>
-            {{end}}
-            </tbody>
-        </table>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Call Sign</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{range .Members}}
+                    <tr>
+                        <td><a href="/admin/members/{{.ID}}">{{.DisplayName}}</a></td>
+                        <td>{{if .CallSign.Valid}}{{.CallSign.String}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                        <td>{{if .BaseType}}{{.BaseType}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                        <td>
+                            {{if .DeactivatedAt.Valid}}<span class="badge badge-red">Deactivated</span>
+                            {{else if .DeceasedAt.Valid}}<span class="badge badge-gray">Deceased</span>
+                            {{else}}<span class="badge badge-green">Active</span>
+                            {{end}}
+                        </td>
+                        <td><a href="/admin/members/{{.ID}}" class="btn btn-sm btn-secondary">View</a></td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
 
         {{if .HasMore}}
         <div style="text-align: center; margin-top: 16px;">

@@ -64,22 +64,24 @@
 <div class="card">
     <h3 style="margin: 0 0 8px; font-size: 1rem;">Previous sheets</h3>
     {{if .Runs}}
-    <table>
-        <thead><tr><th>Sheet</th><th>As of</th><th>Listed</th><th>Order</th><th>Rows</th><th>Generated</th><th></th></tr></thead>
-        <tbody>
-            {{range .Runs}}
-            <tr>
-                <td>{{.Label}}</td>
-                <td>{{.AsOf}}</td>
-                <td>{{.FilterKind}}</td>
-                <td>{{.SortOrder}}</td>
-                <td>{{.RowCount}}</td>
-                <td>{{.GeneratedAt}}</td>
-                <td><a href="/admin/treasury/worksheets/{{.ID}}">Open</a></td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Sheet</th><th>As of</th><th>Listed</th><th>Order</th><th>Rows</th><th>Generated</th><th></th></tr></thead>
+            <tbody>
+                {{range .Runs}}
+                <tr>
+                    <td>{{.Label}}</td>
+                    <td>{{.AsOf}}</td>
+                    <td>{{.FilterKind}}</td>
+                    <td>{{.SortOrder}}</td>
+                    <td>{{.RowCount}}</td>
+                    <td>{{.GeneratedAt}}</td>
+                    <td><a href="/admin/treasury/worksheets/{{.ID}}">Open</a></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p>No sheets yet.</p>
     {{end}}

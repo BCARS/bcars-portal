@@ -137,6 +137,18 @@
     .card h2 { margin: 0 0 var(--space-3); font-size: 1.1em; font-weight: 700; }
     .card h3 { margin: 0 0 var(--space-2); font-size: .95em; font-weight: 700; }
 
+    /* A table lives inside its card even when it does not fit in it.
+       At the Larger text size the directory's columns needed more width than
+       the card had, and the table simply drew past the card's right edge: the
+       border stopped mid-row and the last column sat on the page background
+       (bcars-portal-7jg). width:100% sets a preferred width, not a maximum,
+       so a table whose minimum column widths exceed the container overflows
+       it. The wrapper gives that overflow somewhere to go. */
+    .table-wrap { overflow-x: auto; }
+    /* On paper there is no scrolling, so a clipped table would lose columns
+       outright. Print gets the natural overflow instead. */
+    @media print { .table-wrap { overflow-x: visible; } }
+
     table { width: 100%; border-collapse: collapse; font-size: .95em; }
     th {
         text-align: left;

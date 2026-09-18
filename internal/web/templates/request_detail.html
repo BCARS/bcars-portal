@@ -93,50 +93,52 @@
             Tick what you accept. Correct anything that is nearly right before you
             apply it &mdash; what you apply is recorded beside what was suggested.
         </p>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:2.5rem;"><span class="visually-hidden">Apply</span></th>
-                    <th>What</th>
-                    <th>On the record now</th>
-                    <th>Apply this</th>
-                </tr>
-            </thead>
-            <tbody>
-            {{range .Items}}
-                {{if and .Decidable .Appliable}}
-                <tr>
-                    <td>
-                        <input type="checkbox" name="include" value="{{.ID}}" checked
-                               id="include-{{.ID}}">
-                        <label class="visually-hidden" for="include-{{.ID}}">Apply the change to {{.Label}}</label>
-                    </td>
-                    <td>
-                        {{.Label}}
-                        {{if .Sensitive}}<span class="badge badge-yellow">Sensitive</span>{{end}}
-                    </td>
-                    <td>
-                        {{if .CurrentValue}}{{.CurrentValue}}
-                        {{else}}<span style="color:var(--text-muted);">not recorded</span>{{end}}
-                    </td>
-                    <td>
-                        {{if .AudienceChoice}}
-                        <select name="value_{{.ID}}" aria-label="Value to apply for {{.Label}}">
-                            <option value="full_members"{{if eq .EditValue "full_members"}} selected{{end}}>Listed in the member directory</option>
-                            <option value="hidden"{{if eq .EditValue "hidden"}} selected{{end}}>Not in the directory</option>
-                            <option value="officers_only"{{if eq .EditValue "officers_only"}} selected{{end}}>Officers only</option>
-                        </select>
-                        {{else}}
-                        <input type="text" name="value_{{.ID}}" value="{{.EditValue}}"
-                               maxlength="2000" style="width:100%; padding:6px 8px; border:1px solid var(--input-border); border-radius:var(--radius-control); font-family:inherit; font-size:0.95em;"
-                               aria-label="Value to apply for {{.Label}}">
-                        {{end}}
-                    </td>
-                </tr>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:2.5rem;"><span class="visually-hidden">Apply</span></th>
+                        <th>What</th>
+                        <th>On the record now</th>
+                        <th>Apply this</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{range .Items}}
+                    {{if and .Decidable .Appliable}}
+                    <tr>
+                        <td>
+                            <input type="checkbox" name="include" value="{{.ID}}" checked
+                                   id="include-{{.ID}}">
+                            <label class="visually-hidden" for="include-{{.ID}}">Apply the change to {{.Label}}</label>
+                        </td>
+                        <td>
+                            {{.Label}}
+                            {{if .Sensitive}}<span class="badge badge-yellow">Sensitive</span>{{end}}
+                        </td>
+                        <td>
+                            {{if .CurrentValue}}{{.CurrentValue}}
+                            {{else}}<span style="color:var(--text-muted);">not recorded</span>{{end}}
+                        </td>
+                        <td>
+                            {{if .AudienceChoice}}
+                            <select name="value_{{.ID}}" aria-label="Value to apply for {{.Label}}">
+                                <option value="full_members"{{if eq .EditValue "full_members"}} selected{{end}}>Listed in the member directory</option>
+                                <option value="hidden"{{if eq .EditValue "hidden"}} selected{{end}}>Not in the directory</option>
+                                <option value="officers_only"{{if eq .EditValue "officers_only"}} selected{{end}}>Officers only</option>
+                            </select>
+                            {{else}}
+                            <input type="text" name="value_{{.ID}}" value="{{.EditValue}}"
+                                   maxlength="2000" style="width:100%; padding:6px 8px; border:1px solid var(--input-border); border-radius:var(--radius-control); font-family:inherit; font-size:0.95em;"
+                                   aria-label="Value to apply for {{.Label}}">
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
                 {{end}}
-            {{end}}
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
 
         {{if .HasSensitive}}
         <div class="form-group" style="margin-top:12px;">
@@ -175,48 +177,50 @@
     </form>
     {{end}}
 
-    <table style="margin-top:16px;">
-        <thead>
-            <tr>
-                <th>What</th>
-                <th>Suggested value</th>
-                <th>Status</th>
-                <th>Outcome</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{range .Items}}
-            <tr>
-                <td>
-                    {{.Label}}
-                    {{if .Sensitive}}<span class="badge badge-yellow">Sensitive</span>{{end}}
-                    {{if not .Appliable}}
-                    <div style="font-size:0.75rem; color:var(--text-muted);">Cannot be applied automatically; use the usual workflow.</div>
-                    {{end}}
-                </td>
-                <td>{{if .ProposedValue}}{{.ProposedValue}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
-                <td>
-                    {{if eq .Status "Approved"}}<span class="badge badge-green">{{.Status}}</span>
-                    {{else if eq .Status "Rejected"}}<span class="badge badge-red">{{.Status}}</span>
-                    {{else if eq .Status "Needs verification"}}<span class="badge badge-yellow">{{.Status}}</span>
-                    {{else}}<span class="badge badge-gray">{{.Status}}</span>
-                    {{end}}
-                    {{if .AppliedAt}}<div style="font-size:0.75rem; color:var(--text-helper);">Applied {{.AppliedAt}}</div>{{end}}
-                </td>
-                <td>
-                    {{if .AppliedDiffers}}
-                    <div style="font-size:0.8125rem;">Applied as <strong>{{.AppliedValue}}</strong></div>
-                    {{end}}
-                    {{if .DecisionReason}}<div style="font-size:0.8125rem;">{{.DecisionReason}}</div>{{end}}
-                    {{if .VerificationNote}}<div style="font-size:0.75rem; color:var(--text-helper);">Verified: {{.VerificationNote}}</div>{{end}}
-                    {{if and .Decidable $.Reviewable (not $.CanReview)}}
-                    <div style="font-size:0.75rem; color:var(--text-muted);">Awaiting an officer who may review.</div>
-                    {{end}}
-                </td>
-            </tr>
-        {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table style="margin-top:16px;">
+            <thead>
+                <tr>
+                    <th>What</th>
+                    <th>Suggested value</th>
+                    <th>Status</th>
+                    <th>Outcome</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Items}}
+                <tr>
+                    <td>
+                        {{.Label}}
+                        {{if .Sensitive}}<span class="badge badge-yellow">Sensitive</span>{{end}}
+                        {{if not .Appliable}}
+                        <div style="font-size:0.75rem; color:var(--text-muted);">Cannot be applied automatically; use the usual workflow.</div>
+                        {{end}}
+                    </td>
+                    <td>{{if .ProposedValue}}{{.ProposedValue}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                    <td>
+                        {{if eq .Status "Approved"}}<span class="badge badge-green">{{.Status}}</span>
+                        {{else if eq .Status "Rejected"}}<span class="badge badge-red">{{.Status}}</span>
+                        {{else if eq .Status "Needs verification"}}<span class="badge badge-yellow">{{.Status}}</span>
+                        {{else}}<span class="badge badge-gray">{{.Status}}</span>
+                        {{end}}
+                        {{if .AppliedAt}}<div style="font-size:0.75rem; color:var(--text-helper);">Applied {{.AppliedAt}}</div>{{end}}
+                    </td>
+                    <td>
+                        {{if .AppliedDiffers}}
+                        <div style="font-size:0.8125rem;">Applied as <strong>{{.AppliedValue}}</strong></div>
+                        {{end}}
+                        {{if .DecisionReason}}<div style="font-size:0.8125rem;">{{.DecisionReason}}</div>{{end}}
+                        {{if .VerificationNote}}<div style="font-size:0.75rem; color:var(--text-helper);">Verified: {{.VerificationNote}}</div>{{end}}
+                        {{if and .Decidable $.Reviewable (not $.CanReview)}}
+                        <div style="font-size:0.75rem; color:var(--text-muted);">Awaiting an officer who may review.</div>
+                        {{end}}
+                    </td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <div class="empty-state"><p>This request proposes nothing.</p></div>
     {{end}}
@@ -230,18 +234,20 @@
         access to a record and are not a reason to approve anything. Access is granted
         separately on the <a href="/admin/members/{{.TargetPersonID}}/access">record access page</a>.
     </p>
-    <table>
-        <thead><tr><th>Relationship</th><th>Person</th><th>Note</th></tr></thead>
-        <tbody>
-        {{range .Relationships}}
-            <tr>
-                <td>{{.Kind}}</td>
-                <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
-                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
-            </tr>
-        {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Relationship</th><th>Person</th><th>Note</th></tr></thead>
+            <tbody>
+            {{range .Relationships}}
+                <tr>
+                    <td>{{.Kind}}</td>
+                    <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
+                    <td>{{if .Context}}{{.Context}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
 </div>
 {{end}}
 {{end}}

@@ -24,48 +24,50 @@
 <div class="card">
     <h2>Accounts with access</h2>
     {{if .Grants}}
-    <table>
-        <thead>
-            <tr>
-                <th>Account</th>
-                <th>Kind</th>
-                <th>Granted</th>
-                <th>Status</th>
-                <th>Reason</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-        {{range .Grants}}
-            <tr>
-                <td>
-                    {{.Email}}
-                    {{if not .HasPassword}}
-                    <div style="font-size:0.75rem; color:var(--text-muted);">No password set yet</div>
-                    {{end}}
-                </td>
-                <td>{{if eq .AccessKind "self"}}Their own record{{else}}Acting for them{{end}}</td>
-                <td>{{.GrantedAt}}</td>
-                <td>
-                    {{if .Active}}<span class="badge badge-green">Active</span>
-                    {{else}}<span class="badge badge-gray">Revoked {{.RevokedAt}}</span>{{end}}
-                </td>
-                <td>{{if .Reason}}{{.Reason}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
-                <td>
-                    {{if .Active}}
-                    <form action="/admin/members/{{$.PersonID}}/access/revoke" method="post">
-                        <input type="hidden" name="user_id" value="{{.UserID}}">
-                        <input type="text" name="reason" placeholder="Reason"
-                               aria-label="Reason for revoking access for {{.Email}}"
-                               style="width:auto; margin-right:4px;">
-                        <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
-                    </form>
-                    {{end}}
-                </td>
-            </tr>
-        {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Kind</th>
+                    <th>Granted</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Grants}}
+                <tr>
+                    <td>
+                        {{.Email}}
+                        {{if not .HasPassword}}
+                        <div style="font-size:0.75rem; color:var(--text-muted);">No password set yet</div>
+                        {{end}}
+                    </td>
+                    <td>{{if eq .AccessKind "self"}}Their own record{{else}}Acting for them{{end}}</td>
+                    <td>{{.GrantedAt}}</td>
+                    <td>
+                        {{if .Active}}<span class="badge badge-green">Active</span>
+                        {{else}}<span class="badge badge-gray">Revoked {{.RevokedAt}}</span>{{end}}
+                    </td>
+                    <td>{{if .Reason}}{{.Reason}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                    <td>
+                        {{if .Active}}
+                        <form action="/admin/members/{{$.PersonID}}/access/revoke" method="post">
+                            <input type="hidden" name="user_id" value="{{.UserID}}">
+                            <input type="text" name="reason" placeholder="Reason"
+                                   aria-label="Reason for revoking access for {{.Email}}"
+                                   style="width:auto; margin-right:4px;">
+                            <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+                        </form>
+                        {{end}}
+                    </td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <div class="empty-state">
         <p>No account reaches this record.</p>
@@ -139,18 +141,20 @@
         account that can see it appears in the table above and got there by an officer's
         explicit grant.
     </p>
-    <table>
-        <thead><tr><th>Relationship</th><th>Person</th><th>Note</th></tr></thead>
-        <tbody>
-        {{range .Relationships}}
-            <tr>
-                <td>{{.Kind}}</td>
-                <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
-                <td>{{if .Context}}{{.Context}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
-            </tr>
-        {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Relationship</th><th>Person</th><th>Note</th></tr></thead>
+            <tbody>
+            {{range .Relationships}}
+                <tr>
+                    <td>{{.Kind}}</td>
+                    <td>{{.DisplayName}}{{if .CallSign}} &middot; {{.CallSign}}{{end}}</td>
+                    <td>{{if .Context}}{{.Context}}{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
 </div>
 {{end}}
 {{end}}

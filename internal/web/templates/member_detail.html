@@ -87,41 +87,43 @@
 <div class="card" style="margin-top: 16px;">
     <h3>Memberships</h3>
     {{if .Memberships}}
-    <table>
-        <thead><tr><th>Type</th><th>Status</th><th>Joined</th><th>Ended</th><th></th></tr></thead>
-        <tbody>
-        {{range .Memberships}}
-        <tr>
-            <td>{{.BaseType}}</td>
-            <td>
-                {{if eq .Lifecycle "approved"}}<span class="badge badge-green">Approved</span>
-                {{else if eq .Lifecycle "pending"}}<span class="badge badge-yellow">Pending</span>
-                {{else if eq .Lifecycle "rejected"}}<span class="badge badge-red">Rejected</span>
-                {{else}}<span class="badge badge-gray">{{.Lifecycle}}</span>
-                {{end}}
-            </td>
-            <td>{{if .JoinedOn.Valid}}{{.JoinedOn.String}}{{else}}-{{end}}</td>
-            <td>{{if .EndedOn.Valid}}{{.EndedOn.String}}{{else}}-{{end}}</td>
-            <td>
-                {{if eq .Lifecycle "pending"}}
-                <div style="display: flex; gap: 4px;">
-                    <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/approve" style="display:inline;">
-                        <input type="hidden" name="version" value="{{.Version}}">
-                        <input type="hidden" name="base_type" value="{{.BaseType}}">
-                        <button type="submit" class="btn btn-sm btn-primary">Approve</button>
-                    </form>
-                    <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/reject" style="display:inline;"
-                          onsubmit="return confirm('Reject this membership application?');">
-                        <input type="hidden" name="version" value="{{.Version}}">
-                        <button type="submit" class="btn btn-sm btn-danger">Reject</button>
-                    </form>
-                </div>
-                {{end}}
-            </td>
-        </tr>
-        {{end}}
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Type</th><th>Status</th><th>Joined</th><th>Ended</th><th></th></tr></thead>
+            <tbody>
+            {{range .Memberships}}
+            <tr>
+                <td>{{.BaseType}}</td>
+                <td>
+                    {{if eq .Lifecycle "approved"}}<span class="badge badge-green">Approved</span>
+                    {{else if eq .Lifecycle "pending"}}<span class="badge badge-yellow">Pending</span>
+                    {{else if eq .Lifecycle "rejected"}}<span class="badge badge-red">Rejected</span>
+                    {{else}}<span class="badge badge-gray">{{.Lifecycle}}</span>
+                    {{end}}
+                </td>
+                <td>{{if .JoinedOn.Valid}}{{.JoinedOn.String}}{{else}}-{{end}}</td>
+                <td>{{if .EndedOn.Valid}}{{.EndedOn.String}}{{else}}-{{end}}</td>
+                <td>
+                    {{if eq .Lifecycle "pending"}}
+                    <div style="display: flex; gap: 4px;">
+                        <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/approve" style="display:inline;">
+                            <input type="hidden" name="version" value="{{.Version}}">
+                            <input type="hidden" name="base_type" value="{{.BaseType}}">
+                            <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                        </form>
+                        <form method="post" action="/admin/members/{{$.Person.ID}}/memberships/{{.ID}}/reject" style="display:inline;"
+                              onsubmit="return confirm('Reject this membership application?');">
+                            <input type="hidden" name="version" value="{{.Version}}">
+                            <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                        </form>
+                    </div>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
     {{else}}
     <p style="color: var(--text-muted); font-size: 0.875rem;">No memberships.</p>
     {{end}}
