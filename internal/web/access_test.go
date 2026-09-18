@@ -36,7 +36,7 @@ func TestProvisioningCreatesAnAccountAndGrantsNothing(t *testing.T) {
 	w := e.post(t, accessPage(personID)+"/accounts",
 		url.Values{"email": {"  NewMember@Example.Test  "}}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "no+access+until+you+grant+one")
+	assertFlash(t, w, "access.created")
 
 	var userID int64
 	var passwordHash any
@@ -84,7 +84,7 @@ func TestGrantThenRevokeKeepsTheHistory(t *testing.T) {
 		"user_id": {fmt.Sprint(userID)}, "reason": {"Left the household"},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "session+already+open")
+	assertFlash(t, w, "access.revoked")
 
 	body = e.getAs(t, accessPage(personID), officer).Body.String()
 	assert.Contains(t, body, "Revoked", "the revoked grant stays visible as history")
@@ -109,7 +109,7 @@ func TestGrantingNeedsAnExistingAccount(t *testing.T) {
 	w := e.post(t, accessPage(personID)+"/grants",
 		url.Values{"email": {"nobody@example.test"}}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "Create+the+account+first")
+	assertFlash(t, w, "access.no_account")
 
 	var users, grants int
 	require.NoError(t, e.h.db.QueryRow(

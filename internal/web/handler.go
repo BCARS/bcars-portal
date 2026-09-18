@@ -15,6 +15,7 @@ import (
 	"github.com/bcars/bcars-portal/internal/audit"
 	"github.com/bcars/bcars-portal/internal/authn"
 	"github.com/bcars/bcars-portal/internal/clientip"
+	"github.com/bcars/bcars-portal/internal/db"
 	sqlcgen "github.com/bcars/bcars-portal/internal/db/sqlc"
 	"github.com/bcars/bcars-portal/internal/domain/authz"
 	"github.com/bcars/bcars-portal/internal/domain/batches"
@@ -857,7 +858,7 @@ func (h *Handler) memberDetail(w http.ResponseWriter, r *http.Request) {
 	data.Memberships, _ = h.members.ListMembershipsByPerson(ctx, p, id)
 	data.ContactMethods, _ = h.members.ListContactMethods(ctx, p, id)
 	data.Notes, _ = h.members.ListNotes(ctx, p, "person", id, 50, 0)
-	data.Flash = r.URL.Query().Get("flash")
+	data.Flash, _ = flashBanner(r)
 
 	// Load timeline.
 	events, _ := h.members.Timeline(ctx, p, id, 20)
@@ -905,7 +906,7 @@ func (h *Handler) memberCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Member+created", person.ID), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", person.ID), "member.created"), http.StatusSeeOther)
 }
 
 func (h *Handler) memberEdit(w http.ResponseWriter, r *http.Request) {
@@ -955,7 +956,7 @@ func (h *Handler) memberUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Member+updated", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "member.updated"), http.StatusSeeOther)
 }
 
 func (h *Handler) memberDeactivate(w http.ResponseWriter, r *http.Request) {
@@ -975,7 +976,7 @@ func (h *Handler) memberDeactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Member+deactivated", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "member.deactivated"), http.StatusSeeOther)
 }
 
 func (h *Handler) memberReactivate(w http.ResponseWriter, r *http.Request) {
@@ -995,7 +996,7 @@ func (h *Handler) memberReactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Member+reactivated", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "member.reactivated"), http.StatusSeeOther)
 }
 
 func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
@@ -1018,7 +1019,7 @@ func (h *Handler) membershipApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Membership+approved", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "membership.approved"), http.StatusSeeOther)
 }
 
 func (h *Handler) membershipReject(w http.ResponseWriter, r *http.Request) {
@@ -1044,7 +1045,7 @@ func (h *Handler) membershipReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Membership+rejected", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "membership.rejected"), http.StatusSeeOther)
 }
 
 func (h *Handler) noteCreate(w http.ResponseWriter, r *http.Request) {
@@ -1069,7 +1070,7 @@ func (h *Handler) noteCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Note+added", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "note.added"), http.StatusSeeOther)
 }
 
 // --- Contacts ---
@@ -1129,7 +1130,7 @@ func (h *Handler) contactCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Contact+added", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "contact.added"), http.StatusSeeOther)
 }
 
 // --- Mailing address ---
@@ -1247,7 +1248,7 @@ func (h *Handler) addressCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/members/%d?flash=Address+added", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/members/%d", id), "address.added"), http.StatusSeeOther)
 }
 
 // formatAddress renders the parts as one line, skipping the ones left empty so
@@ -1279,10 +1280,11 @@ func (h *Handler) importList(w http.ResponseWriter, r *http.Request) {
 		Error   string
 		Success string
 	}
+	success, failure := flashBanner(r)
 	h.renderPage(w, r, "imports.html", http.StatusOK, data{
 		Runs:    runs,
-		Error:   r.URL.Query().Get("error"),
-		Success: r.URL.Query().Get("success"),
+		Error:   failure,
+		Success: success,
 	})
 }
 
@@ -1322,11 +1324,12 @@ func (h *Handler) importDetail(w http.ResponseWriter, r *http.Request) {
 		ImportRunID: id, Limit: 1000, Offset: 0,
 	})
 
+	success, failure := flashBanner(r)
 	data := importDetailData{
 		Run:       run,
 		TotalRows: len(rows),
-		Error:     r.URL.Query().Get("error"),
-		Success:   r.URL.Query().Get("success"),
+		Error:     failure,
+		Success:   success,
 	}
 
 	for _, row := range rows {
@@ -1383,13 +1386,13 @@ func (h *Handler) importUpload(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form with size limit.
 	if err := r.ParseMultipartForm(maxImportUploadSize); err != nil {
 		h.log.Error("import upload: parse form", slog.String("error", err.Error()))
-		http.Redirect(w, r, "/admin/imports?error=File+too+large+or+invalid+form", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget("/admin/imports", "import.bad_form"), http.StatusSeeOther)
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Redirect(w, r, "/admin/imports?error=No+file+selected", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget("/admin/imports", "import.no_file"), http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
@@ -1406,7 +1409,7 @@ func (h *Handler) importUpload(w http.ResponseWriter, r *http.Request) {
 	result, err := h.imports.Upload(ctx, file, sourceKind, filename, principal.UserID, idemKey)
 	if err != nil {
 		h.log.Error("import upload", slog.String("error", err.Error()))
-		http.Redirect(w, r, "/admin/imports?error="+friendlyError(err), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget("/admin/imports", importErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 
@@ -1436,11 +1439,11 @@ func (h *Handler) importRowDecide(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.log.Error("import row decision", slog.String("error", err.Error()))
-		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/imports/%d", id), importErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?success=Decision+recorded", id), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/imports/%d", id), "import.decided"), http.StatusSeeOther)
 }
 
 func (h *Handler) importPreview(w http.ResponseWriter, r *http.Request) {
@@ -1450,7 +1453,7 @@ func (h *Handler) importPreview(w http.ResponseWriter, r *http.Request) {
 	_, err := h.imports.Preview(ctx, id)
 	if err != nil {
 		h.log.Error("import preview", slog.String("error", err.Error()))
-		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/imports/%d", id), importErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 
@@ -1473,13 +1476,12 @@ func (h *Handler) importCommit(w http.ResponseWriter, r *http.Request) {
 	result, err := h.imports.Commit(ctx, id, principal.UserID)
 	if err != nil {
 		h.log.Error("import commit", slog.String("error", err.Error()))
-		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/imports/%d", id), importErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 
-	msg := fmt.Sprintf("Import+committed:+%d+created,+%d+updated,+%d+skipped",
-		result.Created, result.Updated, result.Skipped)
-	http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?success=%s", id, msg), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/imports/%d", id), "import.committed",
+		result.Created, result.Updated, result.Skipped), http.StatusSeeOther)
 }
 
 func (h *Handler) importDiscard(w http.ResponseWriter, r *http.Request) {
@@ -1488,11 +1490,11 @@ func (h *Handler) importDiscard(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.imports.Discard(ctx, id); err != nil {
 		h.log.Error("import discard", slog.String("error", err.Error()))
-		http.Redirect(w, r, fmt.Sprintf("/admin/imports/%d?error=%s", id, friendlyError(err)), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(fmt.Sprintf("/admin/imports/%d", id), importErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/admin/imports?success=Import+discarded", http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget("/admin/imports", "import.discarded"), http.StatusSeeOther)
 }
 
 // --- Helpers ---
@@ -1500,6 +1502,25 @@ func (h *Handler) importDiscard(w http.ResponseWriter, r *http.Request) {
 func parseID(r *http.Request, param string) int64 {
 	id, _ := strconv.ParseInt(r.PathValue(param), 10, 64)
 	return id
+}
+
+// importErrorKey names the banner an import failure should show.
+//
+// friendlyError still exists for messages rendered straight into a page, where
+// the text never round-trips through a URL. On a redirect it was the hole this
+// bead closes: its default branch put err.Error() into the query string, so the
+// banner printed whatever a domain error happened to say (bcars-portal-9lx).
+func importErrorKey(err error) string {
+	switch {
+	case errors.Is(err, db.ErrStale) || strings.Contains(err.Error(), "stale version"):
+		return "import.stale"
+	case errors.Is(err, importd.ErrInvalidTransition):
+		return "import.bad_state"
+	case errors.Is(err, importd.ErrUnresolvedManual):
+		return "import.unresolved"
+	default:
+		return "import.failed"
+	}
 }
 
 func friendlyError(err error) string {

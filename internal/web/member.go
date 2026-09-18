@@ -405,11 +405,12 @@ func (h *Handler) memberRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	success, _ := flashBanner(r)
 	data := memberRecordData{
 		Record:    memberRecordRowFrom(profile),
 		BaseType:  profile.BaseType,
 		Lifecycle: membershipStanding(profile.Lifecycle),
-		Success:   r.URL.Query().Get("success"),
+		Success:   success,
 	}
 	for _, c := range profile.Contacts {
 		data.Contacts = append(data.Contacts, memberContactRow{
@@ -665,7 +666,7 @@ func (h *Handler) memberSuggestOwnSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	http.Redirect(w, r, RouteMemberRequests+"/"+strconv.FormatInt(created.ID, 10)+"?success=Your+suggestion+has+been+sent+to+the+officers",
+	http.Redirect(w, r, flashTarget(RouteMemberRequests+"/"+strconv.FormatInt(created.ID, 10), "suggestion.sent"),
 		http.StatusSeeOther)
 }
 
@@ -904,7 +905,7 @@ func (h *Handler) memberSuggestOtherSubmit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	http.Redirect(w, r, RouteMemberRequests+"/"+strconv.FormatInt(created.ID, 10)+"?success=Your+note+has+been+sent+to+the+officers",
+	http.Redirect(w, r, flashTarget(RouteMemberRequests+"/"+strconv.FormatInt(created.ID, 10), "suggestion.note_sent"),
 		http.StatusSeeOther)
 }
 
@@ -1015,7 +1016,8 @@ func (h *Handler) memberRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := memberRequestsData{Success: r.URL.Query().Get("success")}
+	success, _ := flashBanner(r)
+	data := memberRequestsData{Success: success}
 	for _, req := range own {
 		data.Requests = append(data.Requests, memberRequestRowFrom(req))
 	}
@@ -1046,10 +1048,11 @@ func (h *Handler) memberRequestDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	success, failure := flashBanner(r)
 	data := memberRequestDetailData{
 		Request: memberRequestRowFrom(req),
-		Success: r.URL.Query().Get("success"),
-		Error:   r.URL.Query().Get("error"),
+		Success: success,
+		Error:   failure,
 	}
 	// The applied value is a fact about the record, so it is shown only while
 	// the caller may still see that record. A member who reported something
@@ -1114,12 +1117,12 @@ func (h *Handler) memberRequestWithdraw(w http.ResponseWriter, r *http.Request) 
 	_, err := h.changeRequests.Withdraw(r.Context(), p, id, time.Now())
 	switch {
 	case err == nil:
-		http.Redirect(w, r, target+"?success=Your+suggestion+has+been+withdrawn", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "suggestion.withdrawn"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrNotYours), errors.Is(err, changerequests.ErrNotFound):
 		h.renderError(w, r, http.StatusNotFound, "No such suggestion.")
 	case errors.Is(err, changerequests.ErrDecidedItems), errors.Is(err, changerequests.ErrAlreadyResolved):
 		http.Redirect(w, r,
-			target+"?error=An+officer+has+already+started+reviewing+this,+so+it+can+no+longer+be+withdrawn",
+			flashTarget(target, "request.withdraw_too_late"),
 			http.StatusSeeOther)
 	default:
 		h.log.Error("member withdrawal", slog.String("error", err.Error()))

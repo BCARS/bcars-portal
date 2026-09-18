@@ -474,8 +474,7 @@ func TestWithdrawalPageHidesTheButtonOnceDecided(t *testing.T) {
 	// merely hidden.
 	w = e.post(t, detail+"/withdrawal", url.Values{}, cookie)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "error=",
-		"hiding the button is presentation; the refusal is the domain service's")
+	assertFlash(t, w, "request.withdraw_too_late")
 }
 
 // TestMemberPagesEscapeWhatAMemberTyped guards the obvious injection surface:
@@ -995,8 +994,9 @@ func TestAMemberContactCorrectionCanBeApprovedByAnOfficer(t *testing.T) {
 	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, requestID, itemID)
 	w = e.post(t, path, url.Values{"decision": {"approved"}}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
-	assert.NotContains(t, w.Header().Get("Location"), "error=",
-		"an officer approving a correction the portal's own form produced must not be refused")
+	// Asserted as a kind rather than as the absence of the old "error=" text:
+	// once no redirect carries that text, its absence proves nothing.
+	assertFlashKind(t, w, flashSuccess)
 
 	var stored string
 	require.NoError(t, e.h.db.QueryRow(

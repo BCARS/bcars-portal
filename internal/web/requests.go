@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -238,12 +237,13 @@ func (h *Handler) requestQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	success, failure := flashBanner(r)
 	data := requestQueueData{
 		Filters:  filters,
 		Statuses: statusOptions(),
 		Sources:  sourceOptions(),
-		Success:  r.URL.Query().Get("success"),
-		Error:    r.URL.Query().Get("error"),
+		Success:  success,
+		Error:    failure,
 	}
 	for _, req := range list {
 		data.Requests = append(data.Requests, officerRequestRowFrom(req))
@@ -423,6 +423,7 @@ func (h *Handler) requestDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	p := h.principalFromRequest(r)
 
+	success, failure := flashBanner(r)
 	data := requestDetailData{
 		Request: officerRequestRowFrom(req),
 		Supplied: suppliedSnapshot{
@@ -437,8 +438,8 @@ func (h *Handler) requestDetail(w http.ResponseWriter, r *http.Request) {
 		CanReview:      hasCap(p, "change_request.review"),
 		Reviewable: req.Status != changerequests.StatusResolved &&
 			req.Status != changerequests.StatusWithdrawn,
-		Success: r.URL.Query().Get("success"),
-		Error:   r.URL.Query().Get("error"),
+		Success: success,
+		Error:   failure,
 	}
 	if req.RequesterUserID != 0 {
 		_ = h.db.QueryRowContext(r.Context(),
@@ -694,13 +695,13 @@ func (h *Handler) requestTriage(w http.ResponseWriter, r *http.Request) {
 	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 	personID, _ := strconv.ParseInt(strings.TrimSpace(r.FormValue("target_person_id")), 10, 64)
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
 	if personID == 0 {
-		http.Redirect(w, r, target+"?error=Give+the+member+record+this+request+concerns", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.need_target"), http.StatusSeeOther)
 		return
 	}
 
@@ -710,20 +711,19 @@ func (h *Handler) requestTriage(w http.ResponseWriter, r *http.Request) {
 	}, time.Now())
 	switch {
 	case err == nil:
-		http.Redirect(w, r, target+"?success=Linked+to+the+member+record", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.linked"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrNotFound):
 		h.renderError(w, r, http.StatusNotFound, "No such request.")
 	case errors.Is(err, changerequests.ErrUnknownPerson):
-		http.Redirect(w, r, target+"?error=No+member+record+with+that+number", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.unknown_target"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrAlreadyResolved):
-		http.Redirect(w, r, target+"?error=This+request+is+already+closed", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.closed"), http.StatusSeeOther)
 	case errors.Is(err, db.ErrStale):
 		http.Redirect(w, r,
-			target+"?error=Another+officer+changed+this+request+while+you+were+reading+it.+Reload+and+try+again",
-			http.StatusSeeOther)
+			flashTarget(target, "request.stale"), http.StatusSeeOther)
 	default:
 		h.log.Error("request triage", slog.String("error", err.Error()))
-		http.Redirect(w, r, target+"?error=That+link+could+not+be+saved.+Please+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.link_failed"), http.StatusSeeOther)
 	}
 }
 
@@ -744,7 +744,7 @@ func (h *Handler) requestDecide(w http.ResponseWriter, r *http.Request) {
 	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 
@@ -757,42 +757,38 @@ func (h *Handler) requestDecide(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case err == nil:
-		http.Redirect(w, r, target+"?success="+decisionMessage(decision), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, decisionKey(decision)), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrNotFound), errors.Is(err, changerequests.ErrItemNotInRequest):
 		h.renderError(w, r, http.StatusNotFound, "No such request item.")
 	case errors.Is(err, changerequests.ErrItemDecided):
 		http.Redirect(w, r,
-			target+"?error=Another+officer+has+already+decided+this+item.+Reload+to+see+their+decision",
-			http.StatusSeeOther)
+			flashTarget(target, "request.item_decided"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrSelfReview):
 		http.Redirect(w, r,
-			target+"?error=You+submitted+this+request,+so+another+officer+must+approve+this+item",
-			http.StatusSeeOther)
+			flashTarget(target, "request.self_review"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrVerificationNoteRequired):
 		http.Redirect(w, r,
-			target+"?error=Say+how+you+verified+this+before+approving+it", http.StatusSeeOther)
+			flashTarget(target, "request.need_note"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrReasonRequired):
 		http.Redirect(w, r,
-			target+"?error=Give+a+reason+for+the+rejection", http.StatusSeeOther)
+			flashTarget(target, "request.need_reject"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrNoAdapter):
 		http.Redirect(w, r,
-			target+"?error=This+suggestion+cannot+be+applied+automatically.+Use+the+usual+workflow,+then+reject+or+hold+it+here",
-			http.StatusSeeOther)
+			flashTarget(target, "request.no_adapter"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrUnknownDecision):
-		http.Redirect(w, r, target+"?error=Choose+approve,+reject,+or+needs+verification", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.need_decision"), http.StatusSeeOther)
 	case errors.Is(err, db.ErrStale):
 		http.Redirect(w, r,
-			target+"?error=The+record+changed+while+you+were+reading+it,+so+nothing+was+applied.+Reload+and+try+again",
-			http.StatusSeeOther)
+			flashTarget(target, "request.stale_record"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrTargetRequired):
 		http.Redirect(w, r,
-			target+"?error=Link+this+request+to+a+member+record+before+approving+it", http.StatusSeeOther)
+			flashTarget(target, "request.need_link"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrBadValue):
 		http.Redirect(w, r,
-			target+"?error=The+suggested+value+is+not+valid+for+this+kind+of+change", http.StatusSeeOther)
+			flashTarget(target, "request.bad_value"), http.StatusSeeOther)
 	default:
 		h.log.Error("request decision", slog.String("error", err.Error()))
-		http.Redirect(w, r, target+"?error=That+decision+could+not+be+saved.+Please+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.decision_failed"), http.StatusSeeOther)
 	}
 }
 
@@ -815,14 +811,14 @@ func (h *Handler) requestApply(w http.ResponseWriter, r *http.Request) {
 	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 
 	ticked := r.PostForm["include"]
 	if len(ticked) == 0 {
 		http.Redirect(w, r,
-			target+"?error=Tick+the+changes+you+want+to+apply", http.StatusSeeOther)
+			flashTarget(target, "request.need_tick"), http.StatusSeeOther)
 		return
 	}
 	note := strings.TrimSpace(r.FormValue("verification_note"))
@@ -841,7 +837,7 @@ func (h *Handler) requestApply(w http.ResponseWriter, r *http.Request) {
 				AmendedValue:     strings.TrimSpace(r.FormValue("value_" + raw)),
 			}, time.Now())
 		if err != nil {
-			failures = append(failures, applyFailureReason(err))
+			failures = append(failures, applyFailureKey(err))
 			continue
 		}
 		if decision.Applied {
@@ -850,13 +846,20 @@ func (h *Handler) requestApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(failures) == 0 {
-		http.Redirect(w, r, target+"?success="+url.QueryEscape(appliedMessage(applied)), http.StatusSeeOther)
+		if applied == 0 {
+			http.Redirect(w, r, flashTarget(target, "request.apply_none"), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, flashTarget(target, "request.applied_count", applied), http.StatusSeeOther)
 		return
 	}
 	// One message names what landed and what did not, so an officer is never
-	// left to work out which half of their click took effect.
-	msg := appliedMessage(applied) + " " + strings.Join(dedupeReasons(failures), " ")
-	http.Redirect(w, r, target+"?error="+url.QueryEscape(msg), http.StatusSeeOther)
+	// left to work out which half of their click took effect. The count and the
+	// reasons travel as a number and a list of keys; the sentences are built
+	// from the catalog on the way out.
+	http.Redirect(w, r,
+		flashTargetWhy(target, "request.applied_partial", []int{applied}, dedupeReasons(failures)),
+		http.StatusSeeOther)
 }
 
 // requestDecline closes out everything still pending with one reason.
@@ -870,12 +873,12 @@ func (h *Handler) requestDecline(w http.ResponseWriter, r *http.Request) {
 	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 	reason := strings.TrimSpace(r.FormValue("reason"))
 	if reason == "" {
-		http.Redirect(w, r, target+"?error=Give+a+reason,+so+the+member+knows+why", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.need_reason"), http.StatusSeeOther)
 		return
 	}
 
@@ -896,20 +899,19 @@ func (h *Handler) requestDecline(w http.ResponseWriter, r *http.Request) {
 				Decision: changerequests.ItemRejected,
 				Reason:   reason,
 			}, time.Now()); err != nil {
-			failures = append(failures, applyFailureReason(err))
+			failures = append(failures, applyFailureKey(err))
 			continue
 		}
 		declined++
 	}
 
-	msg := "Declined " + itemCount(declined) + "."
 	if len(failures) > 0 {
 		http.Redirect(w, r,
-			target+"?error="+url.QueryEscape(msg+" "+strings.Join(dedupeReasons(failures), " ")),
+			flashTargetWhy(target, "request.declined_partial", []int{declined}, dedupeReasons(failures)),
 			http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, target+"?success="+url.QueryEscape(msg), http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(target, "request.declined", declined), http.StatusSeeOther)
 }
 
 // requestDone is an officer saying they are finished with a request
@@ -928,7 +930,7 @@ func (h *Handler) requestDone(w http.ResponseWriter, r *http.Request) {
 	target := RouteAdminRequests + "/" + strconv.FormatInt(id, 10)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 	version, _ := strconv.ParseInt(r.FormValue("version"), 10, 64)
@@ -947,26 +949,17 @@ func (h *Handler) requestDone(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, changerequests.ErrNotFound):
 		h.renderError(w, r, http.StatusNotFound, "No such request.")
 	case errors.Is(err, changerequests.ErrAlreadyResolved):
-		http.Redirect(w, r, target+"?error=This+was+already+closed", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.was_closed"), http.StatusSeeOther)
 	case errors.Is(err, changerequests.ErrPendingItems):
 		http.Redirect(w, r,
-			target+"?error=Apply+or+decline+the+proposed+changes+first,+so+the+member+gets+an+answer+about+them",
-			http.StatusSeeOther)
+			flashTarget(target, "request.decide_first"), http.StatusSeeOther)
 	case errors.Is(err, db.ErrStale):
 		http.Redirect(w, r,
-			target+"?error=Another+officer+changed+this+while+you+were+reading+it.+Reload+and+look+again",
-			http.StatusSeeOther)
+			flashTarget(target, "request.done_stale"), http.StatusSeeOther)
 	default:
 		h.log.Error("request resolve", slog.String("error", err.Error()))
-		http.Redirect(w, r, target+"?error=That+could+not+be+saved.+Please+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "request.save_failed"), http.StatusSeeOther)
 	}
-}
-
-func appliedMessage(applied int) string {
-	if applied == 0 {
-		return "Nothing was applied."
-	}
-	return "Applied " + itemCount(applied) + "."
 }
 
 func itemCount(n int) string {
@@ -976,26 +969,28 @@ func itemCount(n int) string {
 	return strconv.Itoa(n) + " changes"
 }
 
-// applyFailureReason turns a domain error into the sentence an officer needs.
-// It says what to do next, because "conflict" on its own is not an instruction.
-func applyFailureReason(err error) string {
+// applyFailureKey names the clause explaining why one change did not apply.
+//
+// It returns a key, not a sentence: the words live in flashReasons, and a
+// redirect carries only the key (bcars-portal-9lx).
+func applyFailureKey(err error) string {
 	switch {
 	case errors.Is(err, db.ErrStale):
-		return "One change was left alone because the record moved while you were reading it; reload and look again."
+		return "stale"
 	case errors.Is(err, changerequests.ErrItemDecided):
-		return "One change had already been decided by another officer."
+		return "decided"
 	case errors.Is(err, changerequests.ErrSelfReview):
-		return "One change needs a different officer, because you submitted it."
+		return "self"
 	case errors.Is(err, changerequests.ErrVerificationNoteRequired):
-		return "One change is sensitive and needs a note saying how you verified it."
+		return "note"
 	case errors.Is(err, changerequests.ErrTargetRequired):
-		return "One change names no record yet; link this request first."
+		return "target"
 	case errors.Is(err, changerequests.ErrBadValue):
-		return "One value was not valid for the kind of detail it corrects."
+		return "value"
 	case errors.Is(err, changerequests.ErrNoAdapter):
-		return "One change cannot be applied here; do it on the record and decline this."
+		return "noadapter"
 	default:
-		return "One change could not be applied."
+		return "other"
 	}
 }
 
@@ -1013,21 +1008,21 @@ func dedupeReasons(in []string) []string {
 	return out
 }
 
-// decisionMessage says what actually happened, including the case where the
+// decisionKey names what actually happened, including the case where the
 // decision was recorded but nothing was applied — a distinction an officer
 // needs, since "approved" without "applied" means the change is still theirs to
 // make by hand.
-func decisionMessage(d changerequests.Decision) string {
+func decisionKey(d changerequests.Decision) string {
 	switch {
 	case d.Replay:
-		return "That+item+was+already+decided+that+way"
+		return "request.replayed"
 	case d.Applied:
-		return "Approved+and+applied+to+the+member+record"
+		return "request.applied"
 	case d.Item.Status == changerequests.ItemApproved:
-		return "Approved.+Apply+the+change+with+the+usual+workflow"
+		return "request.approved"
 	case d.Item.Status == changerequests.ItemRejected:
-		return "Rejected"
+		return "request.rejected"
 	default:
-		return "Held+for+verification"
+		return "request.held"
 	}
 }

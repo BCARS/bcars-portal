@@ -90,13 +90,14 @@ func (h *Handler) memberAccessPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := h.principalFromRequest(r)
+	success, failure := flashBanner(r)
 
 	data := memberAccessData{
 		PersonID:    person.ID,
 		DisplayName: person.DisplayName,
 		CallSign:    person.CallSign.String,
-		Success:     r.URL.Query().Get("success"),
-		Error:       r.URL.Query().Get("error"),
+		Success:     success,
+		Error:       failure,
 	}
 
 	grants, err := h.memberAccess.ListGrantsForPerson(r.Context(), p, person.ID)
@@ -154,28 +155,28 @@ func (h *Handler) memberAccessProvision(w http.ResponseWriter, r *http.Request) 
 	target := accessPath(id)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 	email := strings.TrimSpace(r.FormValue("email"))
 	if email == "" {
-		http.Redirect(w, r, target+"?error=Give+the+email+address+for+the+account", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "access.need_email"), http.StatusSeeOther)
 		return
 	}
 
 	acct, err := h.memberAccess.Provision(r.Context(), p, memberaccess.ProvisionParams{Email: email}, time.Now())
 	if err != nil {
 		h.log.Error("member account provision", slog.String("error", err.Error()))
-		http.Redirect(w, r, target+"?error="+urlMessage(accessErrorMessage(err)), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, accessErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 	audit.StampResource(r.Context(), "user", acct.UserID)
 
-	msg := "Account+created.+It+has+no+password+and+no+access+until+you+grant+one"
+	key := "access.created"
 	if !acct.Created {
-		msg = "That+address+already+had+an+account,+so+it+was+reused"
+		key = "access.reused"
 	}
-	http.Redirect(w, r, target+"?success="+msg, http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(target, key), http.StatusSeeOther)
 }
 
 // memberAccessGrant gives one existing account access to this record.
@@ -190,7 +191,7 @@ func (h *Handler) memberAccessGrant(w http.ResponseWriter, r *http.Request) {
 	target := accessPath(id)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 	email := memberaccess.NormalizeEmail(r.FormValue("email"))
@@ -199,7 +200,7 @@ func (h *Handler) memberAccessGrant(w http.ResponseWriter, r *http.Request) {
 		kind = memberaccess.AccessSelf
 	}
 	if email == "" {
-		http.Redirect(w, r, target+"?error=Give+the+email+address+of+the+account+to+grant", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "access.need_grant_email"), http.StatusSeeOther)
 		return
 	}
 
@@ -207,7 +208,7 @@ func (h *Handler) memberAccessGrant(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.QueryRowContext(r.Context(),
 		`SELECT id FROM users WHERE email = ?`, email).Scan(&userID); err != nil {
 		http.Redirect(w, r,
-			target+"?error=No+account+for+that+address.+Create+the+account+first", http.StatusSeeOther)
+			flashTarget(target, "access.no_account"), http.StatusSeeOther)
 		return
 	}
 
@@ -217,11 +218,11 @@ func (h *Handler) memberAccessGrant(w http.ResponseWriter, r *http.Request) {
 		Reason:     strings.TrimSpace(r.FormValue("reason")),
 	}, time.Now())
 	if err != nil {
-		http.Redirect(w, r, target+"?error="+urlMessage(accessErrorMessage(err)), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, accessErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 	audit.StampResource(r.Context(), "member_access_grant", grant.ID)
-	http.Redirect(w, r, target+"?success=Access+granted", http.StatusSeeOther)
+	http.Redirect(w, r, flashTarget(target, "access.granted"), http.StatusSeeOther)
 }
 
 // memberAccessRevoke ends one account's access to this record.
@@ -237,12 +238,12 @@ func (h *Handler) memberAccessRevoke(w http.ResponseWriter, r *http.Request) {
 	target := accessPath(id)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 	userID, _ := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
 	if userID == 0 {
-		http.Redirect(w, r, target+"?error=Choose+which+account+to+revoke", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "access.need_account"), http.StatusSeeOther)
 		return
 	}
 
@@ -251,12 +252,12 @@ func (h *Handler) memberAccessRevoke(w http.ResponseWriter, r *http.Request) {
 		Reason:   strings.TrimSpace(r.FormValue("reason")),
 	}, time.Now())
 	if err != nil {
-		http.Redirect(w, r, target+"?error="+urlMessage(accessErrorMessage(err)), http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, accessErrorKey(err)), http.StatusSeeOther)
 		return
 	}
 	audit.StampResource(r.Context(), "member_access_grant", grant.ID)
 	http.Redirect(w, r,
-		target+"?success=Access+revoked.+It+ends+on+their+next+page+load,+including+a+session+already+open",
+		flashTarget(target, "access.revoked"),
 		http.StatusSeeOther)
 }
 
@@ -271,12 +272,12 @@ func (h *Handler) memberAccessRecovery(w http.ResponseWriter, r *http.Request) {
 	target := accessPath(id)
 
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, target+"?error=Please+check+your+entries+and+try+again", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "form.invalid"), http.StatusSeeOther)
 		return
 	}
 	email := strings.TrimSpace(r.FormValue("email"))
 	if email == "" {
-		http.Redirect(w, r, target+"?error=Give+the+email+address+to+send+to", http.StatusSeeOther)
+		http.Redirect(w, r, flashTarget(target, "access.need_send_email"), http.StatusSeeOther)
 		return
 	}
 
@@ -284,7 +285,7 @@ func (h *Handler) memberAccessRecovery(w http.ResponseWriter, r *http.Request) {
 		err := h.emailLinks.RequestRecovery(r.Context(), email, h.clientIP.HashRequest(r))
 		if errors.Is(err, authn.ErrRateLimited) {
 			http.Redirect(w, r,
-				target+"?error=Too+many+recent+requests+for+that+address.+Wait+a+few+minutes+and+try+again",
+				flashTarget(target, "access.rate_limited"),
 				http.StatusSeeOther)
 			return
 		}
@@ -296,7 +297,7 @@ func (h *Handler) memberAccessRecovery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r,
-		target+"?success=If+that+address+has+an+account,+a+sign-in+link+is+on+its+way",
+		flashTarget(target, "access.sent"),
 		http.StatusSeeOther)
 }
 
@@ -313,30 +314,27 @@ func accessPath(personID int64) string {
 	return "/admin/members/" + strconv.FormatInt(personID, 10) + "/access"
 }
 
-// accessErrorMessage phrases a domain refusal for an officer.
-func accessErrorMessage(err error) string {
+// accessErrorKey names the banner a domain refusal should show an officer.
+//
+// It returns a key rather than a sentence: the words live in flashCatalog, and
+// nothing this function produces travels through a URL (bcars-portal-9lx).
+func accessErrorKey(err error) string {
 	switch {
 	case errors.Is(err, memberaccess.ErrEmailRequired):
-		return "Give a usable email address"
+		return "access.email_required"
 	case errors.Is(err, memberaccess.ErrUnknownUser):
-		return "No account for that address"
+		return "access.unknown_user"
 	case errors.Is(err, memberaccess.ErrUnknownPerson):
-		return "No such member record"
+		return "access.unknown_person"
 	case errors.Is(err, memberaccess.ErrAlreadyGranted):
-		return "That account already reaches this record"
+		return "access.already_granted"
 	case errors.Is(err, memberaccess.ErrGrantNotFound):
-		return "That account does not currently reach this record"
+		return "access.grant_not_found"
 	case errors.Is(err, memberaccess.ErrUnknownAccessKind):
-		return "Choose whether this is the member's own record or a delegate"
+		return "access.kind_required"
 	case errors.Is(err, db.ErrStale):
-		return "Another officer changed this while you were reading it. Reload and try again"
+		return "access.stale"
 	default:
-		return "That change could not be saved. Please try again"
+		return "access.failed"
 	}
-}
-
-// urlMessage encodes a sentence for the redirect query string, matching the
-// form the hand-written messages elsewhere in this package already use.
-func urlMessage(msg string) string {
-	return strings.ReplaceAll(msg, " ", "+")
 }

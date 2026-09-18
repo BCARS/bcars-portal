@@ -203,7 +203,7 @@ func TestTriageRefusesAStaleForm(t *testing.T) {
 		"target_person_id": {fmt.Sprint(second)}, "version": {fmt.Sprint(staleVersion)},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "Another+officer+changed+this")
+	assertFlash(t, w, "request.stale")
 
 	var targetID int64
 	require.NoError(t, e.h.db.QueryRow(
@@ -224,7 +224,7 @@ func TestApprovalAppliesOnceAndARepeatIsSafe(t *testing.T) {
 	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, req.ID, item.ID)
 	w := e.post(t, path, url.Values{"decision": {"approved"}}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "applied")
+	assertFlash(t, w, "request.applied")
 
 	var name string
 	var version int64
@@ -233,10 +233,12 @@ func TestApprovalAppliesOnceAndARepeatIsSafe(t *testing.T) {
 	assert.Equal(t, "Dale Rutherford Jr", name, "an approved correction reaches the record")
 
 	// Resubmitting the identical decision returns the recorded outcome rather
-	// than applying it a second time.
+	// than applying it a second time. This is the replay message, not the
+	// conflict one: the old assertion looked for "already decided", which both
+	// sentences contain, so it could not tell them apart.
 	w = e.post(t, path, url.Values{"decision": {"approved"}}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "already+decided")
+	assertFlash(t, w, "request.replayed")
 
 	var after int64
 	require.NoError(t, e.h.db.QueryRow(
@@ -256,7 +258,7 @@ func TestChangingADecisionIsRefused(t *testing.T) {
 		e.post(t, path, url.Values{"decision": {"approved"}}, officer).Code)
 
 	w := e.post(t, path, url.Values{"decision": {"rejected"}, "reason": {"changed my mind"}}, officer)
-	assert.Contains(t, w.Header().Get("Location"), "already+decided")
+	assertFlash(t, w, "request.item_decided")
 
 	var status string
 	require.NoError(t, e.h.db.QueryRow(
@@ -273,7 +275,7 @@ func TestRejectionNeedsAReason(t *testing.T) {
 	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, req.ID, req.Items[0].ID)
 
 	w := e.post(t, path, url.Values{"decision": {"rejected"}}, officer)
-	assert.Contains(t, w.Header().Get("Location"), "Give+a+reason")
+	assertFlash(t, w, "request.need_reject")
 
 	var status string
 	require.NoError(t, e.h.db.QueryRow(
@@ -323,7 +325,7 @@ func TestOfficerCannotApproveTheirOwnSensitiveRequest(t *testing.T) {
 
 	w := e.post(t, fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, req.ID, req.Items[0].ID),
 		url.Values{"decision": {"approved"}, "verification_note": {"it is me"}}, officer)
-	assert.Contains(t, w.Header().Get("Location"), "another+officer+must+approve")
+	assertFlash(t, w, "request.self_review")
 
 	var status string
 	require.NoError(t, e.h.db.QueryRow(
@@ -366,7 +368,7 @@ func TestSensitiveApprovalNeedsAVerificationNote(t *testing.T) {
 	path := fmt.Sprintf("%s/%d/items/%d/decision", RouteAdminRequests, req.ID, req.Items[0].ID)
 
 	w := e.post(t, path, url.Values{"decision": {"approved"}}, officer)
-	assert.Contains(t, w.Header().Get("Location"), "Say+how+you+verified")
+	assertFlash(t, w, "request.need_note")
 
 	w = e.post(t, path, url.Values{
 		"decision": {"approved"}, "verification_note": {"called the published number back"},
@@ -688,7 +690,8 @@ func TestAnOfficerAmendsAValueAndAppliesItInOneGo(t *testing.T) {
 		fmt.Sprintf("value_%d", emailItem): {"dale.new@example.test"},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
-	assert.Contains(t, w.Header().Get("Location"), "success=", w.Header().Get("Location"))
+	assertFlash(t, w, "request.applied_count")
+	assert.Contains(t, w.Header().Get("Location"), "n=2", "both ticked changes landed")
 
 	var name, email string
 	require.NoError(t, e.h.db.QueryRow(`SELECT display_name FROM persons WHERE id = ?`, personID).Scan(&name))
@@ -772,7 +775,7 @@ func TestDecliningStillNeedsAReason(t *testing.T) {
 		"reason": {"   "},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "error=Give+a+reason")
+	assertFlash(t, w, "request.need_reason")
 
 	var status string
 	require.NoError(t, e.h.db.QueryRow(
@@ -804,7 +807,8 @@ func TestASensitiveChangeStillNeedsItsVerificationNote(t *testing.T) {
 		fmt.Sprintf("value_%d", itemID): {"W3NEW"},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "error=",
+	assertFlash(t, w, "request.applied_partial")
+	assert.Contains(t, w.Header().Get("Location"), "why=note",
 		"a sensitive change may not be applied without saying how it was verified")
 
 	var callSign sql.NullString
@@ -890,7 +894,7 @@ func TestMarkingDoneIsRefusedWhileAChangeIsStillPending(t *testing.T) {
 		"version": {fmt.Sprint(req.Version)},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "error=Apply+or+decline")
+	assertFlash(t, w, "request.decide_first")
 
 	var status string
 	require.NoError(t, e.h.db.QueryRow(

@@ -94,7 +94,7 @@ func TestAMemberLeavesTheDirectoryOnceAnOfficerApplies(t *testing.T) {
 		"verification_note":             {"Asked Dale at the meeting."},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code, w.Body.String())
-	require.Contains(t, w.Header().Get("Location"), "success=", w.Header().Get("Location"))
+	assertFlash(t, w, "request.applied_count")
 
 	// The property: the directory stops listing it.
 	assert.NotContains(t, e.getAs(t, RouteMemberDirectory, cookie).Body.String(), "dale@example.test",
@@ -196,7 +196,8 @@ func TestAnOfficerCannotApplyAnUnknownAudience(t *testing.T) {
 		"verification_note":             {"Asked Dale at the meeting."},
 	}, officer)
 	require.Equal(t, http.StatusSeeOther, w.Code)
-	assert.True(t, strings.Contains(w.Header().Get("Location"), "error="),
+	assertFlash(t, w, "request.applied_partial")
+	assert.Contains(t, w.Header().Get("Location"), "why=value",
 		"an unknown audience is refused: %s", w.Header().Get("Location"))
 
 	var events int
