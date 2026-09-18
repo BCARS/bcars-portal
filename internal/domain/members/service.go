@@ -105,6 +105,9 @@ type PersonSummary struct {
 	Version       int64
 	CreatedAt     string
 	UpdatedAt     string
+	// BaseType is the person's current membership type, empty when they have
+	// none. The list showed a dash for everyone without it (bcars-portal-ges).
+	BaseType string
 }
 
 // ListPersons returns active persons, optionally filtered by name.
@@ -132,6 +135,7 @@ func (s *Service) ListPersons(ctx context.Context, p *authz.Principal, params Li
 				CallSign: r.CallSign, DeceasedAt: r.DeceasedAt,
 				DeactivatedAt: r.DeactivatedAt, Version: r.Version,
 				CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+				BaseType: r.BaseType,
 			}
 		}
 		return result, nil
@@ -150,9 +154,76 @@ func (s *Service) ListPersons(ctx context.Context, p *authz.Principal, params Li
 			CallSign: r.CallSign, DeceasedAt: r.DeceasedAt,
 			DeactivatedAt: r.DeactivatedAt, Version: r.Version,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+			BaseType: r.BaseType,
 		}
 	}
 	return result, nil
+}
+
+// PendingMembership is one membership awaiting an officer's decision.
+type PendingMembership struct {
+	MembershipID int64
+	PersonID     int64
+	DisplayName  string
+	CallSign     string
+	BaseType     string
+	RequestedAt  string
+	Version      int64
+	// Deactivated and Deceased are carried so the queue can say so on the row.
+	// Such a membership is still listed, because it still needs a decision.
+	Deactivated bool
+	Deceased    bool
+}
+
+// ListPendingMemberships returns the memberships waiting on an officer.
+//
+// CountPendingMemberships answers "how many" over the same population. The two
+// exist as a pair so the dashboard tile and the queue cannot disagree, which is
+// the whole of bcars-portal-ges: the tile said 2 and there was no way to reach
+// the two.
+func (s *Service) ListPendingMemberships(ctx context.Context, p *authz.Principal, limit, offset int64) ([]PendingMembership, error) {
+	if err := authz.Authorize(ctx, p, "member.read", nil); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.Q.ListPendingMemberships(ctx, sqlcgen.ListPendingMembershipsParams{
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("members: list pending memberships: %w", err)
+	}
+
+	out := make([]PendingMembership, len(rows))
+	for i, r := range rows {
+		out[i] = PendingMembership{
+			MembershipID: r.MembershipID,
+			PersonID:     r.PersonID,
+			DisplayName:  r.DisplayName,
+			CallSign:     r.CallSign.String,
+			BaseType:     r.BaseType,
+			RequestedAt:  r.RequestedAt,
+			Version:      r.Version,
+			Deactivated:  r.DeactivatedAt.Valid,
+			Deceased:     r.DeceasedAt.Valid,
+		}
+	}
+	return out, nil
+}
+
+// CountPendingMemberships counts the same memberships ListPendingMemberships
+// returns. See the note there, and the query comment that pairs them.
+func (s *Service) CountPendingMemberships(ctx context.Context, p *authz.Principal) (int64, error) {
+	if err := authz.Authorize(ctx, p, "member.read", nil); err != nil {
+		return 0, err
+	}
+	n, err := s.Q.CountPendingMemberships(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("members: count pending memberships: %w", err)
+	}
+	return n, nil
 }
 
 // CreatePersonParams contains fields for creating a new person.

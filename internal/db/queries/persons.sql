@@ -2,18 +2,38 @@
 SELECT * FROM persons WHERE id = ?;
 
 -- name: ListPersons :many
-SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, version, created_at, updated_at
-FROM persons
-WHERE deactivated_at IS NULL
-ORDER BY sort_name
+--
+-- base_type comes from the person's current membership, so the list can say
+-- what each person is. It was absent, and the members list rendered a dash in
+-- the Type column for everyone while the record page showed the type
+-- (bcars-portal-ges).
+--
+-- The subquery takes the most recent membership that has not ended, which is
+-- the one the record page shows. A person with no membership yields NULL, and
+-- the list still says "-" for them -- correctly, this time.
+SELECT p.id, p.display_name, p.sort_name, p.call_sign, p.deceased_at, p.deactivated_at,
+       p.version, p.created_at, p.updated_at,
+       CAST(COALESCE((SELECT m.base_type FROM memberships m
+                       WHERE m.person_id = p.id AND m.ended_on IS NULL
+                       ORDER BY m.created_at DESC, m.id DESC LIMIT 1), '') AS TEXT) AS base_type
+FROM persons p
+WHERE p.deactivated_at IS NULL
+ORDER BY p.sort_name
 LIMIT ? OFFSET ?;
 
 -- name: ListPersonsByName :many
-SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, version, created_at, updated_at
-FROM persons
-WHERE (display_name LIKE '%' || ? || '%' OR sort_name LIKE '%' || ? || '%')
-  AND deactivated_at IS NULL
-ORDER BY sort_name
+--
+-- The same columns as ListPersons, including the current membership's
+-- base_type; see the note there.
+SELECT p.id, p.display_name, p.sort_name, p.call_sign, p.deceased_at, p.deactivated_at,
+       p.version, p.created_at, p.updated_at,
+       CAST(COALESCE((SELECT m.base_type FROM memberships m
+                       WHERE m.person_id = p.id AND m.ended_on IS NULL
+                       ORDER BY m.created_at DESC, m.id DESC LIMIT 1), '') AS TEXT) AS base_type
+FROM persons p
+WHERE (p.display_name LIKE '%' || ? || '%' OR p.sort_name LIKE '%' || ? || '%')
+  AND p.deactivated_at IS NULL
+ORDER BY p.sort_name
 LIMIT ? OFFSET ?;
 
 -- name: GetPersonByCallSign :one

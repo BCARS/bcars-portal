@@ -95,3 +95,44 @@ SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ? AND version = ?
 RETURNING *;
+
+-- A membership awaiting an officer's decision (bcars-portal-ges).
+--
+-- The predicate is `lifecycle = 'pending' AND ended_on IS NULL`, and it is
+-- written twice on purpose: once here and once in CountPendingMemberships.
+-- The dashboard tile and this list MUST agree, because a count that says 2
+-- beside a list that shows 3 teaches an officer to trust neither. The test
+-- that holds them together compares the count against the length of the list
+-- over a fixture built to disagree -- an ended pending row, a rejected one, a
+-- deactivated person's -- rather than trusting that two similar-looking WHERE
+-- clauses stay similar.
+--
+-- A deactivated or deceased person's pending membership IS listed. It still
+-- needs a decision, and the row says so, which is better than a queue that
+-- quietly holds fewer rows than the number above it.
+--
+-- name: ListPendingMemberships :many
+SELECT m.id          AS membership_id,
+       m.person_id   AS person_id,
+       m.base_type   AS base_type,
+       m.created_at  AS requested_at,
+       m.version     AS version,
+       p.display_name,
+       p.call_sign,
+       p.deactivated_at,
+       p.deceased_at
+  FROM memberships m
+  JOIN persons p ON p.id = m.person_id
+ WHERE m.lifecycle = 'pending'
+   AND m.ended_on IS NULL
+ ORDER BY m.created_at, m.id
+ LIMIT ? OFFSET ?;
+
+-- name: CountPendingMemberships :one
+--
+-- The same population as ListPendingMemberships. See the note there.
+SELECT count(*)
+  FROM memberships m
+  JOIN persons p ON p.id = m.person_id
+ WHERE m.lifecycle = 'pending'
+   AND m.ended_on IS NULL;

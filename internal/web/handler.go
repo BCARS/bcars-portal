@@ -287,6 +287,7 @@ func (h *Handler) AdminRoutes() []GuardedRoute {
 		{Pattern: "POST /admin/treasury/payments/{id}/correct", Capability: "payment.correct", AuditAction: "payment.correct", ResourceKind: "payment", handler: h.correctionSubmit},
 
 		{Pattern: "GET /admin/members", Capability: "member.read", ResourceKind: "person", handler: h.memberList},
+		{Pattern: "GET /admin/memberships/pending", Capability: "member.read", ResourceKind: "membership", handler: h.pendingMemberships},
 		{Pattern: "GET /admin/members/new", Capability: "member.create", ResourceKind: "person", handler: h.memberNew},
 		{Pattern: "POST /admin/members/new", Capability: "member.create", AuditAction: "member.create", ResourceKind: "person", handler: h.memberCreate},
 		{Pattern: "GET /admin/members/{id}", Capability: "member.read", ResourceKind: "person", handler: h.memberDetail},
@@ -756,7 +757,12 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	if data.Nav.Members {
 		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM persons WHERE deactivated_at IS NULL`).Scan(&data.TotalPersons)
 		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'approved'`).Scan(&data.ActiveMemberships)
-		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM memberships WHERE lifecycle = 'pending'`).Scan(&data.PendingApprovals)
+		// The tile's number and the queue's rows come from one pair of
+		// queries over one predicate. They used to be unrelated: this was an
+		// inline count, and there was no queue at all (bcars-portal-ges).
+		if n, err := h.members.CountPendingMemberships(ctx, p); err == nil {
+			data.PendingApprovals = int(n)
+		}
 	}
 	if data.Nav.Imports {
 		_ = h.db.QueryRowContext(ctx, `SELECT count(*) FROM import_runs`).Scan(&data.ImportRuns)
@@ -775,6 +781,13 @@ type memberListData struct {
 	Query      string
 	HasMore    bool
 	NextOffset int64
+	// Pending is the number of memberships awaiting a decision, from the same
+	// query pair the dashboard tile and the queue use. The link is always
+	// offered, including at zero: an officer checking whether anything is
+	// waiting needs to be able to look and be told no, and a page that exists
+	// only while it has rows is one an officer cannot navigate to
+	// (bcars-portal-ges).
+	Pending int64
 }
 
 type memberRow struct {
@@ -806,6 +819,9 @@ func (h *Handler) memberList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := memberListData{Query: query, NextOffset: offset + limit}
+	if n, err := h.members.CountPendingMemberships(ctx, p); err == nil {
+		data.Pending = n
+	}
 
 	hasMore := len(persons) > int(limit)
 	if hasMore {
@@ -819,12 +835,94 @@ func (h *Handler) memberList(w http.ResponseWriter, r *http.Request) {
 			DisplayName:   ps.DisplayName,
 			SortName:      ps.SortName,
 			CallSign:      ps.CallSign,
+			BaseType:      ps.BaseType,
 			DeactivatedAt: ps.DeactivatedAt,
 			DeceasedAt:    ps.DeceasedAt,
 		})
 	}
 
 	h.renderPage(w, r, "members.html", http.StatusOK, data)
+}
+
+// --- Memberships awaiting a decision ---
+
+type pendingMembershipsData struct {
+	Rows []pendingMembershipRow
+	// Total is the same number the dashboard tile shows, from the same query
+	// pair, so a reader can see the two agree rather than take it on trust.
+	Total      int64
+	HasMore    bool
+	NextOffset int64
+	// CanDecide gates the approve and reject controls on each row. Reaching
+	// this page needs member.read; acting on a row needs membership.approve,
+	// and an officer who holds only the first sees the queue without buttons
+	// that would answer 403.
+	CanDecide bool
+}
+
+type pendingMembershipRow struct {
+	MembershipID int64
+	PersonID     int64
+	DisplayName  string
+	CallSign     string
+	BaseType     string
+	RequestedAt  string
+	Version      int64
+	Deactivated  bool
+	Deceased     bool
+}
+
+// pendingMemberships is the route from the dashboard's "Pending Approval" tile.
+//
+// Before this, that number was the only evidence the memberships existed: the
+// tile was not a link, the members list had no lifecycle filter, and the
+// approve control lived on a record an officer could only reach by already
+// knowing the name. The 2026-08-16 walkthrough found them with a hand-written
+// SQLite query (bcars-portal-ges).
+func (h *Handler) pendingMemberships(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := h.principal(r)
+	offset, _ := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
+	const limit = 50
+
+	rows, err := h.members.ListPendingMemberships(ctx, p, limit+1, offset)
+	if err != nil {
+		h.log.Error("list pending memberships", slog.String("error", err.Error()))
+		h.renderDomainError(w, r, err)
+		return
+	}
+
+	total, err := h.members.CountPendingMemberships(ctx, p)
+	if err != nil {
+		h.log.Error("count pending memberships", slog.String("error", err.Error()))
+		h.renderDomainError(w, r, err)
+		return
+	}
+
+	data := pendingMembershipsData{
+		Total:      total,
+		NextOffset: offset + limit,
+		CanDecide:  hasCap(p, "membership.approve"),
+	}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		data.HasMore = true
+	}
+	for _, m := range rows {
+		data.Rows = append(data.Rows, pendingMembershipRow{
+			MembershipID: m.MembershipID,
+			PersonID:     m.PersonID,
+			DisplayName:  m.DisplayName,
+			CallSign:     m.CallSign,
+			BaseType:     m.BaseType,
+			RequestedAt:  memberDate(m.RequestedAt),
+			Version:      m.Version,
+			Deactivated:  m.Deactivated,
+			Deceased:     m.Deceased,
+		})
+	}
+
+	h.renderPage(w, r, "memberships_pending.html", http.StatusOK, data)
 }
 
 type timelineItem struct {

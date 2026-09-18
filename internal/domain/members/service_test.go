@@ -762,3 +762,123 @@ func TestAcsAresSharingMissingPersonIsNotFound(t *testing.T) {
 	_, err := svc.GetAcsAresSharing(context.Background(), p, 999999)
 	assert.ErrorIs(t, err, sql.ErrNoRows)
 }
+
+// --- Memberships awaiting a decision (bcars-portal-ges) ---
+
+// TestPendingCountAndListCannotDisagree is the property the bead asks for. The
+// dashboard tile said 2 and there was no way to reach the two; the fix is a
+// route, but the fix that matters is that the number and the rows come from one
+// predicate.
+//
+// The fixture is built to make a careless pair disagree: a pending membership
+// that has ended, a rejected one, an approved one, and a pending one belonging
+// to a deactivated person. Any of those falling on different sides of the two
+// queries shows up here as a mismatch.
+func TestPendingCountAndListCannotDisagree(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	seed := func(name, lifecycle, endedOn string, deactivated bool) {
+		t.Helper()
+		person, err := svc.CreatePerson(ctx, p, CreatePersonParams{DisplayName: name, SortName: name})
+		require.NoError(t, err)
+		_, err = svc.DB.Exec(
+			`INSERT INTO memberships (person_id, base_type, lifecycle, ended_on) VALUES (?, 'full', ?, ?)`,
+			person.ID, lifecycle, sqlNullString(endedOn))
+		require.NoError(t, err)
+		if deactivated {
+			_, err = svc.DB.Exec(
+				`UPDATE persons SET deactivated_at = '2026-01-01T00:00:00.000Z' WHERE id = ?`, person.ID)
+			require.NoError(t, err)
+		}
+	}
+
+	seed("Waiting One", "pending", "", false)
+	seed("Waiting Two", "pending", "", false)
+	seed("Withdrawn", "pending", "2026-02-01", false)
+	seed("Refused", "rejected", "", false)
+	seed("Member", "approved", "", false)
+	seed("Waiting Deactivated", "pending", "", true)
+
+	list, err := svc.ListPendingMemberships(ctx, p, 50, 0)
+	require.NoError(t, err)
+	count, err := svc.CountPendingMemberships(ctx, p)
+	require.NoError(t, err)
+
+	assert.Equal(t, int(count), len(list),
+		"the tile's number and the queue's rows must describe the same set")
+	assert.Equal(t, int64(3), count,
+		"two waiting, plus the deactivated person's, which still needs a decision")
+
+	names := make([]string, 0, len(list))
+	for _, m := range list {
+		names = append(names, m.DisplayName)
+	}
+	assert.NotContains(t, names, "Withdrawn", "an ended membership is not waiting on anyone")
+	assert.NotContains(t, names, "Refused", "a decided membership is not waiting on anyone")
+	assert.NotContains(t, names, "Member", "an approved membership is not waiting on anyone")
+
+	// A deactivated person's pending membership is listed rather than hidden,
+	// and says so, because hiding it is how the count and the queue drift
+	// apart again.
+	var deactivated PendingMembership
+	for _, m := range list {
+		if m.DisplayName == "Waiting Deactivated" {
+			deactivated = m
+		}
+	}
+	require.NotZero(t, deactivated.MembershipID)
+	assert.True(t, deactivated.Deactivated)
+}
+
+func TestPendingMembershipsNeedMemberRead(t *testing.T) {
+	svc, _ := setupTest(t)
+	ctx := context.Background()
+	stranger := &authz.Principal{UserID: 2}
+
+	_, err := svc.ListPendingMemberships(ctx, stranger, 50, 0)
+	assert.Error(t, err, "the queue is member data")
+	_, err = svc.CountPendingMemberships(ctx, stranger)
+	assert.Error(t, err, "so is the count of it")
+}
+
+// TestPersonListCarriesTheMembershipType holds the defect the bead notes
+// alongside the missing route: the members list rendered a dash in the Type
+// column for every row, because the query never read the membership.
+func TestPersonListCarriesTheMembershipType(t *testing.T) {
+	svc, p := setupTest(t)
+	ctx := context.Background()
+
+	full, err := svc.CreatePerson(ctx, p, CreatePersonParams{DisplayName: "Ada Full", SortName: "Full, Ada"})
+	require.NoError(t, err)
+	_, err = svc.DB.Exec(
+		`INSERT INTO memberships (person_id, base_type, lifecycle) VALUES (?, 'full', 'approved')`, full.ID)
+	require.NoError(t, err)
+
+	none, err := svc.CreatePerson(ctx, p, CreatePersonParams{DisplayName: "Bob Nomember", SortName: "Nomember, Bob"})
+	require.NoError(t, err)
+
+	ended, err := svc.CreatePerson(ctx, p, CreatePersonParams{DisplayName: "Cid Lapsed", SortName: "Lapsed, Cid"})
+	require.NoError(t, err)
+	_, err = svc.DB.Exec(
+		`INSERT INTO memberships (person_id, base_type, lifecycle, ended_on) VALUES (?, 'associate', 'approved', '2025-12-31')`,
+		ended.ID)
+	require.NoError(t, err)
+
+	byID := map[int64]PersonSummary{}
+	rows, err := svc.ListPersons(ctx, p, ListPersonsParams{Limit: 50})
+	require.NoError(t, err)
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+
+	assert.Equal(t, "full", byID[full.ID].BaseType, "the list must say what the record says")
+	assert.Empty(t, byID[none.ID].BaseType, "a person with no membership has no type, and the page shows a dash")
+	assert.Empty(t, byID[ended.ID].BaseType, "an ended membership is not a current type")
+
+	// The search branch is a separate query and had the same hole.
+	found, err := svc.ListPersons(ctx, p, ListPersonsParams{Query: "Ada", Limit: 50})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "full", found[0].BaseType, "searching must not lose the type")
+}

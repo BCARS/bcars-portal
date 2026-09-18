@@ -64,6 +64,9 @@ type Querier interface {
 	// A request resolves only when this reaches zero.
 	CountPendingChangeRequestItems(ctx context.Context, requestID int64) (int64, error)
 	//
+	// The same population as ListPendingMemberships. See the note there.
+	CountPendingMemberships(ctx context.Context) (int64, error)
+	//
 	// Attempts from one source within the window, whatever their outcome. Counting
 	// limited attempts too means sustained hammering keeps extending the block
 	// rather than draining it, which is the intended behaviour for abuse.
@@ -425,7 +428,35 @@ type Querier interface {
 	ListPaymentBatches(ctx context.Context, arg ListPaymentBatchesParams) ([]PaymentBatch, error)
 	ListPaymentsByBatch(ctx context.Context, batchID sql.NullInt64) ([]Payment, error)
 	ListPaymentsByMembership(ctx context.Context, membershipID int64) ([]Payment, error)
+	// A membership awaiting an officer's decision (bcars-portal-ges).
+	//
+	// The predicate is `lifecycle = 'pending' AND ended_on IS NULL`, and it is
+	// written twice on purpose: once here and once in CountPendingMemberships.
+	// The dashboard tile and this list MUST agree, because a count that says 2
+	// beside a list that shows 3 teaches an officer to trust neither. The test
+	// that holds them together compares the count against the length of the list
+	// over a fixture built to disagree -- an ended pending row, a rejected one, a
+	// deactivated person's -- rather than trusting that two similar-looking WHERE
+	// clauses stay similar.
+	//
+	// A deactivated or deceased person's pending membership IS listed. It still
+	// needs a decision, and the row says so, which is better than a queue that
+	// quietly holds fewer rows than the number above it.
+	//
+	ListPendingMemberships(ctx context.Context, arg ListPendingMembershipsParams) ([]ListPendingMembershipsRow, error)
+	//
+	// base_type comes from the person's current membership, so the list can say
+	// what each person is. It was absent, and the members list rendered a dash in
+	// the Type column for everyone while the record page showed the type
+	// (bcars-portal-ges).
+	//
+	// The subquery takes the most recent membership that has not ended, which is
+	// the one the record page shows. A person with no membership yields NULL, and
+	// the list still says "-" for them -- correctly, this time.
 	ListPersons(ctx context.Context, arg ListPersonsParams) ([]ListPersonsRow, error)
+	//
+	// The same columns as ListPersons, including the current membership's
+	// base_type; see the note there.
 	ListPersonsByName(ctx context.Context, arg ListPersonsByNameParams) ([]ListPersonsByNameRow, error)
 	//
 	// Both directions, archived rows included, so an officer can answer who was

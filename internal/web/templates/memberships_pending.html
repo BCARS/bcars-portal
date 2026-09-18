@@ -1,0 +1,72 @@
+{{template "layout.html" .}}
+
+{{define "title"}}Memberships awaiting a decision - BCARS Portal{{end}}
+
+{{define "content"}}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Memberships awaiting a decision</h2>
+    <a href="/admin/members" class="btn btn-secondary">All members</a>
+</div>
+
+<div class="card">
+    {{if .Rows}}
+    <p class="note" style="margin: 0 0 12px;">
+        {{.Total}} waiting. This is the same count the dashboard shows.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Call Sign</th>
+                <th>Type</th>
+                <th>Applied</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Rows}}
+            <tr>
+                <td>
+                    <a href="/admin/members/{{.PersonID}}">{{.DisplayName}}</a>
+                    {{if .Deactivated}}<span class="badge badge-red">Deactivated</span>{{end}}
+                    {{if .Deceased}}<span class="badge badge-gray">Deceased</span>{{end}}
+                </td>
+                <td>{{if .CallSign}}<span class="callsign">{{.CallSign}}</span>{{else}}<span style="color:var(--text-muted);">-</span>{{end}}</td>
+                <td>{{.BaseType}}</td>
+                <td>{{.RequestedAt}}</td>
+                <td>
+                    {{if $.CanDecide}}
+                    <div style="display: flex; gap: 4px;">
+                        <form method="post" action="/admin/members/{{.PersonID}}/memberships/{{.MembershipID}}/approve" style="display:inline;">
+                            <input type="hidden" name="version" value="{{.Version}}">
+                            <input type="hidden" name="base_type" value="{{.BaseType}}">
+                            <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                        </form>
+                        <form method="post" action="/admin/members/{{.PersonID}}/memberships/{{.MembershipID}}/reject" style="display:inline;"
+                              onsubmit="return confirm('Reject this membership application?');">
+                            <input type="hidden" name="version" value="{{.Version}}">
+                            <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                        </form>
+                    </div>
+                    {{else}}
+                    <a href="/admin/members/{{.PersonID}}" class="btn btn-sm btn-secondary">View</a>
+                    {{end}}
+                </td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+
+    {{if .HasMore}}
+    <div style="text-align: center; margin-top: 16px;">
+        <a href="/admin/memberships/pending?offset={{.NextOffset}}" class="btn btn-secondary btn-sm">Load more</a>
+    </div>
+    {{end}}
+    {{else}}
+    <div class="empty-state">
+        <p>No memberships are waiting for a decision.</p>
+        <p><a href="/admin/members">Go to the members list</a></p>
+    </div>
+    {{end}}
+</div>
+{{end}}

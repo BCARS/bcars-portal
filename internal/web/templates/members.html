@@ -5,7 +5,10 @@
 {{define "content"}}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
     <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Members</h2>
-    <a href="/admin/members/new" class="btn btn-primary">Create Member</a>
+    <div style="display: flex; gap: 8px; align-items: center;">
+        <a href="/admin/memberships/pending" class="btn btn-secondary">{{if .Pending}}{{.Pending}} awaiting a decision{{else}}Awaiting a decision{{end}}</a>
+        <a href="/admin/members/new" class="btn btn-primary">Create Member</a>
+    </div>
 </div>
 
 <div class="card">

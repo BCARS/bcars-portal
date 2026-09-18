@@ -129,10 +129,14 @@ func (q *Queries) GetPersonByCallSign(ctx context.Context, callSign sql.NullStri
 }
 
 const listPersons = `-- name: ListPersons :many
-SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, version, created_at, updated_at
-FROM persons
-WHERE deactivated_at IS NULL
-ORDER BY sort_name
+SELECT p.id, p.display_name, p.sort_name, p.call_sign, p.deceased_at, p.deactivated_at,
+       p.version, p.created_at, p.updated_at,
+       CAST(COALESCE((SELECT m.base_type FROM memberships m
+                       WHERE m.person_id = p.id AND m.ended_on IS NULL
+                       ORDER BY m.created_at DESC, m.id DESC LIMIT 1), '') AS TEXT) AS base_type
+FROM persons p
+WHERE p.deactivated_at IS NULL
+ORDER BY p.sort_name
 LIMIT ? OFFSET ?
 `
 
@@ -151,8 +155,17 @@ type ListPersonsRow struct {
 	Version       int64
 	CreatedAt     string
 	UpdatedAt     string
+	BaseType      string
 }
 
+// base_type comes from the person's current membership, so the list can say
+// what each person is. It was absent, and the members list rendered a dash in
+// the Type column for everyone while the record page showed the type
+// (bcars-portal-ges).
+//
+// The subquery takes the most recent membership that has not ended, which is
+// the one the record page shows. A person with no membership yields NULL, and
+// the list still says "-" for them -- correctly, this time.
 func (q *Queries) ListPersons(ctx context.Context, arg ListPersonsParams) ([]ListPersonsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPersons, arg.Limit, arg.Offset)
 	if err != nil {
@@ -172,6 +185,7 @@ func (q *Queries) ListPersons(ctx context.Context, arg ListPersonsParams) ([]Lis
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BaseType,
 		); err != nil {
 			return nil, err
 		}
@@ -187,11 +201,15 @@ func (q *Queries) ListPersons(ctx context.Context, arg ListPersonsParams) ([]Lis
 }
 
 const listPersonsByName = `-- name: ListPersonsByName :many
-SELECT id, display_name, sort_name, call_sign, deceased_at, deactivated_at, version, created_at, updated_at
-FROM persons
-WHERE (display_name LIKE '%' || ? || '%' OR sort_name LIKE '%' || ? || '%')
-  AND deactivated_at IS NULL
-ORDER BY sort_name
+SELECT p.id, p.display_name, p.sort_name, p.call_sign, p.deceased_at, p.deactivated_at,
+       p.version, p.created_at, p.updated_at,
+       CAST(COALESCE((SELECT m.base_type FROM memberships m
+                       WHERE m.person_id = p.id AND m.ended_on IS NULL
+                       ORDER BY m.created_at DESC, m.id DESC LIMIT 1), '') AS TEXT) AS base_type
+FROM persons p
+WHERE (p.display_name LIKE '%' || ? || '%' OR p.sort_name LIKE '%' || ? || '%')
+  AND p.deactivated_at IS NULL
+ORDER BY p.sort_name
 LIMIT ? OFFSET ?
 `
 
@@ -212,8 +230,11 @@ type ListPersonsByNameRow struct {
 	Version       int64
 	CreatedAt     string
 	UpdatedAt     string
+	BaseType      string
 }
 
+// The same columns as ListPersons, including the current membership's
+// base_type; see the note there.
 func (q *Queries) ListPersonsByName(ctx context.Context, arg ListPersonsByNameParams) ([]ListPersonsByNameRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPersonsByName,
 		arg.Column1,
@@ -238,6 +259,7 @@ func (q *Queries) ListPersonsByName(ctx context.Context, arg ListPersonsByNamePa
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BaseType,
 		); err != nil {
 			return nil, err
 		}
